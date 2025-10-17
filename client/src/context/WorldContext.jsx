@@ -193,7 +193,7 @@ export function WorldProvider({ children }) {
     metadata = mergeMetadata(metadata, { heading: direction });
 
     const animation = player.animation ?? existing.animation ?? DEFAULT_ANIMATION;
-    const displayName = alias ?? player.name ?? existing.name ?? `Tripulante ${player.id.slice(-4)}`;
+    const displayName = alias ?? player.name ?? existing.name ?? `Usuario ${player.id.slice(-4)}`;
 
     const enriched = {
       ...existing,
@@ -242,7 +242,7 @@ export function WorldProvider({ children }) {
       const payload = {
         id: message.id,
         playerId: message.playerId ?? null,
-        author: message.author ?? 'Tripulante',
+        author: message.author ?? 'Usuario',
         content: message.content ?? '',
         timestamp: message.timestamp ?? new Date().toISOString(),
         receivedAt: existing?.receivedAt ?? now,
@@ -296,7 +296,7 @@ export function WorldProvider({ children }) {
           .map((entry) => ({
             id: entry.id,
             playerId: entry.playerId ?? null,
-            author: entry.author ?? 'Tripulante',
+            author: entry.author ?? 'Usuario',
             content: entry.content ?? '',
             timestamp: entry.timestamp ?? new Date().toISOString(),
             receivedAt: Date.now() - 4000,
@@ -753,7 +753,7 @@ export function WorldProvider({ children }) {
       localStateRef.current = nextState;
 
       const existing = playersRef.current.get(playerId) ?? { id: playerId };
-      const displayName = alias ?? existing.name ?? `Tripulante ${playerId.slice(-4)}`;
+      const displayName = alias ?? existing.name ?? `Usuario ${playerId.slice(-4)}`;
       const combinedMetadata = mergeMetadata(existing.metadata, metadata);
 
       const direction =

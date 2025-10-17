@@ -3,6 +3,7 @@ import mapController from '../controllers/mapController.js'
 
 const router = Router()
 
+router.get('/static', mapController.listStaticMaps)
 router.get('/', mapController.listMaps)
 router.post('/', mapController.createMap)
 router.get('/:mapId', mapController.getMap)

@@ -1,5 +1,6 @@
 const MAP_DIRECTORY = '../../../server/maps';
 const MAP_FILE_EXTENSION = '.map';
+const STATIC_MAP_ENDPOINT = '/maps/static';
 
 const toCamelCase = (rawKey) =>
   rawKey
@@ -120,7 +121,7 @@ const normaliseMapDefinition = (filePath, rawContents) => {
   if (doorPosition) {
     objects.push({
       id: `${id}-door`,
-      label: 'Acceso principal',
+      name: 'Acceso principal',
       position: doorPosition,
       size: { width: 1, height: 1 },
       solid: false,
@@ -151,17 +152,22 @@ const normalisedMaps = Object.entries(mapSources).map(([filePath, rawContents]) 
   normaliseMapDefinition(filePath, rawContents)
 );
 
-normalisedMaps.sort((a, b) => {
-  const aIsInit = /(^|\/)init\.map$/i.test(a.sourcePath ?? '');
-  const bIsInit = /(^|\/)init\.map$/i.test(b.sourcePath ?? '');
-  if (aIsInit && !bIsInit) {
-    return -1;
-  }
-  if (bIsInit && !aIsInit) {
-    return 1;
-  }
-  return a.name.localeCompare(b.name);
-});
+const sortMaps = (maps) => {
+  maps.sort((a, b) => {
+    const aIsInit = /(^|\/)init\.map$/i.test(a.sourcePath ?? '');
+    const bIsInit = /(^|\/)init\.map$/i.test(b.sourcePath ?? '');
+    if (aIsInit && !bIsInit) {
+      return -1;
+    }
+    if (bIsInit && !aIsInit) {
+      return 1;
+    }
+    return a.name.localeCompare(b.name);
+  });
+  return maps;
+};
+
+sortMaps(normalisedMaps);
 
 export const MAPS = normalisedMaps;
 
@@ -181,6 +187,79 @@ if (!MAPS.length) {
   });
 }
 
-const defaultMap = MAPS.find((map) => /(^|\/)init\.map$/i.test(map.sourcePath ?? '')) ?? MAPS[0];
+const selectDefaultMap = (maps) =>
+  maps.find((map) => /(^|\/)init\.map$/i.test(map.sourcePath ?? '')) ?? maps[0] ?? null;
 
-export const DEFAULT_MAP_ID = defaultMap?.id ?? 'empty-map';
+export const DEFAULT_MAP_ID = selectDefaultMap(MAPS)?.id ?? 'empty-map';
+
+export const resolveDefaultMapId = (maps = MAPS) => {
+  const collection = Array.isArray(maps) ? [...maps] : [];
+  return selectDefaultMap(collection)?.id ?? 'empty-map';
+};
+
+export const fetchServerMaps = async ({ signal } = {}) => {
+  if (typeof fetch !== 'function') {
+    return [];
+  }
+
+  try {
+    const response = await fetch(STATIC_MAP_ENDPOINT, { signal });
+    if (!response.ok) {
+      return [];
+    }
+
+    const payload = await response.json();
+    const items = Array.isArray(payload?.items)
+      ? payload.items
+      : Array.isArray(payload?.maps)
+        ? payload.maps
+        : [];
+
+    const normalised = items
+      .map((definition) => {
+        if (!definition || typeof definition !== 'object') {
+          return null;
+        }
+
+        const size = definition.size ?? {
+          width: Number.parseInt(definition.width ?? 0, 10) || 0,
+          height: Number.parseInt(definition.height ?? 0, 10) || 0
+        };
+
+        const spawn = definition.spawn ??
+          (definition.spawnPoint && typeof definition.spawnPoint === 'object'
+            ? definition.spawnPoint
+            : {
+                x:
+                  (definition.spawn && Number.parseInt(definition.spawn.x, 10)) ??
+                  Number.parseInt(definition.spawnX ?? size.width / 2, 10) ||
+                  Math.floor(size.width / 2) ||
+                  0,
+                y:
+                  (definition.spawn && Number.parseInt(definition.spawn.y, 10)) ??
+                  Number.parseInt(definition.spawnY ?? size.height / 2, 10) ||
+                  Math.floor(size.height / 2) ||
+                  0
+              });
+
+        return {
+          id: definition.id ?? '',
+          name: definition.name ?? definition.title ?? definition.id ?? 'map',
+          biome: definition.biome ?? 'Comunidad',
+          description: definition.description ?? '',
+          size,
+          spawn,
+          blockedAreas: Array.isArray(definition.blockedAreas) ? definition.blockedAreas : [],
+          objects: Array.isArray(definition.objects) ? definition.objects : [],
+          portals: Array.isArray(definition.portals) ? definition.portals : [],
+          theme: definition.theme ?? { borderColour: null },
+          sourcePath: definition.sourcePath ?? null
+        };
+      })
+      .filter((map) => map && map.id);
+
+    return sortMaps(normalised);
+  } catch (error) {
+    return [];
+  }
+};

@@ -1,6 +1,6 @@
 const DEFAULT_TILESET_CONFIG = {
-  tileWidth: 64,
-  tileHeight: 32
+  tileWidth: 48,
+  tileHeight: 48
 };
 
 const DEFAULT_SPRITE_CONFIG = {
@@ -17,9 +17,9 @@ const DEFAULT_SPRITE_CONFIG = {
 };
 
 const TILE_PALETTE = [
-  { top: '#8eb5ff', bottom: '#5575d9', stroke: '#1b3a8a' },
-  { top: '#f4a9a8', bottom: '#d25b5b', stroke: '#861b2b' },
-  { top: '#ffe8a3', bottom: '#f0c14b', stroke: '#b58817' }
+  { top: '#8eb5ff', bottom: '#6c8fe8', stroke: '#1b3a8a' },
+  { top: '#f4a9a8', bottom: '#e27575', stroke: '#861b2b' },
+  { top: '#ffe8a3', bottom: '#f5c65b', stroke: '#b58817' }
 ];
 
 const PLAYER_COLORS = {
@@ -130,12 +130,10 @@ class SpriteAnimator {
   }
 }
 
-const isoToScreen = (x, y, tileWidth, tileHeight) => {
-  return {
-    x: (x - y) * (tileWidth / 2),
-    y: (x + y) * (tileHeight / 2)
-  };
-};
+const gridToScreen = (x, y, tileWidth, tileHeight) => ({
+  x: x * tileWidth,
+  y: y * tileHeight
+});
 
 export class IsometricEngine {
   constructor(canvas, options = {}) {
@@ -352,9 +350,9 @@ export class IsometricEngine {
       for (let x = 0; x < map.size.width; x += 1) {
         const relX = x - camera.x;
         const relY = y - camera.y;
-        const iso = isoToScreen(relX, relY, tileWidth, tileHeight);
-        const drawX = originX + iso.x - tileWidth / 2;
-        const drawY = originY + iso.y - tileHeight;
+        const screen = gridToScreen(relX, relY, tileWidth, tileHeight);
+        const drawX = originX + screen.x - tileWidth / 2;
+        const drawY = originY + screen.y - tileHeight / 2;
         const key = toKey(x, y);
 
         let tileIndex = 0;
@@ -379,21 +377,16 @@ export class IsometricEngine {
     const { tileWidth, tileHeight } = this.tileConfig;
     const palette = TILE_PALETTE[tileIndex] ?? TILE_PALETTE[0];
 
-    this.ctx.save();
-    this.ctx.beginPath();
-    this.ctx.moveTo(x + tileWidth / 2, y);
-    this.ctx.lineTo(x + tileWidth, y + tileHeight / 2);
-    this.ctx.lineTo(x + tileWidth / 2, y + tileHeight);
-    this.ctx.lineTo(x, y + tileHeight / 2);
-    this.ctx.closePath();
-
     const gradient = this.ctx.createLinearGradient(x, y, x, y + tileHeight);
     gradient.addColorStop(0, palette.top);
     gradient.addColorStop(1, palette.bottom);
 
+    this.ctx.save();
     this.ctx.fillStyle = gradient;
     this.ctx.strokeStyle = palette.stroke;
-    this.ctx.lineWidth = 1.2;
+    this.ctx.lineWidth = 1;
+    this.ctx.beginPath();
+    this.ctx.rect(x, y, tileWidth, tileHeight);
     this.ctx.fill();
     this.ctx.stroke();
     this.ctx.restore();
@@ -435,7 +428,10 @@ export class IsometricEngine {
     const sorted = allPlayers.sort((a, b) => {
       const aPos = a.position ?? { x: 0, y: 0 };
       const bPos = b.position ?? { x: 0, y: 0 };
-      return aPos.x + aPos.y - (bPos.x + bPos.y);
+      if (aPos.y !== bPos.y) {
+        return aPos.y - bPos.y;
+      }
+      return aPos.x - bPos.x;
     });
 
     const { tileWidth, tileHeight } = this.tileConfig;
@@ -447,9 +443,9 @@ export class IsometricEngine {
       const position = entity.position ?? { x: 0, y: 0 };
       const relX = position.x - camera.x;
       const relY = position.y - camera.y;
-      const iso = isoToScreen(relX, relY, tileWidth, tileHeight);
-      const screenX = originX + iso.x;
-      const screenY = originY + iso.y;
+      const screen = gridToScreen(relX, relY, tileWidth, tileHeight);
+      const screenX = originX + screen.x;
+      const screenY = originY + screen.y;
 
       const { time } = this.animator.getFrame(
         entity.id ?? (entity.local ? 'local' : `remote-${screenX}-${screenY}`),
@@ -586,7 +582,7 @@ export class IsometricEngine {
   computeNameplateY(screenY, animation, time) {
     const { tileHeight } = this.tileConfig;
     const bob = this.resolveBobOffset(animation, time);
-    return screenY - tileHeight * 1.8 - bob;
+    return screenY - tileHeight * 1.4 - bob;
   }
 
   resolveBobOffset(animation, time) {
@@ -608,14 +604,14 @@ export class IsometricEngine {
     // shadow
     this.ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
     this.ctx.beginPath();
-    this.ctx.ellipse(screenX, screenY + tileHeight * 0.15, tileWidth * 0.35, tileHeight * 0.2, 0, 0, Math.PI * 2);
+    this.ctx.ellipse(screenX, screenY + tileHeight * 0.1, tileWidth * 0.35, tileHeight * 0.18, 0, 0, Math.PI * 2);
     this.ctx.fill();
 
-    const baseY = screenY - tileHeight / 2 - bob;
-    const bodyWidth = tileWidth * 0.55;
-    const bodyHeight = tileHeight * 1.2;
-    const torsoHeight = bodyHeight * 0.6;
-    const headRadius = tileWidth * 0.22;
+    const baseY = screenY - tileHeight * 0.6 - bob;
+    const bodyWidth = tileWidth * 0.5;
+    const bodyHeight = tileHeight * 1.05;
+    const torsoHeight = bodyHeight * 0.58;
+    const headRadius = tileWidth * 0.2;
 
     this.ctx.translate(screenX, baseY);
 

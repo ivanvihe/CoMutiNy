@@ -70,7 +70,7 @@ export default function MapViewport() {
       .filter((player) => player.id && player.id !== localPlayerId)
       .map((player) => ({
         id: player.id,
-        name: player.alias ?? player.metadata?.alias ?? player.name ?? 'Tripulante',
+        name: player.alias ?? player.metadata?.alias ?? player.name ?? 'Usuario',
         position: player.renderPosition ?? player.position ?? { x: 0, y: 0 },
         direction: player.direction ?? player.metadata?.heading ?? 'down',
         animation: player.animation ?? 'idle',
@@ -242,7 +242,7 @@ export default function MapViewport() {
             <p className="hud-card__subtitle">{currentMap.description}</p>
             <div className="hud-meta">
               <span>Bioma: {currentMap.biome}</span>
-              <span>Tripulantes: {totalCrew}</span>
+              <span>Usuarios: {totalCrew}</span>
             </div>
           </div>
         </div>

@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import mapRepository from '../repositories/mapRepository.js'
+import loadStaticMapDefinitions from '../utils/staticMapLoader.js'
 
 const slugify = (value) => {
   if (!value) {
@@ -365,6 +366,10 @@ const serializeMap = (mapModel) => {
 }
 
 const mapService = {
+  async listStaticMaps () {
+    return await loadStaticMapDefinitions()
+  },
+
   async listMaps ({ limit = 20, offset = 0 } = {}) {
     const { count, rows } = await mapRepository.list({ limit, offset })
     return {
