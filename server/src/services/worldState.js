@@ -1,3 +1,5 @@
+import crypto from 'node:crypto'
+
 const DEFAULT_POSITION = Object.freeze({
   x: 0,
   y: 0,
@@ -46,6 +48,18 @@ const sanitizeName = (name, fallback) => {
   }
 
   return name.trim().slice(0, 100)
+}
+
+const generatePlayerId = (fallback) => {
+  if (fallback) {
+    return fallback
+  }
+
+  if (typeof crypto.randomUUID === 'function') {
+    return `player-${crypto.randomUUID()}`
+  }
+
+  return `player-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
 }
 
 const sanitizeAppearance = (appearance) => {
@@ -253,14 +267,26 @@ class WorldState {
   }
 
   addPlayer (socketId, payload = {}) {
-    const playerId = typeof payload.playerId === 'string' ? payload.playerId.trim() : ''
+    const requestedId =
+      typeof payload.playerId === 'string' && payload.playerId.trim()
+        ? payload.playerId.trim()
+        : null
 
-    if (!playerId) {
-      throw new Error('playerId is required')
+    const playerId = generatePlayerId(requestedId ?? socketId)
+
+    const aliasCandidate =
+      typeof payload.alias === 'string' && payload.alias.trim()
+        ? payload.alias.trim()
+        : typeof payload.name === 'string' && payload.name.trim()
+          ? payload.name.trim()
+          : null
+
+    if (!aliasCandidate) {
+      throw new Error('Alias is required')
     }
 
-    const fallbackName = `Player ${playerId}`
-    const name = sanitizeName(payload.name, fallbackName)
+    const alias = sanitizeName(aliasCandidate, aliasCandidate)
+    const name = sanitizeName(payload.name, alias)
     const position = sanitizePosition(payload.position)
     const animation = sanitizeAnimation(payload.animation)
 
@@ -271,7 +297,11 @@ class WorldState {
       this.playerToSocket.delete(playerId)
     }
 
-    const metadata = mergeMetadata({}, payload.metadata)
+    let metadata = mergeMetadata({}, payload.metadata)
+    metadata = mergeMetadata(metadata, {
+      alias,
+      ...(payload.avatar && typeof payload.avatar === 'object' ? { avatar: payload.avatar } : {})
+    })
 
     const player = {
       id: playerId,
@@ -309,13 +339,35 @@ class WorldState {
       player.animation = sanitizeAnimation(payload.animation)
     }
 
-    if (typeof payload.name === 'string') {
+    let metadata = player.metadata
+
+    if (payload.metadata && typeof payload.metadata === 'object') {
+      metadata = mergeMetadata(metadata, payload.metadata)
+    }
+
+    if (payload.avatar && typeof payload.avatar === 'object') {
+      metadata = mergeMetadata(metadata, { avatar: payload.avatar })
+    }
+
+    if (typeof payload.alias === 'string' && payload.alias.trim()) {
+      const alias = sanitizeName(payload.alias, player.name)
+      metadata = mergeMetadata(metadata, { alias })
+      player.name = alias
+    } else if (typeof payload.name === 'string') {
       player.name = sanitizeName(payload.name, player.name)
     }
 
-    if (payload.metadata && typeof payload.metadata === 'object') {
-      player.metadata = mergeMetadata(player.metadata, payload.metadata)
+    const aliasFromMetadata =
+      typeof metadata?.alias === 'string' && metadata.alias.trim()
+        ? sanitizeName(metadata.alias, player.name)
+        : null
+
+    if (aliasFromMetadata) {
+      metadata.alias = aliasFromMetadata
+      player.name = aliasFromMetadata
     }
+
+    player.metadata = metadata
 
     this.playersById.set(player.id, player)
 
@@ -378,11 +430,23 @@ class WorldState {
       return null
     }
 
-    const fallbackName = `Player ${payload.id}`
-    const name = sanitizeName(payload.name, fallbackName)
+    const aliasCandidate =
+      typeof payload.metadata?.alias === 'string' && payload.metadata.alias.trim()
+        ? payload.metadata.alias.trim()
+        : typeof payload.name === 'string' && payload.name.trim()
+          ? payload.name.trim()
+          : `Tripulante ${payload.id}`
+
+    const alias = sanitizeName(aliasCandidate, aliasCandidate)
+    const name = sanitizeName(payload.name, alias)
     const position = sanitizePosition(payload.position)
     const animation = sanitizeAnimation(payload.animation)
-    const metadata = mergeMetadata({}, payload.metadata)
+    let metadata = mergeMetadata({}, payload.metadata)
+
+    metadata = mergeMetadata(metadata, {
+      alias,
+      ...(payload.avatar && typeof payload.avatar === 'object' ? { avatar: payload.avatar } : {})
+    })
 
     const player = {
       id: payload.id,

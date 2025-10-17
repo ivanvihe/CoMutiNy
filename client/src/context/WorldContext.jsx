@@ -1,12 +1,15 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { io } from 'socket.io-client';
 import LagCompensator from '../utils/lagCompensation.js';
-import { useAuth } from './AuthContext.jsx';
 
 const WorldContext = createContext({
   connected: false,
   connectionError: null,
   connectionStatus: 'idle',
+  profile: null,
+  joinStatus: 'idle',
+  joinError: null,
+  joinWorld: () => Promise.resolve(null),
   players: [],
   localPlayerId: null,
   spriteAtlas: null,
@@ -51,6 +54,34 @@ const mergeMetadata = (current = {}, incoming = {}) => {
 
 const DEFAULT_ANIMATION = 'idle';
 
+const SPRITE_IDS = ['explorer', 'pilot', 'engineer', 'scientist'];
+const SPRITE_COLORS = ['#ff7043', '#29b6f6', '#66bb6a', '#ab47bc', '#ffca28', '#8d6e63'];
+const ACCENT_COLORS = ['#212121', '#f5f5f5', '#37474f', '#cfd8dc'];
+
+const pickRandom = (items) => {
+  if (!Array.isArray(items) || items.length === 0) {
+    return null;
+  }
+  const index = Math.floor(Math.random() * items.length);
+  return items[index];
+};
+
+const generateRandomAvatar = () => ({
+  sprite: pickRandom(SPRITE_IDS) ?? 'explorer',
+  color: pickRandom(SPRITE_COLORS) ?? '#ff7043',
+  accent: pickRandom(ACCENT_COLORS) ?? '#212121'
+});
+
+const generateClientPlayerId = () => {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return `client-${crypto.randomUUID()}`;
+  }
+
+  const random = Math.random().toString(36).slice(2, 10);
+  const timestamp = Date.now().toString(36);
+  return `client-${timestamp}${random}`;
+};
+
 const deriveServerUrl = () => {
   if (typeof window === 'undefined') {
     return null;
@@ -65,16 +96,18 @@ const deriveServerUrl = () => {
 };
 
 export function WorldProvider({ children }) {
-  const { user } = useAuth();
   const [connectionState, setConnectionState] = useState({ status: 'idle', error: null });
   const [players, setPlayers] = useState([]);
   const [localPlayerId, setLocalPlayerId] = useState(null);
   const [spriteAtlas, setSpriteAtlas] = useState(null);
   const [chatMessages, setChatMessages] = useState([]);
+  const [profile, setProfile] = useState(null);
+  const [joinState, setJoinState] = useState({ status: 'idle', error: null });
 
   const socketRef = useRef(null);
   const localPlayerIdRef = useRef(null);
-  const fallbackPlayerIdRef = useRef(null);
+  const profileRef = useRef(null);
+  const joinStateRef = useRef({ status: 'idle', error: null });
   const playersRef = useRef(new Map());
   const compensatorsRef = useRef(new Map());
   const chatRef = useRef([]);
@@ -83,6 +116,21 @@ export function WorldProvider({ children }) {
     animation: DEFAULT_ANIMATION,
     metadata: {}
   });
+
+  const ensureLocalPlayerId = useCallback(() => {
+    if (localPlayerIdRef.current) {
+      return localPlayerIdRef.current;
+    }
+
+    const fallbackId = profileRef.current?.playerId ?? generateClientPlayerId();
+    localPlayerIdRef.current = fallbackId;
+    setLocalPlayerId(fallbackId);
+    return fallbackId;
+  }, []);
+
+  useEffect(() => {
+    joinStateRef.current = joinState;
+  }, [joinState]);
 
   const ensureCompensator = useCallback((playerId) => {
     if (!playerId) {
@@ -138,7 +186,7 @@ export function WorldProvider({ children }) {
       const payload = {
         id: message.id,
         playerId: message.playerId ?? null,
-        author: message.author ?? 'Player',
+        author: message.author ?? 'Tripulante',
         content: message.content ?? '',
         timestamp: message.timestamp ?? new Date().toISOString()
       };
@@ -185,7 +233,7 @@ export function WorldProvider({ children }) {
           .map((entry) => ({
             id: entry.id,
             playerId: entry.playerId ?? null,
-            author: entry.author ?? 'Player',
+            author: entry.author ?? 'Tripulante',
             content: entry.content ?? '',
             timestamp: entry.timestamp ?? new Date().toISOString()
           }));
@@ -261,57 +309,203 @@ export function WorldProvider({ children }) {
     };
   }, [refreshRenderablePlayers]);
 
-  const determinePlayerId = useCallback(
-    () => {
-      if (user?.id) {
-        return String(user.id);
+  const joinWithProfile = useCallback(
+    (profileData) => {
+      const socket = socketRef.current;
+
+      if (!socket?.connected) {
+        return Promise.reject(new Error('No hay conexión activa con el servidor.'));
       }
 
-      if (!fallbackPlayerIdRef.current) {
-        fallbackPlayerIdRef.current = `guest-${Math.random().toString(36).slice(2, 10)}`;
+      const alias = typeof profileData?.alias === 'string' ? profileData.alias.trim() : '';
+
+      if (!alias) {
+        return Promise.reject(new Error('El alias es obligatorio.'));
       }
 
-      return fallbackPlayerIdRef.current;
+      const avatar =
+        profileData?.avatar && typeof profileData.avatar === 'object'
+          ? profileData.avatar
+          : null;
+
+      const desiredId =
+        typeof profileData?.playerId === 'string' && profileData.playerId.trim()
+          ? profileData.playerId.trim()
+          : ensureLocalPlayerId();
+
+      const previousId = localPlayerIdRef.current;
+
+      if (previousId && previousId !== desiredId) {
+        playersRef.current.delete(previousId);
+        compensatorsRef.current.delete(previousId);
+      }
+
+      localPlayerIdRef.current = desiredId;
+      setLocalPlayerId(desiredId);
+
+      const nextProfile = {
+        alias,
+        avatar,
+        playerId: desiredId
+      };
+
+      profileRef.current = nextProfile;
+      setProfile(nextProfile);
+
+      const metadata = mergeMetadata(localStateRef.current.metadata, {
+        alias,
+        ...(avatar ? { avatar } : {})
+      });
+
+      const nextState = {
+        ...localStateRef.current,
+        metadata
+      };
+
+      localStateRef.current = nextState;
+
+      return new Promise((resolve, reject) => {
+        socket.emit(
+          'player:join',
+          {
+            playerId: desiredId,
+            name: alias,
+            alias,
+            avatar,
+            position: nextState.position,
+            animation: nextState.animation,
+            metadata
+          },
+          (ack) => {
+            if (!ack?.ok) {
+              reject(new Error(ack?.message ?? 'No se pudo unir a la sesión.'));
+              return;
+            }
+
+            if (ack.state) {
+              applySnapshot(ack.state);
+            }
+
+            if (ack.player) {
+              applyPlayerSnapshot(ack.player);
+            }
+
+            const joined = ack.player ?? {};
+            const resolvedId = joined.id ?? desiredId;
+            const resolvedAlias =
+              joined?.metadata?.alias ?? joined?.name ?? alias;
+            const resolvedAvatar =
+              joined?.metadata?.avatar ?? avatar ?? null;
+
+            if (resolvedId && resolvedId !== desiredId) {
+              playersRef.current.delete(desiredId);
+              compensatorsRef.current.delete(desiredId);
+            }
+
+            localPlayerIdRef.current = resolvedId;
+            setLocalPlayerId(resolvedId);
+
+            const mergedMetadata = mergeMetadata(metadata, {
+              alias: resolvedAlias,
+              ...(resolvedAvatar ? { avatar: resolvedAvatar } : {})
+            });
+
+            localStateRef.current = {
+              ...localStateRef.current,
+              metadata: mergedMetadata
+            };
+
+            const resolvedProfile = {
+              alias: resolvedAlias,
+              avatar: resolvedAvatar,
+              playerId: resolvedId
+            };
+
+            profileRef.current = resolvedProfile;
+            setProfile(resolvedProfile);
+
+            resolve(joined);
+          }
+        );
+      });
     },
-    [user]
+    [applyPlayerSnapshot, applySnapshot, ensureLocalPlayerId]
   );
 
-  const sendJoinRequest = useCallback(() => {
-    const socket = socketRef.current;
-    if (!socket || !socket.connected) {
-      return;
-    }
+  const joinWorld = useCallback(
+    (aliasInput) => {
+      const trimmed = typeof aliasInput === 'string' ? aliasInput.trim() : '';
 
-    const playerId = determinePlayerId();
-    const previousId = localPlayerIdRef.current;
-
-    if (previousId && previousId !== playerId) {
-      playersRef.current.delete(previousId);
-      compensatorsRef.current.delete(previousId);
-    }
-
-    localPlayerIdRef.current = playerId;
-    setLocalPlayerId(playerId);
-
-    const payload = {
-      playerId,
-      name: user?.username ?? `Guest ${playerId.slice(-4)}`,
-      position: localStateRef.current.position,
-      animation: localStateRef.current.animation,
-      metadata: mergeMetadata(localStateRef.current.metadata, {
-        mapId: localStateRef.current.metadata?.mapId
-      })
-    };
-
-    socket.emit('player:join', payload, (ack) => {
-      if (ack?.state) {
-        applySnapshot(ack.state);
+      if (!trimmed) {
+        const error = new Error('Introduce un alias para unirte.');
+        setJoinState({ status: 'error', error });
+        return Promise.reject(error);
       }
-      if (ack?.player) {
-        applyPlayerSnapshot(ack.player);
+
+      const previousProfile = profileRef.current;
+      const shouldRegenerateAvatar = !previousProfile || previousProfile.alias !== trimmed;
+      const avatar = shouldRegenerateAvatar
+        ? generateRandomAvatar()
+        : previousProfile?.avatar ?? generateRandomAvatar();
+      const playerId = previousProfile?.playerId ?? ensureLocalPlayerId();
+
+      const profileData = { alias: trimmed, avatar, playerId };
+      profileRef.current = profileData;
+      setProfile(profileData);
+      setJoinState({ status: 'pending', error: null });
+
+      const attemptJoin = () =>
+        joinWithProfile(profileData)
+          .then((player) => {
+            setJoinState({ status: 'ready', error: null });
+            return player;
+          })
+          .catch((error) => {
+            setJoinState({ status: 'error', error });
+            throw error;
+          });
+
+      const socket = socketRef.current;
+
+      if (socket?.connected) {
+        return attemptJoin();
       }
-    });
-  }, [applyPlayerSnapshot, applySnapshot, determinePlayerId, user]);
+
+      if (!socket) {
+        const error = new Error('No se pudo establecer conexión con el servidor.');
+        setJoinState({ status: 'error', error });
+        return Promise.reject(error);
+      }
+
+      if (socket.disconnected && typeof socket.connect === 'function') {
+        socket.connect();
+      }
+
+      return new Promise((resolve, reject) => {
+        const handleConnect = () => {
+          cleanup();
+          attemptJoin().then(resolve).catch(reject);
+        };
+
+        const handleError = (err) => {
+          cleanup();
+          const error =
+            err instanceof Error ? err : new Error('No se pudo conectar con el servidor.');
+          setJoinState({ status: 'error', error });
+          reject(error);
+        };
+
+        const cleanup = () => {
+          socket.off('connect', handleConnect);
+          socket.off('connect_error', handleError);
+        };
+
+        socket.once('connect', handleConnect);
+        socket.once('connect_error', handleError);
+      });
+    },
+    [ensureLocalPlayerId, joinWithProfile]
+  );
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -337,21 +531,47 @@ export function WorldProvider({ children }) {
 
     const handleConnect = () => {
       setConnectionState({ status: 'connected', error: null });
-      sendJoinRequest();
+
+      if (profileRef.current) {
+        if (joinStateRef.current.status !== 'pending') {
+          setJoinState({ status: 'pending', error: null });
+        }
+
+        joinWithProfile(profileRef.current)
+          .then(() => {
+            setJoinState({ status: 'ready', error: null });
+          })
+          .catch((error) => {
+            setJoinState({ status: 'error', error });
+          });
+      }
     };
 
     const handleDisconnect = () => {
       setConnectionState({ status: 'disconnected', error: null });
+
+      setJoinState((previous) =>
+        previous.status === 'ready' ? { status: 'disconnected', error: null } : previous
+      );
     };
 
     const handleConnectError = (error) => {
       setConnectionState({ status: 'error', error });
+
+      if (joinStateRef.current.status === 'pending') {
+        setJoinState({ status: 'error', error });
+      }
     };
 
     const handleSessionTerminated = (payload) => {
-      setConnectionState({ status: 'terminated', error: payload?.reason ?? 'Session terminated' });
+      const reason = payload?.reason ?? 'Sesión terminada';
+
+      setConnectionState({ status: 'terminated', error: reason });
+      setJoinState({ status: 'terminated', error: new Error(reason) });
       playersRef.current.clear();
       compensatorsRef.current.clear();
+      localPlayerIdRef.current = null;
+      setLocalPlayerId(null);
       chatRef.current = [];
       setPlayers([]);
       setChatMessages([]);
@@ -389,17 +609,25 @@ export function WorldProvider({ children }) {
       chatRef.current = [];
       setChatMessages([]);
     };
-  }, [appendChatMessage, applyPlayerSnapshot, applySnapshot, removePlayer, sendJoinRequest]);
-
-  useEffect(() => {
-    sendJoinRequest();
-  }, [sendJoinRequest, user]);
+  }, [appendChatMessage, applyPlayerSnapshot, applySnapshot, joinWithProfile, removePlayer]);
 
   const updateLocalPlayerState = useCallback(
     (partial) => {
-      const playerId = localPlayerId ?? determinePlayerId();
-      localPlayerIdRef.current = playerId;
-      setLocalPlayerId(playerId);
+      const baseId = localPlayerIdRef.current ?? localPlayerId;
+      const playerId = baseId ?? ensureLocalPlayerId();
+
+      if (!localPlayerIdRef.current) {
+        localPlayerIdRef.current = playerId;
+      }
+
+      if (localPlayerId !== playerId) {
+        setLocalPlayerId(playerId);
+      }
+
+      if (profileRef.current && profileRef.current.playerId !== playerId) {
+        profileRef.current = { ...profileRef.current, playerId };
+        setProfile(profileRef.current);
+      }
 
       const nextState = { ...localStateRef.current };
 
@@ -415,42 +643,62 @@ export function WorldProvider({ children }) {
         nextState.metadata = mergeMetadata(nextState.metadata, partial.metadata);
       }
 
+      const alias = profileRef.current?.alias ?? nextState.metadata?.alias ?? null;
+      const avatar = profileRef.current?.avatar ?? nextState.metadata?.avatar ?? null;
+
+      let metadata = nextState.metadata;
+
+      if (alias) {
+        metadata = mergeMetadata(metadata, { alias });
+      }
+
+      if (avatar) {
+        metadata = mergeMetadata(metadata, { avatar });
+      }
+
+      nextState.metadata = metadata;
       localStateRef.current = nextState;
 
       const existing = playersRef.current.get(playerId) ?? { id: playerId };
+      const displayName = alias ?? existing.name ?? `Tripulante ${playerId.slice(-4)}`;
+      const combinedMetadata = mergeMetadata(existing.metadata, metadata);
+
       const updatedPlayer = {
         ...existing,
-        name: user?.username ?? existing.name ?? `Guest ${playerId.slice(-4)}`,
+        id: playerId,
+        name: displayName,
         position: nextState.position,
         animation: nextState.animation,
-        metadata: mergeMetadata(existing.metadata, nextState.metadata)
+        metadata: combinedMetadata
       };
 
       playersRef.current.set(playerId, updatedPlayer);
       ensureCompensator(playerId)?.addSample(nextState.position);
 
       const socket = socketRef.current;
-      if (socket?.connected) {
+      if (socket?.connected && joinStateRef.current.status === 'ready') {
         socket.emit('player:update', {
           position: nextState.position,
           animation: nextState.animation,
-          metadata: nextState.metadata,
-          name: updatedPlayer.name
+          metadata: combinedMetadata,
+          name: displayName
         });
       }
     },
-    [determinePlayerId, ensureCompensator, localPlayerId, user]
+    [ensureCompensator, localPlayerId]
   );
 
   const sendChatMessage = useCallback(
     (content) => {
       const socket = socketRef.current;
-      const playerId = localPlayerIdRef.current ?? determinePlayerId();
+      const playerId = localPlayerIdRef.current ?? localPlayerId ?? ensureLocalPlayerId();
       const trimmed = typeof content === 'string' ? content.trim() : '';
 
-      if (!socket?.connected || !trimmed) {
+      if (!socket?.connected || !trimmed || joinStateRef.current.status !== 'ready') {
         return Promise.resolve(null);
       }
+
+      const author = profileRef.current?.alias ?? undefined;
 
       return new Promise((resolve, reject) => {
         socket.emit(
@@ -458,7 +706,7 @@ export function WorldProvider({ children }) {
           {
             content: trimmed,
             playerId,
-            author: user?.username ?? undefined
+            author
           },
           (ack) => {
             if (ack?.ok && ack.message) {
@@ -471,7 +719,7 @@ export function WorldProvider({ children }) {
         );
       });
     },
-    [appendChatMessage, determinePlayerId, user]
+    [appendChatMessage, ensureLocalPlayerId, localPlayerId]
   );
 
   const value = useMemo(
@@ -479,6 +727,10 @@ export function WorldProvider({ children }) {
       connected: connectionState.status === 'connected',
       connectionError: connectionState.error,
       connectionStatus: connectionState.status,
+      profile,
+      joinStatus: joinState.status,
+      joinError: joinState.error,
+      joinWorld,
       players,
       localPlayerId,
       spriteAtlas,
@@ -489,12 +741,16 @@ export function WorldProvider({ children }) {
     [
       connectionState.error,
       connectionState.status,
+      profile,
+      joinState.error,
+      joinState.status,
       chatMessages,
       localPlayerId,
       players,
       spriteAtlas,
       sendChatMessage,
-      updateLocalPlayerState
+      updateLocalPlayerState,
+      joinWorld
     ]
   );
 
