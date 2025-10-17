@@ -61,6 +61,35 @@ class MapObject:
         return payload
 
 
+@dataclass(frozen=True)
+class MapDoor:
+    """Simple descriptor for an inbound or outbound door."""
+
+    id: str
+    kind: str  # "in" or "out"
+    position: MapPosition
+    target_map: Optional[str] = None
+    target_position: Optional[MapPosition] = None
+
+    def to_dict(self) -> Dict[str, object]:
+        payload: Dict[str, object] = {
+            "id": self.id,
+            "kind": self.kind,
+            "position": {"x": self.position.x, "y": self.position.y},
+        }
+
+        if self.target_map:
+            payload["targetMap"] = self.target_map
+
+        if self.target_position:
+            payload["targetPosition"] = {
+                "x": self.target_position.x,
+                "y": self.target_position.y,
+            }
+
+        return payload
+
+
 @dataclass
 class MapDefinition:
     """Normalised representation of a `.map` file."""
@@ -73,6 +102,7 @@ class MapDefinition:
     spawn: MapPosition
     blocked_areas: List[MapArea] = field(default_factory=list)
     objects: List[MapObject] = field(default_factory=list)
+    doors: List[MapDoor] = field(default_factory=list)
     portals: List[Dict[str, object]] = field(default_factory=list)
     theme: Dict[str, object] = field(default_factory=dict)
     source_path: Optional[str] = None
@@ -93,6 +123,7 @@ class MapDefinition:
                 for area in self.blocked_areas
             ],
             "objects": [obj.to_dict() for obj in self.objects],
+            "doors": [door.to_dict() for door in self.doors],
             "portals": [dict(portal) for portal in self.portals],
             "theme": {**self.theme},
             "sourcePath": self.source_path,

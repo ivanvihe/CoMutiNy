@@ -108,6 +108,85 @@ export const parseCoordinate = (value) => {
   return null;
 };
 
+const splitDoorEntries = (value = '') =>
+  `${value}`
+    .split(/[;,\n]/)
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+
+const parseDoorEntry = (value) => {
+  let coordinatePart = value;
+  let remainder = '';
+
+  if (value.includes('->')) {
+    [coordinatePart, remainder] = value.split('->', 1);
+  } else if (value.includes(':')) {
+    [coordinatePart, remainder] = value.split(':', 1);
+  }
+
+  const position = parseCoordinate(coordinatePart.trim());
+  if (!position) {
+    throw new Error(`Coordenada de puerta inválida: "${value}"`);
+  }
+
+  remainder = remainder.trim();
+  if (!remainder) {
+    return { position, targetMap: null, targetPosition: null };
+  }
+
+  if (remainder.includes('@')) {
+    const [mapPart, coordinateTarget] = remainder.split('@', 1);
+    const targetMap = mapPart.trim() || null;
+    const targetPosition = parseCoordinate(coordinateTarget.trim());
+    if (coordinateTarget.trim() && !targetPosition) {
+      throw new Error(`Coordenada destino inválida en puerta: "${value}"`);
+    }
+    return { position, targetMap, targetPosition };
+  }
+
+  return { position, targetMap: remainder || null, targetPosition: null };
+};
+
+const buildDoorDefinitions = (entries, { id, kind, registry }) => {
+  const doors = [];
+  const objects = [];
+
+  entries.forEach((rawEntry, index) => {
+    const { position, targetMap, targetPosition } = parseDoorEntry(rawEntry);
+    const doorId = ensureUniqueId(`${id}-door-${kind}`, registry);
+    doors.push({
+      id: doorId,
+      kind,
+      position,
+      ...(targetMap ? { targetMap } : {}),
+      ...(targetPosition ? { targetPosition } : {}),
+    });
+
+    if (kind === 'out') {
+      const label = entries.length > 1 ? `Acceso ${index + 1}` : 'Acceso principal';
+      objects.push({
+        id: doorId,
+        name: label,
+        label,
+        position,
+        size: { width: 1, height: 1 },
+        solid: false,
+        metadata: {
+          type: 'door',
+          objectId: 'community_door',
+          instanceId: doorId,
+          doorKind: kind,
+          ...(targetMap ? { targetMap } : {}),
+          ...(targetPosition ? { targetPosition } : {}),
+        },
+        objectId: 'community_door'
+      });
+    }
+  });
+
+  return { doors, objects };
+};
+
 const ensureUniqueId = (baseId, registry) => {
   if (!registry.has(baseId)) {
     registry.set(baseId, 1);
@@ -226,7 +305,15 @@ export const parseMapDefinition = (rawContents, { sourcePath = null } = {}) => {
     parseCoordinate(metadata.spawnPoint ?? '') ??
     parseCoordinate(metadata.spawn ?? '') ??
     { x: Math.floor(size.width / 2) || 0, y: Math.floor(size.height / 2) || 0 };
-  const doorPosition = parseCoordinate(metadata.doorPosition ?? '');
+  const inboundDoorEntries = splitDoorEntries(metadata.doorIn);
+  const outboundDoorEntries = (() => {
+    const explicit = splitDoorEntries(metadata.doorOut);
+    if (explicit.length) {
+      return explicit;
+    }
+    const legacy = parseCoordinate(metadata.doorPosition ?? '');
+    return legacy ? [`${legacy.x}x${legacy.y}`] : [];
+  })();
 
   const fileName = typeof sourcePath === 'string'
     ? sourcePath.split(/[\\/]/).pop() ?? 'map'
@@ -241,19 +328,25 @@ export const parseMapDefinition = (rawContents, { sourcePath = null } = {}) => {
 
   const registry = new Map();
   const objects = [];
+  const doors = [];
 
-  if (doorPosition) {
-    const doorId = ensureUniqueId(`${id}-door`, registry);
-    objects.push({
-      id: doorId,
-      name: 'Acceso principal',
-      label: 'Acceso principal',
-      position: doorPosition,
-      size: { width: 1, height: 1 },
-      solid: false,
-      metadata: { type: 'door', objectId: 'community_door', instanceId: doorId },
-      objectId: 'community_door'
+  if (outboundDoorEntries.length) {
+    const { doors: parsed, objects: doorObjects } = buildDoorDefinitions(outboundDoorEntries, {
+      id,
+      kind: 'out',
+      registry
     });
+    doors.push(...parsed);
+    objects.push(...doorObjects);
+  }
+
+  if (inboundDoorEntries.length) {
+    const { doors: parsed } = buildDoorDefinitions(inboundDoorEntries, {
+      id,
+      kind: 'in',
+      registry
+    });
+    doors.push(...parsed);
   }
 
   const parsedObjects = parseObjects(sections.get('objects') ?? [], { registry });
@@ -268,6 +361,7 @@ export const parseMapDefinition = (rawContents, { sourcePath = null } = {}) => {
     spawn,
     blockedAreas: buildBlockedAreas(size),
     objects,
+    doors,
     portals: [],
     theme: { borderColour: metadata.borderColour ?? null },
     sourcePath: sourcePath ?? fileName
