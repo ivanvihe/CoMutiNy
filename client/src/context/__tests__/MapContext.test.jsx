@@ -26,6 +26,15 @@ jest.mock('../../game/maps.js', () => ({
   fetchServerMaps: jest.fn(() => Promise.resolve([]))
 }));
 
+jest.mock('../../api/objects.js', () => ({
+  fetchObjectDefinitions: jest.fn(() => Promise.resolve([]))
+}));
+
+jest.mock('../../game/objects/definitions.js', () => ({
+  listObjectDefinitions: jest.fn(() => []),
+  registerObjectDefinitions: jest.fn()
+}));
+
 jest.mock('../WorldContext.jsx', () => ({
   useWorld: () => ({
     updateLocalPlayerState: jest.fn(),

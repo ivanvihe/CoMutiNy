@@ -6,6 +6,9 @@ services:
       context: ./client
     environment:
       VITE_API_BASE_URL: http://api:4000
+    volumes:
+      - ./server/maps:/app/server/maps:ro
+      - ./server/objects/definitions:/app/server/objects/definitions:ro
     ports:
       - "${FRONTEND_PORT:-8123}:8123"
     depends_on:
@@ -17,8 +20,10 @@ services:
       - ./server/.env
     environment:
       STATIC_MAP_DIRECTORIES: /app/maps
+      OBJECT_DEFINITION_DIRECTORIES: /app/objects/definitions
     volumes:
       - ./server/maps:/app/maps
+      - ./server/objects/definitions:/app/objects/definitions
     ports:
       - "4000:4000"
     depends_on:
