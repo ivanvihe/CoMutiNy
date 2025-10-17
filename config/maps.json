@@ -1,0 +1,54 @@
+{
+  "maps": [
+    {
+      "id": "bridge",
+      "name": "Puente de mando",
+      "biome": "Comando",
+      "description": "Sala de control principal de la nave con acceso a rutas estratégicas.",
+      "missions": [
+        { "id": "course-relock", "title": "Reconfigurar el rumbo", "status": "available" },
+        { "id": "sensor-diagnostics", "title": "Diagnosticar sensores", "status": "in-progress" }
+      ]
+    },
+    {
+      "id": "quarters",
+      "name": "Camarotes",
+      "biome": "Habitacional",
+      "description": "Zona de descanso y almacenaje personal de la tripulación.",
+      "missions": [
+        { "id": "inventory-pass", "title": "Organizar inventario", "status": "available" },
+        { "id": "shift-rotation", "title": "Coordinar turnos", "status": "available" }
+      ]
+    },
+    {
+      "id": "hydroponics",
+      "name": "Vivero Hidropónico",
+      "biome": "Biológico",
+      "description": "Cubierta dedicada al cultivo de alimentos y a la investigación botánica.",
+      "missions": [
+        { "id": "restore-irrigation", "title": "Reactivar riego", "status": "available" },
+        { "id": "drone-calibration", "title": "Calibrar drones polinizadores", "status": "in-progress" }
+      ]
+    },
+    {
+      "id": "engine-bay",
+      "name": "Bahía de motores",
+      "biome": "Industrial",
+      "description": "Zona de mantenimiento del núcleo y de los propulsores principales.",
+      "missions": [
+        { "id": "plasma-purge", "title": "Ejecutar purga de plasma", "status": "available" },
+        { "id": "reactor-restart", "title": "Reinicio de núcleo", "status": "locked" }
+      ]
+    },
+    {
+      "id": "asteroid-research",
+      "name": "Laboratorio de asteroides",
+      "biome": "Exoplanetario",
+      "description": "Módulo científico para estudiar fragmentos de asteroides y biomas cristalinos.",
+      "missions": [
+        { "id": "map-biome", "title": "Cartografiar bioma", "status": "available" },
+        { "id": "sample-extraction", "title": "Extraer muestras cristalinas", "status": "locked" }
+      ]
+    }
+  ]
+}

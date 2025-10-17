@@ -1,6 +1,11 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { MAPS } from '../game/maps.js';
 import { useWorld } from './WorldContext.jsx';
+import {
+  applyMissionUpdatesToState,
+  createInitialMissionState,
+  DEFAULT_MISSION_STATUS
+} from './mapMissions.js';
 
 const MapContext = createContext(undefined);
 
@@ -35,6 +40,7 @@ const normaliseMap = (mapDefinition) => {
 const MAP_LOOKUP = new Map(MAPS.map((map) => [map.id, normaliseMap(map)]));
 
 const DEFAULT_MAP_ID = MAPS[0]?.id;
+const MAX_LOG_ENTRIES = 30;
 
 export function MapProvider({ children }) {
   const [currentMapId, setCurrentMapId] = useState(DEFAULT_MAP_ID);
@@ -43,10 +49,24 @@ export function MapProvider({ children }) {
     return startMap?.spawn ?? { x: 0, y: 0 };
   });
   const [activeEvent, setActiveEvent] = useState(null);
+  const [missionStates, setMissionStates] = useState(() => createInitialMissionState(MAPS));
+  const [missionLog, setMissionLog] = useState([]);
   const { updateLocalPlayerState } = useWorld();
 
   const availableMaps = useMemo(() => MAPS.map((map) => MAP_LOOKUP.get(map.id)), []);
   const currentMap = useMemo(() => MAP_LOOKUP.get(currentMapId), [currentMapId]);
+  const missions = useMemo(() => {
+    const mapMissions = currentMap?.missions ?? [];
+    if (!mapMissions.length) {
+      return [];
+    }
+
+    const currentState = missionStates[currentMapId] ?? {};
+    return mapMissions.map((mission) => ({
+      ...mission,
+      status: currentState[mission.id] ?? mission.status ?? DEFAULT_MISSION_STATUS
+    }));
+  }, [currentMap, currentMapId, missionStates]);
 
   const isWithinBounds = useCallback(
     ({ x, y }) =>
@@ -189,6 +209,76 @@ export function MapProvider({ children }) {
     [canMoveTo, currentMapId, findPortalAt, playerPosition, switchMap, updateLocalPlayerState]
   );
 
+  const applyMissionUpdates = useCallback(
+    (updates = [], context = {}) => {
+      if (!Array.isArray(updates) || updates.length === 0) {
+        return { applied: false, updates: [] };
+      }
+
+      const resolvedMapId = context.mapId ?? currentMapId;
+      let mutated = false;
+
+      setMissionStates((previous) => {
+        const nextState = applyMissionUpdatesToState(previous, updates, resolvedMapId);
+        mutated = nextState !== previous;
+        return nextState;
+      });
+
+      if (mutated) {
+        const timestamp = Date.now();
+        setMissionLog((previousLog) => {
+          const nextEntries = updates
+            .filter((update) => update?.missionId)
+            .map((update, index) => {
+              const entryMapId = update.mapId ?? resolvedMapId;
+              const mapDefinition = MAP_LOOKUP.get(entryMapId);
+              const missionDefinition = mapDefinition?.missions?.find(
+                (mission) => mission.id === update.missionId
+              );
+
+              return {
+                id: `${entryMapId}-${update.missionId}-${timestamp}-${index}`,
+                timestamp,
+                mapId: entryMapId,
+                mapName: mapDefinition?.name ?? entryMapId,
+                missionId: update.missionId,
+                missionTitle: missionDefinition?.title ?? update.missionId,
+                status: update.status,
+                message: update.log ?? ''
+              };
+            });
+
+          if (!nextEntries.length) {
+            return previousLog;
+          }
+
+          const merged = [...nextEntries, ...previousLog];
+          return merged.slice(0, MAX_LOG_ENTRIES);
+        });
+      }
+
+      return { applied: mutated, updates };
+    },
+    [currentMapId]
+  );
+
+  const updateMissionStatus = useCallback(
+    (missionId, status, mapId = currentMapId) => {
+      if (!missionId || typeof status !== 'string') {
+        return { applied: false, updates: [] };
+      }
+
+      return applyMissionUpdates([
+        {
+          mapId,
+          missionId,
+          status
+        }
+      ]);
+    },
+    [applyMissionUpdates, currentMapId]
+  );
+
   const interact = useCallback(() => {
     const object = findObjectAt(playerPosition);
     if (!object?.interaction) {
@@ -203,9 +293,15 @@ export function MapProvider({ children }) {
       mapId: currentMapId
     };
 
+    if (Array.isArray(object.interaction.missionUpdates)) {
+      const result = applyMissionUpdates(object.interaction.missionUpdates);
+      event.missionUpdates = object.interaction.missionUpdates;
+      event.missionsChanged = result.applied;
+    }
+
     setActiveEvent(event);
     return event;
-  }, [currentMapId, findObjectAt, playerPosition]);
+  }, [applyMissionUpdates, currentMapId, findObjectAt, playerPosition]);
 
   const clearEvent = useCallback(() => setActiveEvent(null), []);
 
@@ -221,6 +317,10 @@ export function MapProvider({ children }) {
       activeEvent,
       switchMap,
       clearEvent,
+      missions,
+      missionStates,
+      updateMissionStatus,
+      missionLog,
       objectAtPlayerPosition: findObjectAt(playerPosition)
     }),
     [
@@ -232,9 +332,13 @@ export function MapProvider({ children }) {
       currentMapId,
       findObjectAt,
       interact,
+      missionLog,
+      missionStates,
+      missions,
       movePlayer,
       playerPosition,
-      switchMap
+      switchMap,
+      updateMissionStatus
     ]
   );
 
