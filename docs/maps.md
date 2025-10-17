@@ -102,6 +102,29 @@ transparentes se renderizan con opacidad reducida y los tiles bloqueantes
 muestran una superposición roja. Los marcadores de portal, objetos y bordes se
 mantienen mediante superposiciones semitransparentes.
 
+## Capas de objetos y definiciones `.obj`
+
+Además de la sección global `[objects]`, ahora es posible crear capas de
+objetos mediante secciones con el prefijo `[objects ...]`. Cada capa acepta las
+propiedades opcionales `id`, `name`, `order` y `visible`, seguidas de las mismas
+entradas individuales que en `[objects]`. Durante la carga del mapa:
+
+- El servidor expone la estructura en `objectLayers`, respetando el orden y el
+  estado de visibilidad indicado en el `.map`.
+- El cliente filtra los objetos pertenecientes a capas ocultas y los dibuja
+  siguiendo `layerOrder`, garantizando que los elementos decorativos se
+  apilen correctamente sobre los tiles.
+- Las capas se incluyen también en la respuesta de la API (`/maps/static`) para
+  que herramientas externas puedan inspeccionarlas.
+
+Cada objeto debe referenciar una definición `.obj` válida ubicada en
+`server/objects/definitions`. Estas definiciones son archivos JSON que incluyen
+el identificador (`id`), metadatos opcionales, la sección `appearance` y la
+configuración de interacción. Durante el arranque tanto el servidor como el
+cliente cargan estos archivos automáticamente; si falta una definición o está
+mal formada, se registrará un aviso en consola y el objeto quedará sin
+apariencia.
+
 ## Consejos para crear mapas
 
 - Define siempre al menos una capa base (`order: 0`) que cubra el área jugable.
