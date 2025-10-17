@@ -7,7 +7,7 @@ import {
   useRef,
   useState
 } from 'react';
-import { MAPS } from '../game/maps.js';
+import { DEFAULT_MAP_ID, MAPS } from '../game/maps.js';
 import { useWorld } from './WorldContext.jsx';
 
 const MapContext = createContext(undefined);
@@ -51,8 +51,6 @@ const normaliseMap = (mapDefinition) => {
 };
 
 const MAP_LOOKUP = new Map(MAPS.map((map) => [map.id, normaliseMap(map)]));
-
-const DEFAULT_MAP_ID = MAPS[0]?.id;
 
 export function MapProvider({ children }) {
   const [currentMapId, setCurrentMapId] = useState(DEFAULT_MAP_ID);

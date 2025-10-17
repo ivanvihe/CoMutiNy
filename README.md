@@ -40,7 +40,7 @@ Cuando alguien vuelve a conectar con el mismo navegador, el contexto reutiliza l
 
 ### Mapas, motor y requisitos de arte
 
-El frontend utiliza un motor isométrico ligero (`client/src/game/isometricEngine.js`) que renderiza los mapas definidos en `client/src/game/maps.js`, cargados dinámicamente desde archivos de texto ubicados en `./maps/`, y en el resumen JSON de `config/maps.json`. Cada mapa describe el entorno, el tamaño en tiles, zonas bloqueadas, objetos interactivos y portales con destino a otros mapas. El documento [docs/graphics-engine.md](docs/graphics-engine.md) detalla la estructura completa, así como la relación entre `MapContext`, `MapViewport` y el estado en tiempo real.
+El frontend utiliza un motor isométrico ligero (`client/src/game/isometricEngine.js`) que renderiza los mapas definidos en `client/src/game/maps.js`, cargados dinámicamente desde archivos de texto ubicados en `./server/maps/`, y en el resumen JSON de `config/maps.json`. Cada mapa describe el entorno, el tamaño en tiles, zonas bloqueadas, objetos interactivos y portales con destino a otros mapas. El documento [docs/graphics-engine.md](docs/graphics-engine.md) detalla la estructura completa, así como la relación entre `MapContext`, `MapViewport` y el estado en tiempo real.
 
 El motor espera tiles romboidales de `64×32 px` y sprites con frames de `48×64 px`, cuatro direcciones (`down`, `left`, `right`, `up`) y una animación base `idle/walk`. Estos valores pueden ajustarse al inicializar el motor, pero los assets personalizados deben respetar las proporciones para evitar deformaciones. Consulta la sección de "Requisitos de tilesets y sprites" en la guía del motor para conocer la distribución de capas, el orden de dibujo y cómo aportar tilesets o atlas nuevos.
 
