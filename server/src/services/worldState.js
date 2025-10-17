@@ -6,6 +6,7 @@ const DEFAULT_POSITION = Object.freeze({
 
 const DEFAULT_ANIMATION = 'idle'
 const MAX_CHAT_HISTORY = 50
+const APPEARANCE_KEYS = Object.freeze(['hair', 'face', 'outfit', 'shoes'])
 
 const HELLO_WORLD = Object.freeze({
   id: 'hello-world',
@@ -45,6 +46,90 @@ const sanitizeName = (name, fallback) => {
   }
 
   return name.trim().slice(0, 100)
+}
+
+const sanitizeAppearance = (appearance) => {
+  if (!appearance || typeof appearance !== 'object') {
+    return {}
+  }
+
+  const sanitized = {}
+
+  for (const key of APPEARANCE_KEYS) {
+    if (appearance[key] === undefined) {
+      continue
+    }
+
+    const value = appearance[key]
+
+    if (typeof value === 'string') {
+      const trimmed = value.trim()
+      sanitized[key] = trimmed ? trimmed.slice(0, 100) : null
+    } else if (value === null) {
+      sanitized[key] = null
+    }
+  }
+
+  return sanitized
+}
+
+const sanitizeMetadata = (metadata) => {
+  if (!metadata || typeof metadata !== 'object') {
+    return {}
+  }
+
+  const sanitized = {}
+
+  if (metadata.avatarId !== undefined) {
+    if (typeof metadata.avatarId === 'string') {
+      const trimmed = metadata.avatarId.trim()
+      if (trimmed) {
+        sanitized.avatarId = trimmed
+      }
+    }
+  }
+
+  const appearance = sanitizeAppearance(metadata.appearance)
+
+  if (Object.keys(appearance).length > 0) {
+    sanitized.appearance = appearance
+  }
+
+  for (const [key, value] of Object.entries(metadata)) {
+    if (key === 'appearance' || key === 'avatarId') {
+      continue
+    }
+
+    sanitized[key] = value
+  }
+
+  return sanitized
+}
+
+const mergeMetadata = (current, incoming) => {
+  const base = current && typeof current === 'object' ? { ...current } : {}
+  const sanitizedIncoming = sanitizeMetadata(incoming)
+
+  if (sanitizedIncoming.avatarId !== undefined) {
+    base.avatarId = sanitizedIncoming.avatarId
+  }
+
+  if (sanitizedIncoming.appearance) {
+    const currentAppearance =
+      base.appearance && typeof base.appearance === 'object' ? { ...base.appearance } : {}
+
+    base.appearance = { ...currentAppearance, ...sanitizedIncoming.appearance }
+  }
+
+  for (const [key, value] of Object.entries(sanitizedIncoming)) {
+    if (key === 'appearance' || key === 'avatarId') {
+      continue
+    }
+
+    base[key] = value
+  }
+
+  return base
 }
 
 const sanitizeMessageContent = (content) => {
@@ -109,12 +194,14 @@ class WorldState {
       }
     }
 
+    const metadata = mergeMetadata({}, payload.metadata)
+
     const player = {
       id: playerId,
       name,
       position,
       animation,
-      metadata: typeof payload.metadata === 'object' && payload.metadata !== null ? { ...payload.metadata } : {}
+      metadata
     }
 
     this.playersBySocket.set(socketId, player)
@@ -142,7 +229,7 @@ class WorldState {
     }
 
     if (payload.metadata && typeof payload.metadata === 'object') {
-      player.metadata = { ...player.metadata, ...payload.metadata }
+      player.metadata = mergeMetadata(player.metadata, payload.metadata)
     }
 
     return { ...player }

@@ -14,6 +14,10 @@ class AvatarRepository {
     })
   }
 
+  async findByIdBasic (id) {
+    return Avatar.findByPk(id)
+  }
+
   async findByUser (userId) {
     return Avatar.findAll({
       where: { userId },

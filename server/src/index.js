@@ -8,6 +8,7 @@ import authRoutes from './routes/authRoutes.js'
 import avatarRoutes from './routes/avatarRoutes.js'
 import { cookies } from './middlewares/auth.js'
 import worldState from './services/worldState.js'
+import avatarRepository from './repositories/AvatarRepository.js'
 
 dotenv.config()
 
@@ -47,14 +48,82 @@ const safeAck = (ack, payload) => {
   }
 }
 
+const enrichJoinPayloadWithAvatar = async (payload = {}) => {
+  const enriched = { ...(payload ?? {}) }
+
+  const metadata = payload?.metadata && typeof payload.metadata === 'object'
+    ? { ...payload.metadata }
+    : {}
+
+  const avatarId =
+    (typeof enriched.avatarId === 'string' && enriched.avatarId.trim()) ||
+    (typeof metadata.avatarId === 'string' && metadata.avatarId.trim()) ||
+    null
+
+  if (!avatarId) {
+    if (Object.keys(metadata).length > 0) {
+      enriched.metadata = metadata
+    }
+
+    delete enriched.avatarId
+
+    return enriched
+  }
+
+  const avatar = await avatarRepository.findByIdBasic(avatarId)
+
+  if (!avatar) {
+    if (Object.keys(metadata).length > 0) {
+      enriched.metadata = metadata
+    }
+
+    delete enriched.avatarId
+
+    return enriched
+  }
+
+  const plain = typeof avatar.get === 'function' ? avatar.get({ plain: true }) : { ...avatar }
+
+  const avatarAppearance = {
+    hair: plain.layerHair ?? null,
+    face: plain.layerFace ?? null,
+    outfit: plain.layerOutfit ?? null,
+    shoes: plain.layerShoes ?? null
+  }
+
+  const payloadAppearance = metadata.appearance && typeof metadata.appearance === 'object'
+    ? metadata.appearance
+    : {}
+
+  const mergedAppearance = {
+    hair: payloadAppearance.hair ?? avatarAppearance.hair,
+    face: payloadAppearance.face ?? avatarAppearance.face,
+    outfit: payloadAppearance.outfit ?? avatarAppearance.outfit,
+    shoes: payloadAppearance.shoes ?? avatarAppearance.shoes
+  }
+
+  enriched.name = typeof enriched.name === 'string' && enriched.name.trim() ? enriched.name : plain.name
+
+  enriched.metadata = {
+    ...metadata,
+    avatarId: plain.id,
+    appearance: mergedAppearance
+  }
+
+  delete enriched.avatarId
+
+  return enriched
+}
+
 io.on('connection', (socket) => {
   console.log(`Socket connected: ${socket.id}`)
 
   socket.emit('world:state', worldState.getSnapshot())
 
-  socket.on('player:join', (payload, ack) => {
+  socket.on('player:join', async (payload, ack) => {
     try {
-      const player = worldState.addPlayer(socket.id, payload)
+      const enrichedPayload = await enrichJoinPayloadWithAvatar(payload)
+      const player = worldState.addPlayer(socket.id, enrichedPayload)
       socket.data.playerId = player.id
 
       console.log(`Player joined: ${player.id} (${socket.id})`)
