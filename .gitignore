@@ -4,3 +4,5 @@ client/dist/
 client/playwright-report/
 client/test-results/
 *.log
+__pycache__/
+.pytest_cache/

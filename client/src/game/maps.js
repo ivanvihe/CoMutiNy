@@ -1,4 +1,8 @@
 import resolveServerUrl from '../utils/resolveServerUrl.js';
+import parseMapDefinition, {
+  parseCoordinate as parseCoordinateString,
+  parseDimensions as parseDimensionsString
+} from './map/parser.js';
 
 const MAP_DIRECTORY = '../../../server/maps';
 const MAP_FILE_EXTENSION = '.map';
@@ -17,42 +21,6 @@ const resolveStaticMapUrl = () => {
     const trimmedBase = `${baseUrl}`.replace(/\/+$/, '');
     return `${trimmedBase}${STATIC_MAP_ENDPOINT}`;
   }
-};
-
-const toCamelCase = (rawKey) =>
-  rawKey
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9]+([a-z0-9])/g, (_, match) => match.toUpperCase())
-    .replace(/[^a-z0-9]/g, '');
-
-const parseDimensions = (value) => {
-  const [width, height] = value
-    .split('x')
-    .map((part) => Number.parseInt(part.trim(), 10))
-    .filter((part) => Number.isFinite(part) && part > 0);
-
-  if (!width || !height) {
-    return null;
-  }
-
-  return { width, height };
-};
-
-const parseCoordinate = (value) => {
-  if (!value) {
-    return null;
-  }
-  const parts = value
-    .split(/[x,]/)
-    .map((part) => Number.parseInt(part.trim(), 10))
-    .filter((part) => Number.isFinite(part));
-
-  if (parts.length !== 2) {
-    return null;
-  }
-
-  return { x: parts[0], y: parts[1] };
 };
 
 const loadMapSources = () => {
@@ -93,84 +61,10 @@ const loadMapSources = () => {
   return {};
 };
 
-const normaliseMapDefinition = (filePath, rawContents) => {
-  const definition = {};
-  rawContents
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter((line) => line && !line.startsWith('#'))
-    .forEach((line) => {
-      const [key, ...rest] = line.split(':');
-      if (!key || rest.length === 0) {
-        return;
-      }
-      const normalisedKey = toCamelCase(key);
-      definition[normalisedKey] = rest.join(':').trim();
-    });
-
-  const size = parseDimensions(definition.dimensions ?? '');
-  const spawn =
-    parseCoordinate(definition.startingPoint ?? '') ??
-    parseCoordinate(definition.spawn ?? '') ??
-    (size
-      ? { x: Math.floor(size.width / 2), y: Math.floor(size.height / 2) }
-      : { x: 0, y: 0 });
-  const doorPosition = parseCoordinate(definition.doorPosition ?? '');
-
-  const fileName = filePath.split('/').pop() ?? 'map';
-  const rawId = typeof definition.id === 'string' ? definition.id.trim() : '';
-  const id = rawId || fileName.replace(/\.map$/i, '');
-
-  const title =
-    (typeof definition.title === 'string' && definition.title.trim()) ||
-    (typeof definition.name === 'string' && definition.name.trim()) ||
-    id;
-
-  const width = size?.width ?? 0;
-  const height = size?.height ?? 0;
-
-  const blockedAreas = width && height
-    ? [
-        { x: 0, y: 0, width, height: 1 },
-        { x: 0, y: height - 1, width, height: 1 },
-        { x: 0, y: 0, width: 1, height },
-        { x: width - 1, y: 0, width: 1, height }
-      ]
-    : [];
-
-  const objects = [];
-  if (doorPosition) {
-    objects.push({
-      id: `${id}-door`,
-      name: 'Acceso principal',
-      position: doorPosition,
-      size: { width: 1, height: 1 },
-      solid: false,
-      metadata: { type: 'door' }
-    });
-  }
-
-  return {
-    id,
-    name: title,
-    biome: definition.biome ?? 'Comunidad',
-    description: definition.description ?? '',
-    size: size ?? { width: 0, height: 0 },
-    spawn,
-    blockedAreas,
-    objects,
-    portals: [],
-    theme: {
-      borderColour: definition.borderColour ?? null
-    },
-    sourcePath: filePath
-  };
-};
-
 const mapSources = loadMapSources();
 
 const normalisedMaps = Object.entries(mapSources).map(([filePath, rawContents]) =>
-  normaliseMapDefinition(filePath, rawContents)
+  parseMapDefinition(rawContents, { sourcePath: filePath })
 );
 
 const sortMaps = (maps) => {
@@ -218,6 +112,278 @@ export const resolveDefaultMapId = (maps = MAPS) => {
   return selectDefaultMap(collection)?.id ?? 'empty-map';
 };
 
+const normaliseMapSize = (value) => {
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    const width = Number.parseInt(value.width ?? value.w ?? value[0], 10);
+    const height = Number.parseInt(value.height ?? value.h ?? value[1], 10);
+    return {
+      width: Number.isFinite(width) && width > 0 ? width : 0,
+      height: Number.isFinite(height) && height > 0 ? height : 0
+    };
+  }
+
+  if (typeof value === 'string') {
+    const parsed = parseDimensionsString(value);
+    if (parsed) {
+      return parsed;
+    }
+  }
+
+  if (Array.isArray(value) && value.length >= 2) {
+    const width = Number.parseInt(value[0], 10);
+    const height = Number.parseInt(value[1], 10);
+    return {
+      width: Number.isFinite(width) && width > 0 ? width : 0,
+      height: Number.isFinite(height) && height > 0 ? height : 0
+    };
+  }
+
+  return { width: 0, height: 0 };
+};
+
+const normaliseCoordinateInput = (value, fallback = null) => {
+  if (typeof value === 'string') {
+    return parseCoordinateString(value) ?? fallback;
+  }
+
+  if (Array.isArray(value) && value.length >= 2) {
+    const x = Number.parseInt(value[0], 10);
+    const y = Number.parseInt(value[1], 10);
+    if (Number.isFinite(x) && Number.isFinite(y)) {
+      return { x, y };
+    }
+  }
+
+  if (value && typeof value === 'object') {
+    const x = Number.parseInt(value.x ?? value.col ?? value.column ?? value[0], 10);
+    const y = Number.parseInt(value.y ?? value.row ?? value[1], 10);
+    if (Number.isFinite(x) && Number.isFinite(y)) {
+      return { x, y };
+    }
+  }
+
+  return fallback;
+};
+
+const ensureUniqueObjectId = (baseId, registry) => {
+  const trimmed = typeof baseId === 'string' ? baseId.trim() : '';
+  if (!trimmed) {
+    return null;
+  }
+
+  if (!registry.has(trimmed)) {
+    registry.set(trimmed, 1);
+    return trimmed;
+  }
+
+  let suffix = registry.get(trimmed);
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    suffix += 1;
+    const candidate = `${trimmed}-${suffix}`;
+    if (!registry.has(candidate)) {
+      registry.set(trimmed, suffix);
+      registry.set(candidate, 1);
+      return candidate;
+    }
+  }
+};
+
+const normaliseObjectSize = (value) => {
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    const width = Number.parseInt(value.width ?? value.w ?? value[0], 10);
+    const height = Number.parseInt(value.height ?? value.h ?? value[1], 10);
+    return {
+      width: Number.isFinite(width) && width > 0 ? width : 1,
+      height: Number.isFinite(height) && height > 0 ? height : 1
+    };
+  }
+
+  if (typeof value === 'string') {
+    const parsed = parseDimensionsString(value);
+    if (parsed) {
+      return {
+        width: Math.max(parsed.width, 1),
+        height: Math.max(parsed.height, 1)
+      };
+    }
+  }
+
+  if (Array.isArray(value) && value.length >= 2) {
+    const width = Number.parseInt(value[0], 10);
+    const height = Number.parseInt(value[1], 10);
+    return {
+      width: Number.isFinite(width) && width > 0 ? width : 1,
+      height: Number.isFinite(height) && height > 0 ? height : 1
+    };
+  }
+
+  return { width: 1, height: 1 };
+};
+
+const normaliseServerObject = (object, registry) => {
+  if (!object || typeof object !== 'object') {
+    return null;
+  }
+
+  const metadata =
+    object.metadata && typeof object.metadata === 'object' && !Array.isArray(object.metadata)
+      ? { ...object.metadata }
+      : {};
+
+  const objectId =
+    typeof object.objectId === 'string' && object.objectId.trim()
+      ? object.objectId.trim()
+      : typeof metadata.objectId === 'string' && metadata.objectId.trim()
+        ? metadata.objectId.trim()
+        : null;
+
+  if (objectId && !metadata.objectId) {
+    metadata.objectId = objectId;
+  }
+
+  const baseId =
+    (typeof object.id === 'string' && object.id.trim()) ||
+    (typeof metadata.instanceId === 'string' && metadata.instanceId.trim()) ||
+    (objectId ? `${objectId}` : '');
+
+  const id = ensureUniqueObjectId(baseId, registry);
+  if (!id) {
+    return null;
+  }
+
+  if (!metadata.instanceId) {
+    metadata.instanceId = id;
+  }
+  if (baseId && baseId !== id) {
+    metadata.originalInstanceId = metadata.originalInstanceId ?? baseId;
+  }
+
+  const name =
+    (typeof object.name === 'string' && object.name.trim()) ||
+    (typeof object.label === 'string' && object.label.trim()) ||
+    id;
+
+  const position =
+    normaliseCoordinateInput(object.position, null) ??
+    normaliseCoordinateInput({ x: object.x, y: object.y }, null);
+
+  if (!position) {
+    return null;
+  }
+
+  const size = normaliseObjectSize(object.size ?? { width: object.width, height: object.height });
+  const solid = Boolean(object.solid);
+
+  const payload = {
+    id,
+    name,
+    label: name,
+    position,
+    size,
+    solid,
+    metadata
+  };
+
+  if (objectId) {
+    payload.objectId = objectId;
+  }
+
+  if (typeof object.description === 'string' && object.description.trim()) {
+    payload.description = object.description.trim();
+  }
+
+  if (Array.isArray(object.palette)) {
+    payload.palette = [...object.palette];
+  }
+
+  if (Array.isArray(object.actions)) {
+    payload.actions = object.actions.map((action) => ({ ...action }));
+  }
+
+  return payload;
+};
+
+const normaliseServerObjects = (objects) => {
+  if (!Array.isArray(objects)) {
+    return [];
+  }
+
+  const registry = new Map();
+  return objects
+    .map((object) => normaliseServerObject(object, registry))
+    .filter(Boolean);
+};
+
+const normaliseTheme = (theme) => {
+  const candidate = theme && typeof theme === 'object' ? theme : {};
+  const borderColour =
+    typeof candidate.borderColour === 'string' && candidate.borderColour.trim()
+      ? candidate.borderColour.trim()
+      : typeof candidate.borderColor === 'string' && candidate.borderColor.trim()
+        ? candidate.borderColor.trim()
+        : null;
+
+  return { borderColour };
+};
+
+const buildBlockedAreasFromServer = (areas) => {
+  if (!Array.isArray(areas)) {
+    return [];
+  }
+
+  return areas
+    .map((area) => {
+      if (!area || typeof area !== 'object') {
+        return null;
+      }
+      const x = Number.parseInt(area.x ?? area.col ?? area.column, 10);
+      const y = Number.parseInt(area.y ?? area.row, 10);
+      const width = Number.parseInt(area.width ?? area.w, 10);
+      const height = Number.parseInt(area.height ?? area.h, 10);
+
+      if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(width) || !Number.isFinite(height)) {
+        return null;
+      }
+
+      return {
+        x,
+        y,
+        width: Math.max(width, 1),
+        height: Math.max(height, 1)
+      };
+    })
+    .filter(Boolean);
+};
+
+const normaliseServerMap = (definition) => {
+  if (!definition || typeof definition !== 'object') {
+    return null;
+  }
+
+  const size = normaliseMapSize(definition.size ?? definition.dimensions);
+
+  const spawn =
+    normaliseCoordinateInput(definition.spawn, null) ??
+    normaliseCoordinateInput(definition.spawnPoint, null) ??
+    normaliseCoordinateInput(definition.startingPoint, null) ??
+    { x: Math.floor(size.width / 2) || 0, y: Math.floor(size.height / 2) || 0 };
+
+  return {
+    id: definition.id ?? '',
+    name: definition.name ?? definition.title ?? definition.id ?? 'map',
+    biome: definition.biome ?? 'Comunidad',
+    description: definition.description ?? '',
+    size,
+    spawn,
+    blockedAreas: buildBlockedAreasFromServer(definition.blockedAreas),
+    objects: normaliseServerObjects(definition.objects),
+    portals: Array.isArray(definition.portals) ? definition.portals : [],
+    theme: normaliseTheme(definition.theme),
+    sourcePath: definition.sourcePath ?? null
+  };
+};
+
 export const fetchServerMaps = async ({ signal } = {}) => {
   if (typeof fetch !== 'function') {
     return [];
@@ -238,46 +404,7 @@ export const fetchServerMaps = async ({ signal } = {}) => {
         : [];
 
     const normalised = items
-      .map((definition) => {
-        if (!definition || typeof definition !== 'object') {
-          return null;
-        }
-
-        const size = definition.size ?? {
-          width: Number.parseInt(definition.width ?? 0, 10) || 0,
-          height: Number.parseInt(definition.height ?? 0, 10) || 0
-        };
-
-        const spawn = definition.spawn ??
-          (definition.spawnPoint && typeof definition.spawnPoint === 'object'
-            ? definition.spawnPoint
-            : {
-                x:
-                  (definition.spawn && Number.parseInt(definition.spawn.x, 10)) ??
-                  (Number.parseInt(definition.spawnX ?? size.width / 2, 10) ||
-                    Math.floor(size.width / 2) ||
-                    0),
-                y:
-                  (definition.spawn && Number.parseInt(definition.spawn.y, 10)) ??
-                  (Number.parseInt(definition.spawnY ?? size.height / 2, 10) ||
-                    Math.floor(size.height / 2) ||
-                    0)
-              });
-
-        return {
-          id: definition.id ?? '',
-          name: definition.name ?? definition.title ?? definition.id ?? 'map',
-          biome: definition.biome ?? 'Comunidad',
-          description: definition.description ?? '',
-          size,
-          spawn,
-          blockedAreas: Array.isArray(definition.blockedAreas) ? definition.blockedAreas : [],
-          objects: Array.isArray(definition.objects) ? definition.objects : [],
-          portals: Array.isArray(definition.portals) ? definition.portals : [],
-          theme: definition.theme ?? { borderColour: null },
-          sourcePath: definition.sourcePath ?? null
-        };
-      })
+      .map((definition) => normaliseServerMap(definition))
       .filter((map) => map && map.id);
 
     return sortMaps(normalised);
