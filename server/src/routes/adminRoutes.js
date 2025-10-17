@@ -6,6 +6,8 @@ import {
   createSpriteAsset,
   updateSpriteAsset,
   deleteSpriteAsset,
+  listSpriteGenerators,
+  generateSpriteAsset,
   listLandscapeAssets,
   createLandscapeAsset,
   updateLandscapeAsset,
@@ -29,6 +31,8 @@ router.get('/assets/sprites', listSpriteAssets)
 router.post('/assets/sprites', createSpriteAsset)
 router.patch('/assets/sprites/:id', updateSpriteAsset)
 router.delete('/assets/sprites/:id', deleteSpriteAsset)
+router.get('/assets/sprites/generators', listSpriteGenerators)
+router.post('/assets/sprites/generate', generateSpriteAsset)
 
 router.get('/assets/landscapes', listLandscapeAssets)
 router.post('/assets/landscapes', createLandscapeAsset)

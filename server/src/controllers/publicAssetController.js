@@ -1,4 +1,5 @@
 import spriteAssetRepository from '../repositories/SpriteAssetRepository.js'
+import spriteGenerationService from '../sprites/spriteGenerationService.js'
 
 const toPlain = (record) => {
   if (!record) {
@@ -32,3 +33,12 @@ export const listSpriteAssets = async (req, res, next) => {
   }
 }
 
+export const getSpriteAtlas = async (req, res, next) => {
+  try {
+    const atlas = await spriteGenerationService.getAtlasSnapshot()
+
+    res.json({ atlas })
+  } catch (error) {
+    next(error)
+  }
+}

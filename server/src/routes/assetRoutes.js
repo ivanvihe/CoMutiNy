@@ -1,10 +1,10 @@
 import { Router } from 'express'
 
-import { listSpriteAssets } from '../controllers/publicAssetController.js'
+import { getSpriteAtlas, listSpriteAssets } from '../controllers/publicAssetController.js'
 
 const router = Router()
 
 router.get('/sprites', listSpriteAssets)
+router.get('/sprites/atlas', getSpriteAtlas)
 
 export default router
-

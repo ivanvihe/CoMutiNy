@@ -31,3 +31,7 @@ Once the containers are running on a remote host you can reach the application f
 * API: `http://<public-ip>:4000`.
 
 Environment defaults are defined in the root `.env` file and in `server/.env`.
+
+### Generación automática de sprites
+
+El pipeline para generar sprites a partir de descripciones de texto, junto con los endpoints y procedimientos para usarlos desde la UI de administración, está documentado en [docs/sprite-generation.md](docs/sprite-generation.md).
