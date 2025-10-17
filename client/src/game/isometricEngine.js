@@ -83,6 +83,11 @@ const expandArea = ({ x = 0, y = 0, width = 1, height = 1 }) => {
 
 const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
 
+const toFiniteNumber = (value, fallback = 0) => {
+  const parsed = Number.parseFloat(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+};
+
 const clampZoomValue = (value) => {
   const numeric = Number(value);
   if (!Number.isFinite(numeric)) {
