@@ -275,7 +275,7 @@ export function MapProvider({ children }) {
           const travelEvent = {
             type: 'travel',
             title: targetMap.name,
-            description: portal.description ?? 'Te desplazas a otra sección de la nave.'
+            description: portal.description ?? 'Te desplazas a otra sección de la comunidad.'
           };
 
           switchMap(portal.targetMap, {

@@ -19,13 +19,13 @@
    - En cada una selecciona un alias distinto mediante el formulario inicial. El alias es obligatorio y el servidor emitirá `session:terminated` si detecta duplicados.
 
 3. **Sincroniza movimiento y chat**
-   - Usa las teclas `WASD`/flechas para mover cada jugador; `MapContext` actualizará la animación (`idle`/`walk`) y enviará `player:update` con la posición y dirección.
-   - Verifica que los jugadores remotos aparecen en el HUD y sobre el mapa (`MapViewport.jsx`).
+   - Usa las teclas `WASD`/flechas para mover cada participante; `MapContext` actualizará la animación (`idle`/`walk`) y enviará `player:update` con la posición y dirección.
+   - Verifica que las personas remotas aparecen en el HUD y sobre el mapa (`MapViewport.jsx`).
    - Envía mensajes de chat para validar la propagación `chat:message` y la autoría basada en alias.
 
 4. **Comprueba reconexiones**
    - Cierra una pestaña; el servidor debería emitir `player:left` y desaparecer el avatar remoto.
-   - Vuelve a abrir la sesión y confirma que el alias anterior se reutiliza y que el listado de tripulantes se actualiza.
+   - Vuelve a abrir la sesión y confirma que el alias anterior se reutiliza y que el listado de participantes se actualiza.
 
 ## Extender el set de animaciones
 

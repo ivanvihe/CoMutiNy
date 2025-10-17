@@ -1,6 +1,6 @@
 # Sprite generation pipeline
 
-La plataforma incluye un pipeline automático para producir sprites compatibles con el motor del juego a partir de descripciones en texto. El flujo se apoya en el servicio `SpriteGenerationService` del backend (`server/src/sprites/spriteGenerationService.js`) y se consume mediante scripts internos o procesos automatizados.
+La plataforma incluye un pipeline automático para producir sprites compatibles con el motor interactivo a partir de descripciones en texto. El flujo se apoya en el servicio `SpriteGenerationService` del backend (`server/src/sprites/spriteGenerationService.js`) y se consume mediante scripts internos o procesos automatizados.
 
 ## Flujo general
 

@@ -608,7 +608,7 @@ const MapEditor = () => {
         Editor de mapas isométricos
       </Typography>
       <Typography variant="body1" sx={{ mb: 3 }}>
-        Configura dimensiones, paletas y objetos interactivos para sincronizarlos con el motor de juego.
+        Configura dimensiones, paletas y objetos interactivos para sincronizarlos con el motor interactivo.
       </Typography>
 
       {error && (

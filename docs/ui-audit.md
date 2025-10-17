@@ -9,7 +9,7 @@ La revisión cubre los componentes del cliente en `client/src/`, con énfasis en
 - **Jerarquía visual clara** en la pantalla de bienvenida gracias al uso de `Container`, `Stack` y tipografías destacadas (`App.jsx`).
 - **Feedback inmediato** durante el inicio de sesión/registro mediante `Alert` y `CircularProgress` (`AuthForm.jsx`).
 - **Personalización accesible** del avatar con controles agrupados por categoría y previsualización en tiempo real (`AvatarCustomizer.jsx`).
-- **Mapa orientado a la colaboración** con resumen contextual, chips de portales, estado de red y listado de tripulación remota (`MapViewport.jsx`).
+- **Mapa orientado a la colaboración** con resumen contextual, chips de portales, estado de red y listado de presencia remota (`MapViewport.jsx`).
 
 ### Oportunidades de mejora
 1. **Descubrir objetos interactivos** (`MapViewport.jsx`)
@@ -24,8 +24,8 @@ La revisión cubre los componentes del cliente en `client/src/`, con énfasis en
 ### Recomendaciones
 - Añadir indicadores visuales (p. ej. borde animado) sobre objetos interactivos en la cuadrícula.
 - Incorporar controles de navegación más visibles (iconos previo/siguiente y listado persistente).
-- Evaluar la incorporación opcional de un historial compacto de eventos si los equipos de juego lo solicitan.
-- Exponer estados de red y presencia de tripulación de forma más destacada (p. ej. iconografía adicional) conforme se refinen los assets.
+- Evaluar la incorporación opcional de un historial compacto de eventos si los equipos de experiencia colaborativa lo solicitan.
+- Exponer estados de red y presencia de la comunidad de forma más destacada (p. ej. iconografía adicional) conforme se refinen los assets.
 
 ## Próximos pasos sugeridos
 Las recomendaciones anteriores se han priorizado para implementación inmediata dentro de este trabajo, con documentación actualizada y pruebas que verifiquen la nueva navegación y renderizado de mapas.
