@@ -14,20 +14,362 @@ html,
 body,
 #root {
   height: 100%;
+  min-height: 100%;
   margin: 0;
 }
 
 body {
-  background: radial-gradient(circle at top, rgba(255, 112, 67, 0.2), transparent 60%),
-    radial-gradient(circle at bottom, rgba(41, 182, 246, 0.18), transparent 55%),
-    #0b0c10;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  padding: 24px;
-  box-sizing: border-box;
+  background: radial-gradient(circle at top, rgba(255, 112, 67, 0.18), transparent 60%),
+    radial-gradient(circle at bottom, rgba(41, 182, 246, 0.15), transparent 55%),
+    #05070d;
+  color: #e6f1ff;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
 * {
   box-sizing: border-box;
+}
+
+.app-shell {
+  position: relative;
+  min-height: 100vh;
+  width: 100%;
+  padding: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.game-stage {
+  position: relative;
+  width: min(95vw, 1120px);
+  height: min(82vh, 720px);
+  background: linear-gradient(145deg, rgba(8, 16, 30, 0.92), rgba(10, 24, 42, 0.88));
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 28px;
+  box-shadow: 0 28px 60px rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+  display: flex;
+  align-items: stretch;
+  justify-content: stretch;
+}
+
+.map-viewport {
+  position: relative;
+  flex: 1;
+  width: 100%;
+  height: 100%;
+  background: radial-gradient(circle at center, rgba(24, 42, 74, 0.7), rgba(5, 7, 13, 0.9));
+  overflow: hidden;
+}
+
+.map-viewport__canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+  background: linear-gradient(180deg, rgba(10, 18, 32, 0.92), rgba(5, 7, 12, 0.95));
+}
+
+.map-viewport__status {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  padding: 12px 18px;
+  border-radius: 14px;
+  background: rgba(7, 14, 26, 0.86);
+  border: 1px solid rgba(128, 222, 234, 0.35);
+  font-size: 0.9rem;
+  letter-spacing: 0.02em;
+  color: #b4e4ff;
+  pointer-events: none;
+  text-align: center;
+}
+
+.map-viewport__status--error {
+  border-color: rgba(255, 138, 128, 0.5);
+  color: #ffcdd2;
+}
+
+.viewport-overlay {
+  position: absolute;
+  pointer-events: none;
+  max-width: 320px;
+}
+
+.viewport-overlay > * {
+  pointer-events: auto;
+}
+
+.viewport-overlay--top-left {
+  top: 16px;
+  left: 16px;
+}
+
+.viewport-overlay--top-right {
+  top: 16px;
+  right: 16px;
+}
+
+.viewport-overlay--bottom-left {
+  bottom: 16px;
+  left: 16px;
+}
+
+.viewport-overlay--bottom-right {
+  bottom: 16px;
+  right: 16px;
+}
+
+.viewport-overlay--center {
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  max-width: 420px;
+  width: calc(100% - 48px);
+}
+
+.hud-card {
+  background: rgba(7, 14, 24, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  padding: 16px 20px;
+  backdrop-filter: blur(12px);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.35);
+}
+
+.hud-card__title {
+  font-size: 1.05rem;
+  font-weight: 600;
+  margin: 0;
+  color: #f4faff;
+}
+
+.hud-card__subtitle {
+  font-size: 0.85rem;
+  margin: 8px 0 0;
+  color: rgba(220, 230, 255, 0.75);
+}
+
+.hud-card--event {
+  border-radius: 20px;
+}
+
+.hud-meta {
+  display: flex;
+  gap: 12px;
+  margin-top: 12px;
+  font-size: 0.8rem;
+  color: rgba(200, 216, 255, 0.75);
+}
+
+.hud-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 120px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  background: rgba(7, 14, 24, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #d8eaff;
+  text-transform: uppercase;
+}
+
+.hud-chip--connected {
+  border-color: rgba(100, 255, 218, 0.45);
+  color: #c9ffe4;
+}
+
+.hud-chip--connecting {
+  border-color: rgba(129, 212, 250, 0.45);
+  color: #b3e5fc;
+}
+
+.hud-chip--error,
+.hud-chip--terminated {
+  border-color: rgba(244, 143, 177, 0.55);
+  color: #ffcdd2;
+}
+
+.hud-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.hud-actions__label {
+  font-size: 0.8rem;
+  color: rgba(200, 216, 255, 0.8);
+}
+
+.hud-actions--end {
+  justify-content: flex-end;
+}
+
+.hud-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(128, 222, 234, 0.3);
+  background: rgba(6, 12, 24, 0.85);
+  color: #c3ecff;
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+
+.hud-button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.35);
+}
+
+.hud-button:active {
+  transform: translateY(0);
+}
+
+.hud-button--primary {
+  background: linear-gradient(135deg, rgba(41, 182, 246, 0.9), rgba(25, 118, 210, 0.9));
+  border-color: rgba(41, 182, 246, 0.6);
+  color: #041424;
+}
+
+.ui-dock {
+  position: absolute;
+  top: 32px;
+  width: min(320px, calc(100vw - 64px));
+  max-height: calc(100vh - 64px);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  pointer-events: none;
+}
+
+.ui-dock--left {
+  left: 32px;
+}
+
+.ui-dock--right {
+  right: 32px;
+}
+
+.dock-card {
+  background: rgba(5, 12, 24, 0.88);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 20px;
+  padding: 20px;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(14px);
+  color: #eef5ff;
+  pointer-events: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.dock-card--scroll {
+  max-height: calc(50vh - 32px);
+  overflow-y: auto;
+}
+
+.dock-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 120px;
+}
+
+.dock-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.app-title {
+  margin: 0;
+  font-size: 1.8rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.app-subtitle {
+  margin: 8px 0 0;
+  font-size: 0.95rem;
+  color: rgba(214, 227, 255, 0.78);
+}
+
+.dock-heading {
+  margin: 0;
+  font-size: 1.2rem;
+  font-weight: 600;
+}
+
+.dock-text {
+  margin: 0;
+  font-size: 0.9rem;
+  color: rgba(219, 231, 255, 0.8);
+}
+
+@media (max-width: 1080px) {
+  .ui-dock {
+    width: min(280px, calc(100vw - 48px));
+  }
+}
+
+@media (max-width: 960px) {
+  .app-shell {
+    flex-direction: column;
+    padding: 16px;
+  }
+
+  .game-stage {
+    width: 100%;
+    height: min(55vh, 520px);
+    border-radius: 20px;
+  }
+
+  .ui-dock {
+    position: static;
+    width: 100%;
+    max-height: none;
+    margin-top: 16px;
+    pointer-events: auto;
+  }
+
+  .ui-dock--right {
+    margin-top: 24px;
+  }
+
+  .viewport-overlay {
+    max-width: 260px;
+  }
+}
+
+@media (max-width: 640px) {
+  .game-stage {
+    height: min(50vh, 420px);
+  }
+
+  .hud-card {
+    padding: 14px 16px;
+  }
+
+  .hud-meta {
+    flex-direction: column;
+  }
+
+  .hud-actions__label {
+    font-size: 0.75rem;
+  }
 }

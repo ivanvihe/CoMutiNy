@@ -1,8 +1,26 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState
+} from 'react';
 import { MAPS } from '../game/maps.js';
 import { useWorld } from './WorldContext.jsx';
 
 const MapContext = createContext(undefined);
+
+const MOVEMENT_DURATION = 280;
+const DEFAULT_DIRECTION = 'down';
+
+const DIRECTION_DELTAS = {
+  up: { x: 0, y: -1 },
+  down: { x: 0, y: 1 },
+  left: { x: -1, y: 0 },
+  right: { x: 1, y: 0 }
+};
 
 const expandArea = ({ x, y, width = 1, height = 1 }) => {
   const tiles = [];
@@ -42,11 +60,51 @@ export function MapProvider({ children }) {
     const startMap = MAP_LOOKUP.get(DEFAULT_MAP_ID);
     return startMap?.spawn ?? { x: 0, y: 0 };
   });
+  const [playerRenderPosition, setPlayerRenderPosition] = useState(() => {
+    const startMap = MAP_LOOKUP.get(DEFAULT_MAP_ID);
+    return startMap?.spawn ?? { x: 0, y: 0 };
+  });
+  const [playerDirection, setPlayerDirection] = useState(DEFAULT_DIRECTION);
+  const [playerIsMoving, setPlayerIsMoving] = useState(false);
   const [activeEvent, setActiveEvent] = useState(null);
   const { updateLocalPlayerState } = useWorld();
 
+  const movementRef = useRef(null);
+  const animationFrameRef = useRef(null);
+  const playerRenderPositionRef = useRef(playerRenderPosition);
+
   const availableMaps = useMemo(() => MAPS.map((map) => MAP_LOOKUP.get(map.id)), []);
   const currentMap = useMemo(() => MAP_LOOKUP.get(currentMapId), [currentMapId]);
+
+  useEffect(() => {
+    playerRenderPositionRef.current = playerRenderPosition;
+  }, [playerRenderPosition]);
+
+  useEffect(() => {
+    return () => {
+      if (typeof window !== 'undefined' && animationFrameRef.current) {
+        window.cancelAnimationFrame(animationFrameRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (movementRef.current) {
+      return;
+    }
+    setPlayerRenderPosition((previous) => {
+      if (!previous) {
+        return playerPosition;
+      }
+      const dx = Math.abs((previous.x ?? 0) - playerPosition.x);
+      const dy = Math.abs((previous.y ?? 0) - playerPosition.y);
+      if (dx < 0.001 && dy < 0.001) {
+        return previous;
+      }
+      return playerPosition;
+    });
+    playerRenderPositionRef.current = playerPosition;
+  }, [playerPosition]);
 
   const isWithinBounds = useCallback(
     ({ x, y }) =>
@@ -118,12 +176,22 @@ export function MapProvider({ children }) {
         return false;
       }
 
+      movementRef.current = null;
+      if (typeof window !== 'undefined' && animationFrameRef.current) {
+        window.cancelAnimationFrame(animationFrameRef.current);
+      }
+      animationFrameRef.current = null;
+
       setCurrentMapId(mapId);
       const nextPosition = position ?? targetMap.spawn ?? { x: 0, y: 0 };
       setPlayerPosition(nextPosition);
+      setPlayerRenderPosition(nextPosition);
+      playerRenderPositionRef.current = nextPosition;
+      setPlayerDirection(DEFAULT_DIRECTION);
+      setPlayerIsMoving(false);
       updateLocalPlayerState({
         position: { ...nextPosition, z: 0 },
-        metadata: { mapId },
+        metadata: { mapId, heading: DEFAULT_DIRECTION },
         animation: 'idle'
       });
       if (event) {
@@ -136,18 +204,56 @@ export function MapProvider({ children }) {
     [updateLocalPlayerState]
   );
 
+  const runMovementFrame = useCallback(
+    (timestamp) => {
+      const movement = movementRef.current;
+      if (!movement) {
+        animationFrameRef.current = null;
+        return;
+      }
+
+      if (!movement.startTime) {
+        movement.startTime = timestamp;
+      }
+
+      const elapsed = timestamp - movement.startTime;
+      const progress = Math.min(elapsed / movement.duration, 1);
+      const x = movement.from.x + (movement.to.x - movement.from.x) * progress;
+      const y = movement.from.y + (movement.to.y - movement.from.y) * progress;
+      const interpolated = { x, y };
+      setPlayerRenderPosition(interpolated);
+      playerRenderPositionRef.current = interpolated;
+
+      if (progress >= 1) {
+        movementRef.current = null;
+        setPlayerRenderPosition(movement.to);
+        playerRenderPositionRef.current = movement.to;
+        setPlayerIsMoving(false);
+        animationFrameRef.current = null;
+        updateLocalPlayerState({
+          position: { ...movement.to, z: 0 },
+          animation: 'idle',
+          metadata: { mapId: currentMapId, heading: movement.direction }
+        });
+        return;
+      }
+
+      if (typeof window !== 'undefined') {
+        animationFrameRef.current = window.requestAnimationFrame(runMovementFrame);
+      }
+    },
+    [currentMapId, updateLocalPlayerState]
+  );
+
   const movePlayer = useCallback(
     (direction) => {
-      const deltas = {
-        up: { x: 0, y: -1 },
-        down: { x: 0, y: 1 },
-        left: { x: -1, y: 0 },
-        right: { x: 1, y: 0 }
-      };
-
-      const delta = deltas[direction];
+      const delta = DIRECTION_DELTAS[direction];
       if (!delta) {
         return { moved: false, reason: 'unknown-direction' };
+      }
+
+      if (movementRef.current) {
+        return { moved: false, reason: 'moving' };
       }
 
       const nextPosition = {
@@ -177,16 +283,56 @@ export function MapProvider({ children }) {
         }
       }
 
+      const fromPosition = playerRenderPositionRef.current ?? playerPosition;
+
       setPlayerPosition(nextPosition);
+      setPlayerDirection(direction);
       setActiveEvent(null);
+      setPlayerIsMoving(true);
+
+      const movement = {
+        from: { ...fromPosition },
+        to: { ...nextPosition },
+        startTime: typeof performance !== 'undefined' ? performance.now() : Date.now(),
+        duration: MOVEMENT_DURATION,
+        direction
+      };
+
+      movementRef.current = movement;
+      setPlayerRenderPosition(fromPosition);
+      playerRenderPositionRef.current = fromPosition;
+
       updateLocalPlayerState({
         position: { ...nextPosition, z: 0 },
-        metadata: { mapId: currentMapId },
+        metadata: { mapId: currentMapId, heading: direction },
         animation: 'walk'
       });
+
+      if (typeof window === 'undefined') {
+        movementRef.current = null;
+        setPlayerRenderPosition(nextPosition);
+        playerRenderPositionRef.current = nextPosition;
+        setPlayerIsMoving(false);
+        updateLocalPlayerState({
+          position: { ...nextPosition, z: 0 },
+          metadata: { mapId: currentMapId, heading: direction },
+          animation: 'idle'
+        });
+      } else if (!animationFrameRef.current) {
+        animationFrameRef.current = window.requestAnimationFrame(runMovementFrame);
+      }
+
       return { moved: true, reason: 'moved', mapId: currentMapId };
     },
-    [canMoveTo, currentMapId, findPortalAt, playerPosition, switchMap, updateLocalPlayerState]
+    [
+      canMoveTo,
+      currentMapId,
+      findPortalAt,
+      playerPosition,
+      runMovementFrame,
+      switchMap,
+      updateLocalPlayerState
+    ]
   );
 
   const interact = useCallback(() => {
@@ -215,6 +361,9 @@ export function MapProvider({ children }) {
       currentMap,
       currentMapId,
       playerPosition,
+      playerRenderPosition,
+      playerDirection,
+      playerIsMoving,
       canMoveTo,
       movePlayer,
       interact,
@@ -233,7 +382,10 @@ export function MapProvider({ children }) {
       findObjectAt,
       interact,
       movePlayer,
+      playerDirection,
+      playerIsMoving,
       playerPosition,
+      playerRenderPosition,
       switchMap
     ]
   );
@@ -241,9 +393,9 @@ export function MapProvider({ children }) {
   useEffect(() => {
     updateLocalPlayerState({
       position: { ...playerPosition, z: 0 },
-      metadata: { mapId: currentMapId }
+      metadata: { mapId: currentMapId, heading: playerDirection }
     });
-  }, [currentMapId, playerPosition, updateLocalPlayerState]);
+  }, [currentMapId, playerDirection, playerPosition, updateLocalPlayerState]);
 
   return <MapContext.Provider value={value}>{children}</MapContext.Provider>;
 }
