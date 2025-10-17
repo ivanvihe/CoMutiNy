@@ -139,95 +139,95 @@ export default function Login() {
 
   return (
     <div className="join-screen">
-      <div className="join-card">
-        <div className="join-card__intro">
-          <Typography component="h1" variant="h3" className="join-title">
-            Bienvenido a CoMutiNy
+      <Box component="form" onSubmit={handleSubmit} noValidate className="join-panel">
+        <Stack spacing={3}>
+          <Stack spacing={1}>
+            <Typography component="h1" variant="h4" className="join-title">
+              Bienvenido a CoMutiNy
+            </Typography>
+            <Typography variant="body2" className="join-subtitle">
+              Elige tu alias y punto de partida para entrar a la comunidad.
+            </Typography>
+          </Stack>
+
+          <Typography variant="caption" color="text.secondary">
+            Usa un alias visible para el resto de la comunidad y selecciona el mapa donde
+            comenzarás tu exploración.
           </Typography>
-          <Typography variant="body1" className="join-subtitle">
-            Elige tu alias y punto de partida para entrar a la comunidad.
-          </Typography>
 
-          <Box component="form" onSubmit={handleSubmit} noValidate className="join-form">
-            <Stack spacing={2.5}>
-              <Typography variant="body2" color="text.secondary">
-                Usa un alias visible para el resto de la comunidad y selecciona el mapa donde
-                comenzarás tu exploración.
-              </Typography>
+          {combinedError && <Alert severity="error">{combinedError}</Alert>}
 
-              {combinedError && <Alert severity="error">{combinedError}</Alert>}
+          {joinStatus === 'ready' && profile ? (
+            <Alert severity="success">Alias configurado como {profile.alias}.</Alert>
+          ) : null}
 
-              {joinStatus === 'ready' && profile ? (
-                <Alert severity="success">Alias configurado como {profile.alias}.</Alert>
-              ) : null}
+          <Stack spacing={2}>
+            <TextField
+              label="Alias"
+              value={alias}
+              onChange={(event) => setAlias(event.target.value)}
+              autoComplete="nickname"
+              disabled={isPending}
+              inputProps={{ maxLength: 40 }}
+            />
 
-              <TextField
-                label="Alias"
-                value={alias}
-                onChange={(event) => setAlias(event.target.value)}
-                autoComplete="nickname"
-                disabled={isPending}
-                inputProps={{ maxLength: 40 }}
-              />
-
-              <FormControl fullWidth disabled={isPending || availableMaps.length === 0}>
-                <InputLabel id="map-select-label">Mapa inicial</InputLabel>
-                <Select
-                  labelId="map-select-label"
-                  label="Mapa inicial"
-                  value={selectedMapId}
-                  onChange={handleMapChange}
-                >
-                  {availableMaps.length === 0 ? (
-                    <MenuItem value="" disabled>
-                      No hay mapas disponibles
+            <FormControl fullWidth disabled={isPending || availableMaps.length === 0}>
+              <InputLabel id="map-select-label">Mapa inicial</InputLabel>
+              <Select
+                labelId="map-select-label"
+                label="Mapa inicial"
+                value={selectedMapId}
+                onChange={handleMapChange}
+              >
+                {availableMaps.length === 0 ? (
+                  <MenuItem value="" disabled>
+                    No hay mapas disponibles
+                  </MenuItem>
+                ) : (
+                  availableMaps.map((map) => (
+                    <MenuItem key={map.id} value={map.id}>
+                      {map.name}
                     </MenuItem>
-                  ) : (
-                    availableMaps.map((map) => (
-                      <MenuItem key={map.id} value={map.id}>
-                        {map.name}
-                      </MenuItem>
-                    ))
-                  )}
-                </Select>
-              </FormControl>
+                  ))
+                )}
+              </Select>
+            </FormControl>
 
-              {selectedMap ? (
-                <Box sx={{ p: 1.5, borderRadius: 1, border: '1px solid', borderColor: 'divider' }}>
-                  <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
-                    {selectedMap.name}
+            {selectedMap ? (
+              <Box className="join-map" sx={{ borderColor: 'divider' }}>
+                <Typography variant="subtitle2" className="join-map__title">
+                  {selectedMap.name}
+                </Typography>
+                {selectedMap.description ? (
+                  <Typography variant="body2" color="text.secondary" className="join-map__description">
+                    {selectedMap.description}
                   </Typography>
-                  {selectedMap.description ? (
-                    <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-                      {selectedMap.description}
-                    </Typography>
-                  ) : null}
-                  <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
-                    Bioma: {selectedMap.biome ?? 'Comunidad'} · Tamaño: {selectedMap.size?.width ?? 0}x
-                    {selectedMap.size?.height ?? 0}
-                  </Typography>
-                </Box>
-              ) : null}
-
-              <Box>
-                <Button
-                  type="submit"
-                  variant="contained"
-                  size="large"
-                  disabled={isPending || !alias.trim()}
-                  endIcon={isPending ? <CircularProgress color="inherit" size={18} /> : null}
-                  className="join-submit"
-                >
-                  {profile ? 'Actualizar y entrar' : 'Entrar a la comunidad'}
-                </Button>
-                <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
-                  Estado de conexión: {connectionLabel}
+                ) : null}
+                <Typography variant="caption" color="text.secondary" className="join-map__meta">
+                  Bioma: {selectedMap.biome ?? 'Comunidad'} · Tamaño: {selectedMap.size?.width ?? 0}x
+                  {selectedMap.size?.height ?? 0}
                 </Typography>
               </Box>
-            </Stack>
-          </Box>
-        </div>
-      </div>
+            ) : null}
+          </Stack>
+
+          <Stack spacing={1}>
+            <Button
+              type="submit"
+              variant="contained"
+              size="medium"
+              disabled={isPending || !alias.trim()}
+              endIcon={isPending ? <CircularProgress color="inherit" size={18} /> : null}
+              className="join-submit"
+            >
+              {profile ? 'Actualizar y entrar' : 'Entrar a la comunidad'}
+            </Button>
+            <Typography variant="caption" color="text.secondary" className="join-connection">
+              Estado de conexión: {connectionLabel}
+            </Typography>
+          </Stack>
+        </Stack>
+      </Box>
     </div>
   );
 }
