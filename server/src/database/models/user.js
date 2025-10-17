@@ -28,6 +28,22 @@ const defineUser = (sequelize) => {
       type: DataTypes.ENUM('user', 'admin'),
       allowNull: false,
       defaultValue: 'user'
+    },
+    isBanned: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
+      field: 'is_banned'
+    },
+    suspensionUntil: {
+      type: DataTypes.DATE,
+      allowNull: true,
+      field: 'suspension_until'
+    },
+    moderationReason: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+      field: 'moderation_reason'
     }
   }, {
     tableName: 'users',

@@ -1,7 +1,13 @@
 import {
   Alert,
   Box,
+  Button,
+  Chip,
   CircularProgress,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   IconButton,
   Stack,
   Table,
@@ -10,10 +16,18 @@ import {
   TableHead,
   TablePagination,
   TableRow,
+  TextField,
   Tooltip,
   Typography
 } from '@mui/material';
-import { DeleteOutline, Security, SecurityUpdateGood } from '@mui/icons-material';
+import {
+  Block,
+  DeleteOutline,
+  HourglassBottom,
+  LockOpen,
+  Security,
+  SecurityUpdateGood
+} from '@mui/icons-material';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
 
@@ -21,10 +35,40 @@ import { useAuth } from '../context/AuthContext.jsx';
 import {
   deleteUser,
   fetchUsers,
-  updateUserRole
+  updateUserRole,
+  updateUserModeration
 } from '../api/admin.js';
+import { resolveUserStatus } from '../utils/userStatus.js';
 
 const rowsPerPageOptions = [5, 10, 25];
+
+const formatDateTime = (value) => {
+  if (!value) {
+    return '—';
+  }
+
+  const date = new Date(value);
+
+  return Number.isNaN(date.getTime()) ? '—' : date.toLocaleString();
+};
+
+const formatDateForInput = (value) => {
+  if (!value) {
+    return '';
+  }
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return '';
+  }
+
+  const pad = (num) => String(num).padStart(2, '0');
+
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(
+    date.getMinutes()
+  )}`;
+};
 
 export default function AdminUserTable() {
   const queryClient = useQueryClient();
@@ -32,6 +76,7 @@ export default function AdminUserTable() {
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(rowsPerPageOptions[1]);
   const [feedback, setFeedback] = useState(null);
+  const [suspensionDialog, setSuspensionDialog] = useState({ open: false, user: null, until: '', reason: '' });
 
   const queryKey = useMemo(
     () => ['admin', 'users', { page, limit: rowsPerPage }],
@@ -68,6 +113,25 @@ export default function AdminUserTable() {
     }
   });
 
+  const moderationMutation = useMutation({
+    mutationFn: ({ id, payload }) => updateUserModeration(id, payload),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'users'] });
+      setFeedback({ type: 'success', message: 'Estado del usuario actualizado.' });
+
+      setSuspensionDialog((current) =>
+        current.open && current.user?.id === variables.id
+          ? { open: false, user: null, until: '', reason: '' }
+          : current
+      );
+    },
+    onError: (mutationError) => {
+      const message =
+        mutationError?.response?.data?.message ?? 'No se pudo actualizar el estado del usuario.';
+      setFeedback({ type: 'error', message });
+    }
+  });
+
   const handleChangePage = (_, newPage) => {
     setPage(newPage);
   };
@@ -91,6 +155,84 @@ export default function AdminUserTable() {
 
   const rows = data?.users ?? [];
   const total = data?.total ?? 0;
+  const isBusy =
+    isFetching || promoteMutation.isPending || deleteMutation.isPending || moderationMutation.isPending;
+
+  const handleToggleBan = (user) => {
+    const actionMessage = user.isBanned
+      ? '¿Quitar el ban permanente de este usuario?'
+      : '¿Banear permanentemente a este usuario?';
+
+    if (!window.confirm(actionMessage)) {
+      return;
+    }
+
+    moderationMutation.mutate({
+      id: user.id,
+      payload: {
+        isBanned: !user.isBanned,
+        suspensionReason: user.isBanned ? null : 'Baneado desde el panel de administración'
+      }
+    });
+  };
+
+  const handleOpenSuspensionDialog = (user) => {
+    setSuspensionDialog({
+      open: true,
+      user,
+      until: formatDateForInput(user.suspensionUntil),
+      reason: user.moderationReason ?? ''
+    });
+  };
+
+  const handleCloseSuspensionDialog = () => {
+    setSuspensionDialog({ open: false, user: null, until: '', reason: '' });
+  };
+
+  const handleSuspensionFieldChange = (field) => (event) => {
+    const { value } = event.target;
+    setSuspensionDialog((current) => ({ ...current, [field]: value }));
+  };
+
+  const handleSubmitSuspension = () => {
+    if (!suspensionDialog.user) {
+      return;
+    }
+
+    if (!suspensionDialog.until) {
+      setFeedback({ type: 'error', message: 'Debes indicar la fecha de finalización de la suspensión.' });
+      return;
+    }
+
+    const untilDate = new Date(suspensionDialog.until);
+
+    if (Number.isNaN(untilDate.getTime())) {
+      setFeedback({ type: 'error', message: 'La fecha de suspensión no es válida.' });
+      return;
+    }
+
+    moderationMutation.mutate({
+      id: suspensionDialog.user.id,
+      payload: {
+        suspensionUntil: untilDate.toISOString(),
+        suspensionReason: suspensionDialog.reason
+      }
+    });
+  };
+
+  const handleClearSuspension = () => {
+    if (!suspensionDialog.user) {
+      return;
+    }
+
+    moderationMutation.mutate({
+      id: suspensionDialog.user.id,
+      payload: {
+        suspensionUntil: null,
+        suspensionReason: null
+      }
+    });
+  };
 
   return (
     <Box>
@@ -98,9 +240,7 @@ export default function AdminUserTable() {
         <Typography variant="h6" fontWeight={600}>
           Gestión de usuarios
         </Typography>
-        {(isFetching || promoteMutation.isPending || deleteMutation.isPending) && (
-          <CircularProgress size={20} />
-        )}
+        {isBusy && <CircularProgress size={20} />}
       </Stack>
 
       {feedback && (
@@ -125,19 +265,20 @@ export default function AdminUserTable() {
             <TableCell>Usuario</TableCell>
             <TableCell>Correo</TableCell>
             <TableCell>Rol</TableCell>
+            <TableCell>Estado</TableCell>
             <TableCell align="right">Acciones</TableCell>
           </TableRow>
         </TableHead>
         <TableBody>
           {isLoading ? (
             <TableRow>
-              <TableCell colSpan={4} align="center">
+              <TableCell colSpan={5} align="center">
                 <CircularProgress size={24} />
               </TableCell>
             </TableRow>
           ) : rows.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={4} align="center">
+              <TableCell colSpan={5} align="center">
                 <Typography variant="body2" color="text.secondary">
                   No hay usuarios para mostrar.
                 </Typography>
@@ -147,6 +288,7 @@ export default function AdminUserTable() {
             rows.map((row) => {
               const isSelf = row.id === currentUser?.id;
               const nextRole = row.role === 'admin' ? 'user' : 'admin';
+              const status = resolveUserStatus(row);
 
               return (
                 <TableRow key={row.id} hover>
@@ -154,12 +296,22 @@ export default function AdminUserTable() {
                     <Stack spacing={0.5}>
                       <Typography fontWeight={600}>{row.username}</Typography>
                       <Typography variant="caption" color="text.secondary">
-                        {new Date(row.createdAt).toLocaleString()}
+                        {formatDateTime(row.createdAt)}
                       </Typography>
                     </Stack>
                   </TableCell>
                   <TableCell>{row.email}</TableCell>
                   <TableCell sx={{ textTransform: 'capitalize' }}>{row.role}</TableCell>
+                  <TableCell>
+                    <Tooltip title={status.tooltip} arrow>
+                      <Chip label={status.label} color={status.chipColor} size="small" sx={{ textTransform: 'none' }} />
+                    </Tooltip>
+                    {row.suspensionUntil && status.code === 'suspended' && (
+                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+                        Hasta {formatDateTime(row.suspensionUntil)}
+                      </Typography>
+                    )}
+                  </TableCell>
                   <TableCell align="right">
                     <Tooltip
                       title={
@@ -174,6 +326,44 @@ export default function AdminUserTable() {
                           disabled={isSelf || promoteMutation.isPending}
                         >
                           {row.role === 'admin' ? <SecurityUpdateGood fontSize="small" /> : <Security fontSize="small" />}
+                        </IconButton>
+                      </span>
+                    </Tooltip>
+                    <Tooltip title={
+                      isSelf
+                        ? 'No puedes gestionar tu propio estado'
+                        : row.isBanned
+                          ? 'Quitar ban permanente'
+                          : 'Banear permanentemente'
+                    }>
+                      <span>
+                        <IconButton
+                          color={row.isBanned ? 'success' : 'default'}
+                          size="small"
+                          onClick={() => handleToggleBan(row)}
+                          disabled={isSelf || moderationMutation.isPending}
+                        >
+                          {row.isBanned ? <LockOpen fontSize="small" /> : <Block fontSize="small" />}
+                        </IconButton>
+                      </span>
+                    </Tooltip>
+                    <Tooltip
+                      title={
+                        isSelf
+                          ? 'No puedes suspender tu propia cuenta'
+                          : row.isBanned
+                            ? 'Desbanealo para gestionar suspensiones'
+                            : 'Suspender temporalmente'
+                      }
+                    >
+                      <span>
+                        <IconButton
+                          color="warning"
+                          size="small"
+                          onClick={() => handleOpenSuspensionDialog(row)}
+                          disabled={isSelf || row.isBanned || moderationMutation.isPending}
+                        >
+                          <HourglassBottom fontSize="small" />
                         </IconButton>
                       </span>
                     </Tooltip>
@@ -206,6 +396,41 @@ export default function AdminUserTable() {
         onRowsPerPageChange={handleChangeRowsPerPage}
         rowsPerPageOptions={rowsPerPageOptions}
       />
+
+      <Dialog open={suspensionDialog.open} onClose={handleCloseSuspensionDialog} fullWidth maxWidth="sm">
+        <DialogTitle>Suspender usuario</DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} sx={{ mt: 1 }}>
+            <TextField
+              label="Hasta"
+              type="datetime-local"
+              value={suspensionDialog.until}
+              onChange={handleSuspensionFieldChange('until')}
+              InputLabelProps={{ shrink: true }}
+            />
+            <TextField
+              label="Motivo (opcional)"
+              multiline
+              minRows={2}
+              value={suspensionDialog.reason}
+              onChange={handleSuspensionFieldChange('reason')}
+            />
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseSuspensionDialog}>Cancelar</Button>
+          <Button onClick={handleClearSuspension} color="secondary" disabled={moderationMutation.isPending}>
+            Quitar suspensión
+          </Button>
+          <Button
+            onClick={handleSubmitSuspension}
+            variant="contained"
+            disabled={moderationMutation.isPending}
+          >
+            Guardar
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }

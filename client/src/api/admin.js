@@ -10,6 +10,11 @@ export const updateUserRole = async (id, role) => {
   return data;
 };
 
+export const updateUserModeration = async (id, payload) => {
+  const { data } = await httpClient.patch(`/admin/users/${id}`, payload);
+  return data;
+};
+
 export const deleteUser = async (id) => {
   await httpClient.delete(`/admin/users/${id}`);
 };
@@ -50,4 +55,39 @@ export const updateLandscapeAsset = async (id, payload) => {
 
 export const deleteLandscapeAsset = async (id) => {
   await httpClient.delete(`/admin/assets/landscapes/${id}`);
+};
+
+export const fetchRecentMessages = async ({
+  limit = 20,
+  offset = 0,
+  search,
+  status,
+  from,
+  to,
+  userId
+} = {}) => {
+  const params = { limit, offset };
+
+  if (search) {
+    params.search = search;
+  }
+
+  if (status && status !== 'all') {
+    params.status = status;
+  }
+
+  if (from) {
+    params.from = from;
+  }
+
+  if (to) {
+    params.to = to;
+  }
+
+  if (userId) {
+    params.userId = userId;
+  }
+
+  const { data } = await httpClient.get('/admin/messages', { params });
+  return data;
 };
