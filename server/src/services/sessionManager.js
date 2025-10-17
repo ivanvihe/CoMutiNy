@@ -11,7 +11,8 @@ const EVENT_TYPES = Object.freeze({
   PLAYER_UPSERT: 'player:upsert',
   PLAYER_REMOVE: 'player:remove',
   CHAT_MESSAGE: 'chat:message',
-  SPRITE_ATLAS: 'sprites:atlas'
+  SPRITE_ATLAS: 'sprites:atlas',
+  WORLD_SET: 'world:set'
 })
 
 class SessionManager extends EventEmitter {
@@ -28,6 +29,7 @@ class SessionManager extends EventEmitter {
     this.pendingUpdateBroadcasts = new Map()
     this.updateTimer = null
     this.snapshotTimer = null
+    this.staticMaps = []
   }
 
   async initialize () {
@@ -75,12 +77,147 @@ class SessionManager extends EventEmitter {
     this.initialized = true
   }
 
+  async _refreshStaticMaps () {
+    try {
+      const maps = await loadStaticMapDefinitions()
+      this.staticMaps = Array.isArray(maps) ? maps : []
+    } catch (error) {
+      console.error('[maps] Failed to refresh static maps', error)
+      this.staticMaps = []
+    }
+
+    return this.staticMaps
+  }
+
+  async _resolveStaticMap (mapIdentifier) {
+    const identifier = typeof mapIdentifier === 'string' ? mapIdentifier.trim() : ''
+
+    if (!identifier) {
+      return null
+    }
+
+    if (!this.staticMaps.length) {
+      await this._refreshStaticMaps()
+    }
+
+    const lowerIdentifier = identifier.toLowerCase()
+
+    let match = this.staticMaps.find((map) => {
+      if (!map) {
+        return false
+      }
+
+      if (typeof map.id === 'string' && map.id.trim().toLowerCase() === lowerIdentifier) {
+        return true
+      }
+
+      if (typeof map.sourcePath === 'string' && map.sourcePath.trim().toLowerCase() === lowerIdentifier) {
+        return true
+      }
+
+      return false
+    })
+
+    if (match) {
+      return match
+    }
+
+    await this._refreshStaticMaps()
+
+    match = this.staticMaps.find((map) => {
+      if (!map) {
+        return false
+      }
+
+      if (typeof map.id === 'string' && map.id.trim().toLowerCase() === lowerIdentifier) {
+        return true
+      }
+
+      if (typeof map.sourcePath === 'string' && map.sourcePath.trim().toLowerCase() === lowerIdentifier) {
+        return true
+      }
+
+      return false
+    })
+
+    return match ?? null
+  }
+
+  _applyWorldDefinition (mapDefinition, { origin = 'system', socketId = null, persist = true, publish = true } = {}) {
+    if (!mapDefinition || typeof mapDefinition !== 'object') {
+      return false
+    }
+
+    const current = this.worldState.getWorld()
+    const spawn = {
+      x: mapDefinition.spawn?.x ?? current.spawn?.x ?? 0,
+      y: mapDefinition.spawn?.y ?? current.spawn?.y ?? 0,
+      z: mapDefinition.spawn?.z ?? current.spawn?.z ?? 0
+    }
+
+    const isSameWorld =
+      current?.sourcePath === mapDefinition.sourcePath &&
+      current?.id === mapDefinition.id &&
+      current?.size?.width === mapDefinition.size?.width &&
+      current?.size?.height === mapDefinition.size?.height &&
+      current?.spawn?.x === spawn.x &&
+      current?.spawn?.y === spawn.y &&
+      current?.spawn?.z === spawn.z
+
+    if (isSameWorld) {
+      return false
+    }
+
+    this.worldState.setWorld({ ...mapDefinition, spawn })
+    const world = this.worldState.getWorld()
+
+    console.info(
+      `[session] World set to ${world.name} (${world.sourcePath ?? 'unknown'}) with size ` +
+        `${world.size?.width ?? 0}x${world.size?.height ?? 0}`
+    )
+
+    if (publish) {
+      this._publish(EVENT_TYPES.WORLD_SET, { world })
+    }
+
+    this.emit('world:changed', { world, origin, socketId })
+
+    if (persist) {
+      this._scheduleSnapshotPersist()
+    }
+
+    return true
+  }
+
+  async selectWorldByMapId (mapId, { origin = 'system', socketId = null } = {}) {
+    if (!mapId) {
+      return false
+    }
+
+    const mapDefinition = await this._resolveStaticMap(mapId)
+
+    if (!mapDefinition) {
+      throw new Error('El mapa seleccionado no está disponible.')
+    }
+
+    return this._applyWorldDefinition(mapDefinition, { origin, socketId })
+  }
+
   getSnapshot () {
     return this.worldState.getSnapshot()
   }
 
-  addPlayer (socketId, payload) {
-    const player = this.worldState.addPlayer(socketId, payload)
+  async addPlayer (socketId, payload = {}) {
+    const mapId = typeof payload?.mapId === 'string' ? payload.mapId.trim() : null
+    let sanitizedPayload = payload
+
+    if (mapId) {
+      await this.selectWorldByMapId(mapId, { origin: 'local', socketId })
+      sanitizedPayload = { ...payload }
+      delete sanitizedPayload.mapId
+    }
+
+    const player = this.worldState.addPlayer(socketId, sanitizedPayload)
 
     this.emit('player:joined', { player, socketId, origin: 'local' })
     this._publish(EVENT_TYPES.PLAYER_UPSERT, { player })
@@ -175,7 +312,7 @@ class SessionManager extends EventEmitter {
 
   async _ensureDefaultWorld () {
     try {
-      const maps = await loadStaticMapDefinitions()
+      const maps = await this._refreshStaticMaps()
 
       if (!Array.isArray(maps) || maps.length === 0) {
         console.warn('[session] No static maps available to initialize the world')
@@ -190,33 +327,15 @@ class SessionManager extends EventEmitter {
         return
       }
 
-      const current = this.worldState.getWorld()
-      const spawn = {
-        x: initMap.spawn?.x ?? current.spawn?.x ?? 0,
-        y: initMap.spawn?.y ?? current.spawn?.y ?? 0,
-        z: initMap.spawn?.z ?? current.spawn?.z ?? 0
-      }
+      const changed = this._applyWorldDefinition(initMap, {
+        origin: 'system:init',
+        socketId: null,
+        publish: false
+      })
 
-      const isSameWorld =
-        current?.sourcePath === initMap.sourcePath &&
-        current?.id === initMap.id &&
-        current?.size?.width === initMap.size?.width &&
-        current?.size?.height === initMap.size?.height &&
-        current?.spawn?.x === spawn.x &&
-        current?.spawn?.y === spawn.y &&
-        current?.spawn?.z === spawn.z
-
-      if (isSameWorld) {
+      if (!changed) {
         console.info('[session] init.map already loaded as the active world')
-        return
       }
-
-      this.worldState.setWorld({ ...initMap, spawn })
-      console.info(
-        `[session] Default world set to ${initMap.name} (${initMap.sourcePath}) ` +
-          `with size ${initMap.size?.width ?? 0}x${initMap.size?.height ?? 0}`
-      )
-      this._scheduleSnapshotPersist()
     } catch (error) {
       console.error('[session] Failed to ensure default world map', error)
     }
@@ -332,6 +451,17 @@ class SessionManager extends EventEmitter {
         }
 
         this.setSpriteAtlas(payload.atlas, 'remote')
+        break
+      }
+      case EVENT_TYPES.WORLD_SET: {
+        if (!payload?.world) {
+          return
+        }
+
+        this.worldState.setWorld(payload.world)
+        const world = this.worldState.getWorld()
+        this.emit('world:changed', { world, origin: 'remote', socketId: null })
+        this._scheduleSnapshotPersist()
         break
       }
       default:

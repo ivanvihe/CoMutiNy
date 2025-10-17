@@ -186,6 +186,11 @@ const attachSessionListeners = (io) => {
     io.emit('sprites:atlasUpdated', atlas)
   })
 
+  sessionManager.on('world:changed', () => {
+    const snapshot = serializeSnapshot(sessionManager.getSnapshot())
+    io.emit('world:state', snapshot)
+  })
+
   sessionManager.on('session:disconnect', ({ socketId, reason }) => {
     if (!socketId) {
       return
@@ -226,7 +231,7 @@ const createSocketServer = (httpServer, { corsOrigin, enrichJoinPayload }) => {
           ? await enrichJoinPayload(payload)
           : payload
 
-        const player = sessionManager.addPlayer(socket.id, enriched)
+        const player = await sessionManager.addPlayer(socket.id, enriched)
 
         console.log(`Player joined: ${player.id} (${socket.id})`)
 

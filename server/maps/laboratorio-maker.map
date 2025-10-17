@@ -1,0 +1,8 @@
+id: laboratorio-maker
+title: Laboratorio Maker
+biome: Innovación
+description: Espacio equipado con impresoras 3D, estaciones electrónicas y almacenamiento colaborativo.
+dimensions: 40x28
+starting_point: 20x14
+border colour: #00838f
+door position: 20x1

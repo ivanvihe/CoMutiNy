@@ -1,8 +1,21 @@
-import { Alert, Box, Button, CircularProgress, Stack, TextField, Typography } from '@mui/material';
+import {
+  Alert,
+  Box,
+  Button,
+  CircularProgress,
+  FormControl,
+  InputLabel,
+  MenuItem,
+  Select,
+  Stack,
+  TextField,
+  Typography
+} from '@mui/material';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import AvatarCustomizer from '../AvatarCustomizer.jsx';
 import { useWorld } from '../../context/WorldContext.jsx';
+import { useMap } from '../../context/MapContext.jsx';
 import '../../styles/home.css';
 
 const CONNECTION_LABELS = {
@@ -25,14 +38,55 @@ export default function JoinForm() {
     appearance,
     setAppearance
   } = useWorld();
+  const { maps, currentMapId, switchMap } = useMap();
   const [alias, setAlias] = useState(profile?.alias ?? '');
   const [localError, setLocalError] = useState('');
+  const [selectedMapId, setSelectedMapId] = useState(profile?.mapId ?? currentMapId ?? '');
 
   useEffect(() => {
     if (profile?.alias) {
       setAlias(profile.alias);
     }
   }, [profile]);
+
+  useEffect(() => {
+    if (profile?.mapId) {
+      setSelectedMapId(profile.mapId);
+      if (profile.mapId !== currentMapId) {
+        switchMap(profile.mapId);
+      }
+    }
+  }, [profile, currentMapId, switchMap]);
+
+  const availableMaps = useMemo(() => (Array.isArray(maps) ? maps : []), [maps]);
+
+  useEffect(() => {
+    if (selectedMapId && availableMaps.some((map) => map.id === selectedMapId)) {
+      return;
+    }
+
+    if (availableMaps.length === 0) {
+      setSelectedMapId('');
+      return;
+    }
+
+    const fallback =
+      (currentMapId && availableMaps.some((map) => map.id === currentMapId)
+        ? currentMapId
+        : null) ?? availableMaps[0]?.id ?? '';
+
+    if (fallback && fallback !== selectedMapId) {
+      setSelectedMapId(fallback);
+      if (fallback !== currentMapId) {
+        switchMap(fallback);
+      }
+    }
+  }, [availableMaps, currentMapId, selectedMapId, switchMap]);
+
+  const selectedMap = useMemo(
+    () => availableMaps.find((map) => map.id === selectedMapId) ?? null,
+    [availableMaps, selectedMapId]
+  );
 
   const isPending = joinStatus === 'pending';
   const connectionLabel = useMemo(
@@ -61,11 +115,25 @@ export default function JoinForm() {
 
     setLocalError('');
 
+    const targetMapId = selectedMapId || availableMaps[0]?.id || '';
+
     try {
-      await joinWorld(trimmed);
+      if (targetMapId) {
+        await joinWorld({ alias: trimmed, mapId: targetMapId });
+      } else {
+        await joinWorld({ alias: trimmed });
+      }
       navigate('/world');
     } catch (error) {
       setLocalError(error?.message ?? 'No se pudo crear la sesión.');
+    }
+  };
+
+  const handleMapChange = (event) => {
+    const { value } = event.target;
+    setSelectedMapId(value);
+    if (value) {
+      switchMap(value);
     }
   };
 
@@ -100,6 +168,45 @@ export default function JoinForm() {
                 disabled={isPending}
                 inputProps={{ maxLength: 40 }}
               />
+
+              <FormControl fullWidth disabled={isPending || availableMaps.length === 0}>
+                <InputLabel id="map-select-label">Mapa inicial</InputLabel>
+                <Select
+                  labelId="map-select-label"
+                  label="Mapa inicial"
+                  value={selectedMapId}
+                  onChange={handleMapChange}
+                >
+                  {availableMaps.length === 0 ? (
+                    <MenuItem value="" disabled>
+                      No hay mapas disponibles
+                    </MenuItem>
+                  ) : (
+                    availableMaps.map((map) => (
+                      <MenuItem key={map.id} value={map.id}>
+                        {map.name}
+                      </MenuItem>
+                    ))
+                  )}
+                </Select>
+              </FormControl>
+
+              {selectedMap ? (
+                <Box sx={{ p: 1.5, borderRadius: 1, border: '1px solid', borderColor: 'divider' }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+                    {selectedMap.name}
+                  </Typography>
+                  {selectedMap.description ? (
+                    <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                      {selectedMap.description}
+                    </Typography>
+                  ) : null}
+                  <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+                    Bioma: {selectedMap.biome ?? 'Comunidad'} · Tamaño: {selectedMap.size?.width ?? 0}x
+                    {selectedMap.size?.height ?? 0}
+                  </Typography>
+                </Box>
+              ) : null}
 
               <Box>
                 <Button

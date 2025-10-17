@@ -1,0 +1,8 @@
+id: jardin-urbano
+title: Jardín Urbano
+biome: Naturaleza
+description: Un espacio verde con bancas, huertos elevados y zonas para talleres al aire libre.
+dimensions: 32x32
+starting_point: 16x20
+border colour: #2e7d32
+door position: 2x20

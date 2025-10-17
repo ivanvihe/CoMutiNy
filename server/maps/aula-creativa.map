@@ -1,0 +1,8 @@
+id: aula-creativa
+title: Aula Creativa
+biome: Comunidad
+description: Taller interior con mesas modulares, pizarras y una zona de prototipado rápido.
+dimensions: 28x36
+starting_point: 10x18
+border colour: #5e35b1
+door position: 1x18
