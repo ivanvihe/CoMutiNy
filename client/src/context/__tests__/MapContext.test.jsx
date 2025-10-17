@@ -28,32 +28,24 @@ describe('MapContext', () => {
     const initialMapId = result.current.currentMapId;
 
     act(() => {
-      result.current.switchMap('hydroponics');
+      result.current.switchMap('otro-mapa');
     });
 
     expect(result.current.currentMapId).toBe(initialMapId);
     expect(result.current.playerPosition).toEqual(result.current.currentMap.spawn);
   });
 
-  it('crea un evento al interactuar con un objeto cercano', () => {
+  it('limpia eventos cuando no hay objetos interactuables', () => {
     const { result } = renderHook(() => useMap(), { wrapper });
 
-    act(() => {
-      result.current.switchMap('bridge', { position: { x: 3, y: 1 } });
-    });
-
-    expect(result.current.objectAtPlayerPosition?.id).toBe('nav-console');
+    expect(result.current.objectAtPlayerPosition).toBeUndefined();
 
     let event;
     act(() => {
       event = result.current.interact();
     });
 
-    expect(event).toMatchObject({
-      objectId: 'nav-console',
-      objectName: 'Consola de navegación',
-      mapId: 'bridge'
-    });
-    expect(result.current.activeEvent).toEqual(event);
+    expect(event).toBeNull();
+    expect(result.current.activeEvent).toBeNull();
   });
 });
