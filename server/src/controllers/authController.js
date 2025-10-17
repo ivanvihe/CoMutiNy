@@ -2,22 +2,9 @@ import bcrypt from 'bcryptjs'
 
 import userRepository from '../repositories/UserRepository.js'
 import { setAuthCookie, signSessionToken } from '../services/authService.js'
+import sanitizeUser from '../utils/sanitizeUser.js'
 
 const SALT_ROUNDS = Number(process.env.BCRYPT_SALT_ROUNDS ?? 10)
-
-const sanitizeUser = (user) => {
-  const plain = typeof user?.get === 'function' ? user.get({ plain: true }) : { ...user }
-
-  if (plain.passwordHash !== undefined) {
-    delete plain.passwordHash
-  }
-
-  if (plain.password_hash !== undefined) {
-    delete plain.password_hash
-  }
-
-  return plain
-}
 
 export const register = async (req, res, next) => {
   try {
@@ -49,7 +36,8 @@ export const register = async (req, res, next) => {
     const user = await userRepository.create({
       username: trimmedUsername,
       email: normalizedEmail,
-      passwordHash
+      passwordHash,
+      role: 'user'
     })
 
     const token = signSessionToken(user.id)
@@ -86,6 +74,18 @@ export const login = async (req, res, next) => {
     setAuthCookie(res, token)
 
     res.json({ user: sanitizeUser(user) })
+  } catch (error) {
+    next(error)
+  }
+}
+
+export const currentUser = async (req, res, next) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ message: 'Authentication required' })
+    }
+
+    res.json({ user: req.user })
   } catch (error) {
     next(error)
   }

@@ -1,7 +1,9 @@
-import { Box, Container, Stack, Tab, Tabs, Typography } from '@mui/material';
+import { Alert, Box, CircularProgress, Container, Stack, Tab, Tabs, Typography } from '@mui/material';
 import { useState } from 'react';
 import AuthForm from './components/AuthForm.jsx';
 import AvatarCustomizer from './components/AvatarCustomizer.jsx';
+import { useAuth } from './context/AuthContext.jsx';
+import AdminDashboard from './components/AdminDashboard.jsx';
 
 const formTabs = [
   { value: 'login', label: 'Iniciar sesión' },
@@ -9,6 +11,7 @@ const formTabs = [
 ];
 
 export default function App() {
+  const { user, loading, error } = useAuth();
   const [formMode, setFormMode] = useState('login');
   const [appearance, setAppearance] = useState({
     hair: 'Corto',
@@ -16,6 +19,7 @@ export default function App() {
     outfit: 'Aventurero',
     shoes: 'Botas'
   });
+  const sessionErrorMessage = error?.response?.data?.message ?? '';
 
   return (
     <Container maxWidth="md">
@@ -46,24 +50,58 @@ export default function App() {
             alignItems="stretch"
           >
             <Box flex={1}>
-              <Tabs
-                value={formMode}
-                onChange={(_, newValue) => setFormMode(newValue)}
-                textColor="primary"
-                indicatorColor="primary"
-                sx={{ mb: 2 }}
-              >
-                {formTabs.map((tab) => (
-                  <Tab key={tab.value} value={tab.value} label={tab.label} />
-                ))}
-              </Tabs>
-              <AuthForm mode={formMode} />
+              {loading ? (
+                <Stack justifyContent="center" alignItems="center" sx={{ height: '100%' }}>
+                  <CircularProgress />
+                </Stack>
+              ) : user ? (
+                <Stack spacing={2}>
+                  <Box>
+                    <Typography variant="h5" fontWeight={600} gutterBottom>
+                      ¡Hola, {user.username}!
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      Tu rol actual es <strong>{user.role}</strong>.
+                    </Typography>
+                  </Box>
+                  {error && (
+                    <Alert severity="warning">
+                      No se pudo refrescar la sesión automáticamente. Continúa navegando o vuelve a iniciar sesión si es
+                      necesario.
+                    </Alert>
+                  )}
+                </Stack>
+              ) : (
+                <Box>
+                  <Tabs
+                    value={formMode}
+                    onChange={(_, newValue) => setFormMode(newValue)}
+                    textColor="primary"
+                    indicatorColor="primary"
+                    sx={{ mb: 2 }}
+                  >
+                    {formTabs.map((tab) => (
+                      <Tab key={tab.value} value={tab.value} label={tab.label} />
+                    ))}
+                  </Tabs>
+                  {error && (
+                    <Alert severity="info" sx={{ mb: 2 }}>
+                      Inicia sesión para continuar.{sessionErrorMessage ? ` (${sessionErrorMessage})` : ''}
+                    </Alert>
+                  )}
+                  <AuthForm mode={formMode} />
+                </Box>
+              )}
             </Box>
 
             <Box flex={1}>
               <AvatarCustomizer appearance={appearance} onChange={setAppearance} />
             </Box>
           </Stack>
+
+          {user?.role === 'admin' && (
+            <AdminDashboard />
+          )}
         </Stack>
       </Box>
     </Container>

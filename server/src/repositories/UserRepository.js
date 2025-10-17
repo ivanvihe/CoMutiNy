@@ -31,6 +31,7 @@ class UserRepository {
       limit,
       offset,
       order: [['createdAt', 'DESC']],
+      distinct: true,
       include: [{ model: Avatar, as: 'avatars' }]
     })
   }

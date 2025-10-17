@@ -14,15 +14,20 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useMemo, useState } from 'react';
 import { Visibility, VisibilityOff } from '@mui/icons-material';
 import { z } from 'zod';
+import { useAuth } from '../context/AuthContext.jsx';
 
-const baseSchema = {
+const baseFields = {
   email: z.string().email('Introduce un correo electrónico válido'),
   password: z.string().min(8, 'La contraseña debe tener al menos 8 caracteres')
 };
 
 const registerSchema = z
   .object({
-    ...baseSchema,
+    username: z
+      .string()
+      .min(3, 'El nombre de usuario debe tener al menos 3 caracteres')
+      .max(50, 'El nombre de usuario es demasiado largo'),
+    ...baseFields,
     confirmPassword: z.string()
   })
   .refine((data) => data.password === data.confirmPassword, {
@@ -30,7 +35,7 @@ const registerSchema = z
     path: ['confirmPassword']
   });
 
-const loginSchema = z.object(baseSchema);
+const loginSchema = z.object(baseFields);
 
 const schemaByMode = {
   login: loginSchema,
@@ -51,10 +56,12 @@ const labelsByMode = {
 export default function AuthForm({ mode }) {
   const schema = useMemo(() => schemaByMode[mode] ?? loginSchema, [mode]);
   const labels = labelsByMode[mode] ?? labelsByMode.login;
+  const { login, registerUser } = useAuth();
   const {
     handleSubmit,
-    register,
-    formState: { errors }
+    register: registerField,
+    formState: { errors },
+    reset
   } = useForm({
     mode: 'onBlur',
     resolver: zodResolver(schema)
@@ -67,17 +74,37 @@ export default function AuthForm({ mode }) {
     setSubmitting(true);
     setStatus({ type: null, message: '' });
 
-    await new Promise((resolve) => setTimeout(resolve, 800));
+    try {
+      if (mode === 'login') {
+        await login({
+          email: data.email.trim().toLowerCase(),
+          password: data.password
+        });
 
-    setSubmitting(false);
-    setStatus({
-      type: 'success',
-      message:
-        mode === 'login'
-          ? 'Sesión iniciada correctamente. ¡Bienvenido a bordo!'
-          : 'Cuenta creada. Ya formas parte de la tripulación.'
-    });
-    console.log(`${mode} form submitted`, data);
+        setStatus({
+          type: 'success',
+          message: 'Sesión iniciada correctamente. ¡Bienvenido a bordo!'
+        });
+      } else {
+        await registerUser({
+          username: data.username.trim(),
+          email: data.email.trim().toLowerCase(),
+          password: data.password
+        });
+
+        setStatus({
+          type: 'success',
+          message: 'Cuenta creada. Ya formas parte de la tripulación.'
+        });
+      }
+
+      reset();
+    } catch (error) {
+      const message = error?.response?.data?.message ?? 'No se pudo completar la operación.';
+      setStatus({ type: 'error', message });
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -89,13 +116,23 @@ export default function AuthForm({ mode }) {
           </Alert>
         )}
 
+        {mode === 'register' && (
+          <TextField
+            label="Nombre de usuario"
+            autoComplete="username"
+            error={Boolean(errors.username)}
+            helperText={errors.username?.message}
+            {...registerField('username')}
+          />
+        )}
+
         <TextField
           label="Correo electrónico"
           type="email"
           autoComplete="email"
           error={Boolean(errors.email)}
           helperText={errors.email?.message}
-          {...register('email')}
+          {...registerField('email')}
         />
 
         <TextField
@@ -113,7 +150,7 @@ export default function AuthForm({ mode }) {
               </InputAdornment>
             )
           }}
-          {...register('password')}
+          {...registerField('password')}
         />
 
         {mode === 'register' && (
@@ -123,7 +160,7 @@ export default function AuthForm({ mode }) {
             autoComplete="new-password"
             error={Boolean(errors.confirmPassword)}
             helperText={errors.confirmPassword?.message}
-            {...register('confirmPassword')}
+            {...registerField('confirmPassword')}
           />
         )}
 

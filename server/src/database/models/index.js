@@ -3,11 +3,13 @@ import defineUser from './user.js'
 import defineAvatar from './avatar.js'
 import defineMessage from './message.js'
 import defineSpriteAsset from './spriteAsset.js'
+import defineLandscapeAsset from './landscapeAsset.js'
 
 const User = defineUser(sequelize)
 const Avatar = defineAvatar(sequelize)
 const Message = defineMessage(sequelize)
 const SpriteAsset = defineSpriteAsset(sequelize)
+const LandscapeAsset = defineLandscapeAsset(sequelize)
 
 User.hasMany(Avatar, {
   as: 'avatars',
@@ -48,12 +50,13 @@ Message.belongsTo(Avatar, {
   foreignKey: 'avatarId'
 })
 
-export { sequelize, User, Avatar, Message, SpriteAsset }
+export { sequelize, User, Avatar, Message, SpriteAsset, LandscapeAsset }
 
 export default {
   sequelize,
   User,
   Avatar,
   Message,
-  SpriteAsset
+  SpriteAsset,
+  LandscapeAsset
 }
