@@ -38,11 +38,34 @@ const drawBrickWall = (ctx, { width, height, tileSize, options = {} }) => {
   }
 };
 
-const drawMonstera = (ctx, { width, height, tileSize, options = {} }) => {
+const drawMonstera = (ctx, { width, height, tileSize, options = {} }, helpers = null) => {
   const centerX = (width * tileSize) / 2;
   const stemColor = options.stemColor ?? '#2d5016';
   const leafColor = options.leafColor ?? '#3a7d2c';
   const darkLeaf = options.darkLeaf ?? '#2d6022';
+
+  if (helpers?.registerLayer) {
+    helpers.registerLayer(
+      'shadow',
+      (shadowCtx) => {
+        shadowCtx.fillStyle = 'rgba(0, 0, 0, 0.28)';
+        shadowCtx.beginPath();
+        shadowCtx.ellipse(centerX, height * tileSize * 0.95, (width * tileSize) / 2.3, tileSize * 0.3, 0, 0, Math.PI * 2);
+        shadowCtx.fill();
+      },
+      {
+        width,
+        height: Math.min(1, height * 0.6),
+        anchor: { x: 0.5, y: 1, z: 0 },
+        offset: { x: 0, y: 0, z: -0.05 },
+        pixelOffset: { y: -tileSize * 0.15 },
+        alpha: 0.8,
+        order: -20
+      }
+    );
+  }
+
+  helpers?.setVolume?.({ height: Math.max(height * 1.6, 1.4), anchor: { x: 0.5, y: 1, z: 0 } });
 
   ctx.fillStyle = stemColor;
   ctx.fillRect(centerX - 3, tileSize, 6, height * tileSize - tileSize);
@@ -127,11 +150,36 @@ const drawStonePath = (ctx, { width, height, tileSize, options = {} }) => {
   }
 };
 
-const drawTree = (ctx, { width, height, tileSize, options = {} }) => {
+const drawTree = (ctx, { width, height, tileSize, options = {} }, helpers = null) => {
   const centerX = (width * tileSize) / 2;
   const trunkColor = options.trunkColor ?? '#5D4037';
   const leafColor = options.leafColor ?? '#2E7D32';
   const darkLeaf = options.darkLeaf ?? '#1B5E20';
+
+  if (helpers?.registerLayer) {
+    helpers.registerLayer(
+      'shadow',
+      (shadowCtx) => {
+        const ellipseWidth = width * tileSize * 0.9;
+        const ellipseHeight = tileSize * 0.35;
+        shadowCtx.fillStyle = 'rgba(0, 0, 0, 0.32)';
+        shadowCtx.beginPath();
+        shadowCtx.ellipse(centerX, height * tileSize - tileSize * 0.2, ellipseWidth / 2, ellipseHeight / 2, 0, 0, Math.PI * 2);
+        shadowCtx.fill();
+      },
+      {
+        width,
+        height: Math.min(1, height * 0.5),
+        anchor: { x: 0.5, y: 1, z: 0 },
+        offset: { z: -0.08 },
+        pixelOffset: { y: -tileSize * 0.15 },
+        alpha: 0.9,
+        order: -30
+      }
+    );
+  }
+
+  helpers?.setVolume?.({ height: Math.max(height * 2.2, 2), anchor: { x: 0.5, y: 1, z: 0 } });
 
   ctx.fillStyle = trunkColor;
   const trunkWidth = Math.max(10, tileSize * 0.4);
@@ -218,12 +266,14 @@ const drawChest = (ctx, { width, height, tileSize, options = {} }) => {
   ctx.fill();
 };
 
-const drawTerminalPanel = (ctx, { width, height, tileSize, options = {} }) => {
+const drawTerminalPanel = (ctx, { width, height, tileSize, options = {} }, helpers = null) => {
   const baseColor = options.baseColor ?? '#1f2933';
   const screenColor = options.screenColor ?? '#4fc3f7';
   const accentColor = options.accentColor ?? '#82e9ff';
   const standColor = options.standColor ?? '#263238';
   const glowColor = options.glowColor ?? 'rgba(79, 195, 247, 0.35)';
+
+  helpers?.setVolume?.({ height: Math.max(height * 1.2, 1), anchor: { x: 0.5, y: 1, z: 0 } });
 
   ctx.fillStyle = standColor;
   ctx.fillRect(width * tileSize * 0.35, height * tileSize * 0.75, width * tileSize * 0.3, height * tileSize * 0.25);
@@ -278,11 +328,34 @@ const drawTerminalPanel = (ctx, { width, height, tileSize, options = {} }) => {
   ctx.stroke();
 };
 
-const drawCommunityDoor = (ctx, { width, height, tileSize, options = {} }) => {
+const drawCommunityDoor = (ctx, { width, height, tileSize, options = {} }, helpers = null) => {
   const frameColor = options.frameColor ?? '#37474f';
   const panelColor = options.panelColor ?? '#546e7a';
   const accentColor = options.accentColor ?? '#ffca28';
   const glowColor = options.glowColor ?? 'rgba(255, 202, 40, 0.4)';
+
+  helpers?.registerLayer?.(
+    'shadow',
+    (shadowCtx) => {
+      const ellipseWidth = width * tileSize * 0.9;
+      const ellipseHeight = tileSize * 0.3;
+      shadowCtx.fillStyle = 'rgba(0, 0, 0, 0.22)';
+      shadowCtx.beginPath();
+      shadowCtx.ellipse(width * tileSize * 0.5, height * tileSize * 0.98, ellipseWidth / 2, ellipseHeight / 2, 0, 0, Math.PI * 2);
+      shadowCtx.fill();
+    },
+    {
+      width,
+      height: Math.min(1, height * 0.4),
+      anchor: { x: 0.5, y: 1, z: 0 },
+      offset: { z: -0.05 },
+      pixelOffset: { y: -tileSize * 0.1 },
+      alpha: 0.75,
+      order: -10
+    }
+  );
+
+  helpers?.setVolume?.({ height: Math.max(height * 1.4, 1.25), anchor: { x: 0.5, y: 1, z: 0 } });
 
   const doorWidth = width * tileSize * 0.8;
   const doorHeight = height * tileSize * 0.95;

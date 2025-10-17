@@ -11,24 +11,58 @@ const toFiniteNumber = (value, fallback = 0) => {
 };
 
 const normaliseAnchor = (raw) => {
-  if (!raw || typeof raw !== 'object') {
-    return { x: 0.5, y: 1 };
+  if (!raw) {
+    return { x: 0.5, y: 1, z: 0 };
   }
 
-  const x = clamp(toFiniteNumber(raw.x, 0.5), 0, 1);
-  const y = clamp(toFiniteNumber(raw.y, 1), 0, 1.5);
+  if (typeof raw === 'number') {
+    const numeric = clamp(toFiniteNumber(raw, 0.5), 0, 1);
+    return { x: numeric, y: numeric, z: 0 };
+  }
 
-  return { x, y };
+  if (Array.isArray(raw) && raw.length) {
+    const x = clamp(toFiniteNumber(raw[0], 0.5), 0, 1);
+    const y = clamp(toFiniteNumber(raw[1] ?? raw[0], 1), 0, 1.5);
+    const z = clamp(toFiniteNumber(raw[2] ?? 0, 0), -8, 8);
+    return { x, y, z };
+  }
+
+  if (typeof raw !== 'object') {
+    return { x: 0.5, y: 1, z: 0 };
+  }
+
+  const x = clamp(toFiniteNumber(raw.x ?? raw[0], 0.5), 0, 1);
+  const y = clamp(toFiniteNumber(raw.y ?? raw[1], 1), 0, 1.5);
+  const z = clamp(toFiniteNumber(raw.z ?? raw.depth ?? raw[2], 0), -8, 8);
+
+  return { x, y, z };
 };
 
 const normaliseOffset = (raw) => {
-  if (!raw || typeof raw !== 'object') {
-    return { x: 0, y: 0 };
+  if (raw === undefined || raw === null) {
+    return { x: 0, y: 0, z: 0 };
   }
 
-  const x = toFiniteNumber(raw.x, 0);
-  const y = toFiniteNumber(raw.y, 0);
-  return { x, y };
+  if (typeof raw === 'number') {
+    const numeric = toFiniteNumber(raw, 0);
+    return { x: numeric, y: numeric, z: 0 };
+  }
+
+  if (Array.isArray(raw) && raw.length) {
+    const x = toFiniteNumber(raw[0], 0);
+    const y = toFiniteNumber(raw[1] ?? raw[0], 0);
+    const z = toFiniteNumber(raw[2] ?? 0, 0);
+    return { x, y, z };
+  }
+
+  if (typeof raw !== 'object') {
+    return { x: 0, y: 0, z: 0 };
+  }
+
+  const x = toFiniteNumber(raw.x ?? raw[0], 0);
+  const y = toFiniteNumber(raw.y ?? raw[1], 0);
+  const z = toFiniteNumber(raw.z ?? raw[2], 0);
+  return { x, y, z };
 };
 
 const normaliseScale = (raw) => {
