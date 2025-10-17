@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CoMutiNy Canvas Demo</title>
+    <style>
+      body {
+        margin: 0;
+        font-family: system-ui, sans-serif;
+        background: #1e1e1e;
+        color: #f5f5f5;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        min-height: 100vh;
+        gap: 1.5rem;
+      }
+
+      #game-container {
+        padding: 1rem;
+        background: #111;
+        border-radius: 8px;
+        box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+      }
+
+      canvas {
+        display: block;
+        image-rendering: pixelated;
+      }
+
+      .instructions {
+        max-width: 480px;
+        text-align: center;
+        line-height: 1.5;
+        font-size: 0.95rem;
+        color: #c8c8c8;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="game-container">
+      <canvas id="game-canvas" width="512" height="384"></canvas>
+    </div>
+    <p class="instructions">
+      Usa las flechas izquierda y derecha para alternar entre las animaciones de caminar
+      y estado ocioso.
+    </p>
+    <script type="module" src="./src/main.js"></script>
+  </body>
+</html>
