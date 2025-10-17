@@ -96,6 +96,7 @@ if (!MAPS.length) {
     spawn: { x: 0, y: 0 },
     blockedAreas: [],
     objects: [],
+    doors: [],
     portals: [],
     theme: { borderColour: null },
     sourcePath: null
@@ -315,6 +316,42 @@ const normaliseServerObjects = (objects) => {
     .filter(Boolean);
 };
 
+const normaliseDoorEntry = (door) => {
+  if (!door || typeof door !== 'object') {
+    return null;
+  }
+
+  const id = typeof door.id === 'string' ? door.id.trim() : '';
+  const kind = typeof door.kind === 'string' ? door.kind.trim().toLowerCase() : '';
+  const position = normaliseCoordinateInput(door.position, null);
+
+  if (!id || !position || (kind !== 'in' && kind !== 'out')) {
+    return null;
+  }
+
+  const targetMap =
+    typeof door.targetMap === 'string' && door.targetMap.trim()
+      ? door.targetMap.trim()
+      : null;
+  const targetPosition = normaliseCoordinateInput(door.targetPosition, null);
+
+  return {
+    id,
+    kind,
+    position,
+    ...(targetMap ? { targetMap } : {}),
+    ...(targetPosition ? { targetPosition } : {})
+  };
+};
+
+const normaliseDoorCollection = (doors) => {
+  if (!Array.isArray(doors)) {
+    return [];
+  }
+
+  return doors.map((door) => normaliseDoorEntry(door)).filter(Boolean);
+};
+
 const normaliseTheme = (theme) => {
   const candidate = theme && typeof theme === 'object' ? theme : {};
   const borderColour =
@@ -378,6 +415,7 @@ const normaliseServerMap = (definition) => {
     spawn,
     blockedAreas: buildBlockedAreasFromServer(definition.blockedAreas),
     objects: normaliseServerObjects(definition.objects),
+    doors: normaliseDoorCollection(definition.doors),
     portals: Array.isArray(definition.portals) ? definition.portals : [],
     theme: normaliseTheme(definition.theme),
     sourcePath: definition.sourcePath ?? null

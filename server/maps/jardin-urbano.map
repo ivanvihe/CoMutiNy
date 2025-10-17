@@ -5,4 +5,5 @@ description: Un espacio verde con bancas, huertos elevados y zonas para talleres
 dimensions: 32x32
 starting_point: 16x20
 border colour: #2e7d32
-door position: 2x20
+door in: 2x21 -> comunidad-inicial
+door out: 2x20 -> comunidad-inicial@14x25

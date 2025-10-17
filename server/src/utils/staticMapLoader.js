@@ -184,16 +184,111 @@ const parseCoordinate = (value) => {
     return null
   }
 
-  const parts = value
+  const withSeparators = value
     .split(/[x,]/)
     .map((part) => Number.parseInt(part.trim(), 10))
     .filter((part) => Number.isFinite(part))
 
-  if (parts.length !== 2) {
-    return null
+  if (withSeparators.length === 2) {
+    return { x: withSeparators[0], y: withSeparators[1] }
   }
 
-  return { x: parts[0], y: parts[1] }
+  const fallback = value
+    .split(/\s+/)
+    .map((part) => Number.parseInt(part.trim(), 10))
+    .filter((part) => Number.isFinite(part))
+
+  if (fallback.length === 2) {
+    return { x: fallback[0], y: fallback[1] }
+  }
+
+  return null
+}
+
+const splitDoorEntries = (value = '') =>
+  `${value}`
+    .split(/[;,\n]/)
+    .map((entry) => entry.trim())
+    .filter(Boolean)
+
+const parseDoorEntry = (value) => {
+  let coordinatePart = value
+  let remainder = ''
+
+  if (value.includes('->')) {
+    ;[coordinatePart, remainder] = value.split('->', 1)
+  } else if (value.includes(':')) {
+    ;[coordinatePart, remainder] = value.split(':', 1)
+  }
+
+  const position = parseCoordinate(coordinatePart.trim())
+  if (!position) {
+    throw new Error(`Coordenada de puerta inválida: "${value}"`)
+  }
+
+  remainder = remainder.trim()
+  if (!remainder) {
+    return { position, targetMap: null, targetPosition: null }
+  }
+
+  if (remainder.includes('@')) {
+    const [mapPart, coordinateTarget] = remainder.split('@', 1)
+    const targetMap = mapPart.trim() || null
+    const targetPosition = parseCoordinate(coordinateTarget.trim())
+    if (coordinateTarget.trim() && !targetPosition) {
+      throw new Error(`Coordenada destino inválida en puerta: "${value}"`)
+    }
+    return { position, targetMap, targetPosition }
+  }
+
+  return { position, targetMap: remainder || null, targetPosition: null }
+}
+
+const buildDoorDefinitions = (entries, { id, kind, registry }) => {
+  const doors = []
+  const objects = []
+
+  entries.forEach((rawEntry, index) => {
+    const { position, targetMap, targetPosition } = parseDoorEntry(rawEntry)
+    const doorId = ensureUniqueId(`${id}-door-${kind}`, registry)
+    doors.push({
+      id: doorId,
+      kind,
+      position,
+      ...(targetMap ? { targetMap } : {}),
+      ...(targetPosition ? { targetPosition } : {}),
+    })
+
+    if (kind === 'out') {
+      const metadata = {
+        type: 'door',
+        objectId: 'community_door',
+        instanceId: doorId,
+        doorKind: kind,
+      }
+      if (targetMap) {
+        metadata.targetMap = targetMap
+      }
+      if (targetPosition) {
+        metadata.targetPosition = targetPosition
+      }
+
+      const label = entries.length > 1 ? `Acceso ${index + 1}` : 'Acceso principal'
+
+      objects.push({
+        id: doorId,
+        name: label,
+        label,
+        position,
+        size: { width: 1, height: 1 },
+        solid: false,
+        metadata,
+        objectId: 'community_door',
+      })
+    }
+  })
+
+  return { doors, objects }
 }
 
 const buildBlockedAreas = (size) => {
@@ -238,7 +333,15 @@ const normaliseMapDefinition = (filePath, rawContents) => {
     (size
       ? { x: Math.floor(size.width / 2), y: Math.floor(size.height / 2) }
       : { x: 0, y: 0 })
-  const doorPosition = parseCoordinate(definition.doorPosition ?? '')
+  const inboundDoorEntries = splitDoorEntries(definition.doorIn)
+  const outboundDoorEntries = (() => {
+    const explicit = splitDoorEntries(definition.doorOut)
+    if (explicit.length) {
+      return explicit
+    }
+    const legacy = parseCoordinate(definition.doorPosition ?? '')
+    return legacy ? [`${legacy.x}x${legacy.y}`] : []
+  })()
 
   const fileName = filePath.split(path.sep).pop() ?? 'map'
   const rawId = typeof definition.id === 'string' ? definition.id.trim() : ''
@@ -251,19 +354,25 @@ const normaliseMapDefinition = (filePath, rawContents) => {
 
   const registry = new Map()
   const objects = []
+  const doors = []
 
-  if (doorPosition) {
-    const doorId = ensureUniqueId(`${id}-door`, registry)
-    objects.push({
-      id: doorId,
-      name: 'Acceso principal',
-      label: 'Acceso principal',
-      position: doorPosition,
-      size: { width: 1, height: 1 },
-      solid: false,
-      metadata: { type: 'door', objectId: 'community_door', instanceId: doorId },
-      objectId: 'community_door'
+  if (outboundDoorEntries.length) {
+    const { doors: parsed, objects: doorObjects } = buildDoorDefinitions(outboundDoorEntries, {
+      id,
+      kind: 'out',
+      registry,
     })
+    doors.push(...parsed)
+    objects.push(...doorObjects)
+  }
+
+  if (inboundDoorEntries.length) {
+    const { doors: parsed } = buildDoorDefinitions(inboundDoorEntries, {
+      id,
+      kind: 'in',
+      registry,
+    })
+    doors.push(...parsed)
   }
 
   const objectLines = sections.get('objects') ?? []
@@ -282,6 +391,7 @@ const normaliseMapDefinition = (filePath, rawContents) => {
     blockedAreas: buildBlockedAreas(size),
     objects,
     portals: [],
+    doors,
     theme: { borderColour: definition.borderColour ?? null },
     sourcePath: relativePath
   }

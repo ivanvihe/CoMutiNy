@@ -7,7 +7,7 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Dict, Iterable, List, Tuple
 
-from .models import MapArea, MapDefinition, MapObject, MapPosition, MapSize
+from .models import MapArea, MapDefinition, MapDoor, MapObject, MapPosition, MapSize
 
 
 class MapLoaderError(RuntimeError):
@@ -164,6 +164,104 @@ def _parse_object_line(line: str, *, registry: Dict[str, int]) -> MapObject:
     )
 
 
+def _split_door_entries(value: str) -> List[str]:
+    entries: List[str] = []
+    for raw_entry in re.split(r"[;,\n]", value):
+        trimmed = raw_entry.strip()
+        if trimmed:
+            entries.append(trimmed)
+    return entries
+
+
+def _parse_door_entry(value: str) -> Tuple[MapPosition, str | None, MapPosition | None]:
+    if "->" in value:
+        coordinate_part, remainder = value.split("->", 1)
+    elif ":" in value:
+        coordinate_part, remainder = value.split(":", 1)
+    else:
+        coordinate_part, remainder = value, ""
+
+    position = _parse_coordinate(coordinate_part.strip())
+
+    target_map: str | None = None
+    target_position: MapPosition | None = None
+
+    remainder = remainder.strip()
+    if remainder:
+        if "@" in remainder:
+            map_part, coordinate_target = remainder.split("@", 1)
+            target_map = map_part.strip() or None
+            coordinate_target = coordinate_target.strip()
+            if coordinate_target:
+                target_position = _parse_coordinate(coordinate_target)
+        else:
+            target_map = remainder.strip() or None
+
+    return position, target_map, target_position
+
+
+def _build_door_definitions(
+    values: Iterable[str],
+    *,
+    map_id: str,
+    kind: str,
+    registry: Dict[str, int],
+) -> Tuple[List[MapDoor], List[MapObject]]:
+    doors: List[MapDoor] = []
+    objects: List[MapObject] = []
+
+    entries = list(values)
+    for index, raw_entry in enumerate(entries):
+        try:
+            position, target_map, target_position = _parse_door_entry(raw_entry)
+        except MapLoaderError as error:
+            raise MapLoaderError(
+                f"Entrada de puerta inválida '{raw_entry}'"
+            ) from error
+
+        door_id = _ensure_unique_id(f"{map_id}-door-{kind}", registry)
+        door = MapDoor(
+            id=door_id,
+            kind=kind,
+            position=position,
+            target_map=target_map,
+            target_position=target_position,
+        )
+        doors.append(door)
+
+        if kind == "out":
+            name = "Acceso principal"
+            if len(entries) > 1:
+                name = f"Acceso {index + 1}"
+
+            metadata: Dict[str, object] = {
+                "objectId": "community_door",
+                "instanceId": door_id,
+                "type": "door",
+                "doorKind": kind,
+            }
+            if target_map:
+                metadata["targetMap"] = target_map
+            if target_position:
+                metadata["targetPosition"] = {
+                    "x": target_position.x,
+                    "y": target_position.y,
+                }
+
+            objects.append(
+                MapObject(
+                    id=door_id,
+                    name=name,
+                    position=position,
+                    size=MapSize(1, 1),
+                    solid=False,
+                    metadata=metadata,
+                )
+            )
+
+    return doors, objects
+
+
 def _build_blocked_areas(size: MapSize) -> List[MapArea]:
     if size.width <= 0 or size.height <= 0:
         return []
@@ -227,12 +325,24 @@ def load_map(path: str | Path) -> MapDefinition:
     if spawn is None:
         spawn = MapPosition(x=size.width // 2 if size.width else 0, y=size.height // 2 if size.height else 0)
 
-    door_position = None
-    if metadata.get("door_position"):
+    inbound_raw = metadata.get("door_in") or ""
+    outbound_raw = metadata.get("door_out") or ""
+    legacy_position = metadata.get("door_position")
+
+    inbound_entries: List[str] = []
+    outbound_entries: List[str] = []
+
+    if inbound_raw:
+        inbound_entries = _split_door_entries(inbound_raw)
+
+    if outbound_raw:
+        outbound_entries = _split_door_entries(outbound_raw)
+    elif legacy_position:
         try:
-            door_position = _parse_coordinate(metadata["door_position"])
+            position = _parse_coordinate(legacy_position)
+            outbound_entries = [f"{position.x}x{position.y}"]
         except MapLoaderError:
-            door_position = None
+            outbound_entries = []
 
     raw_id = (metadata.get("id") or file_path.stem).strip()
     map_id = raw_id or file_path.stem
@@ -244,18 +354,20 @@ def load_map(path: str | Path) -> MapDefinition:
 
     registry: Dict[str, int] = {}
     objects: List[MapObject] = []
-    if door_position:
-        door_id = _ensure_unique_id(f"{map_id}-door", registry)
-        objects.append(
-            MapObject(
-                id=door_id,
-                name="Acceso principal",
-                position=door_position,
-                size=MapSize(1, 1),
-                solid=False,
-                metadata={"objectId": "community_door", "instanceId": door_id},
-            )
+    doors: List[MapDoor] = []
+
+    if outbound_entries:
+        parsed_doors, door_objects = _build_door_definitions(
+            outbound_entries, map_id=map_id, kind="out", registry=registry
         )
+        doors.extend(parsed_doors)
+        objects.extend(door_objects)
+
+    if inbound_entries:
+        parsed_doors, _ = _build_door_definitions(
+            inbound_entries, map_id=map_id, kind="in", registry=registry
+        )
+        doors.extend(parsed_doors)
 
     section_objects = sections.get("objects", [])
     objects.extend(_parse_objects(section_objects, registry=registry))
@@ -277,6 +389,8 @@ def load_map(path: str | Path) -> MapDefinition:
             "spawn_point",
             "spawn",
             "door_position",
+            "door_in",
+            "door_out",
             "border_colour",
             "border_color",
         }
@@ -291,6 +405,7 @@ def load_map(path: str | Path) -> MapDefinition:
         spawn=spawn,
         blocked_areas=blocked_areas,
         objects=objects,
+        doors=doors,
         portals=[],
         theme=theme,
         source_path=str(file_path),
