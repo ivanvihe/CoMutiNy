@@ -78,8 +78,13 @@ export class GameStateManager {
     }
 
     try {
-      const remoteMaps = await this._fetchMaps({});
-      (Array.isArray(remoteMaps) ? remoteMaps : []).forEach((map) => {
+      const result = await this._fetchMaps({});
+      const remoteMaps = Array.isArray(result?.maps)
+        ? result.maps
+        : Array.isArray(result)
+          ? result
+          : [];
+      remoteMaps.forEach((map) => {
         if (map && typeof map === 'object' && typeof map.id === 'string') {
           this._maps.set(map.id, map);
         }

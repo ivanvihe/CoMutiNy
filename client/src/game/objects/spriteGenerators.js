@@ -326,7 +326,7 @@ const drawCommunityDoor = (ctx, { width, height, tileSize, options = {} }) => {
   ctx.fill();
 };
 
-export const SPRITE_GENERATORS = {
+const BUILTIN_SPRITE_GENERATORS = {
   brickWall: drawBrickWall,
   monstera: drawMonstera,
   stonePath: drawStonePath,
@@ -336,5 +336,114 @@ export const SPRITE_GENERATORS = {
   terminalPanel: drawTerminalPanel,
   communityDoor: drawCommunityDoor
 };
+
+const CUSTOM_SPRITE_GENERATORS = new Map();
+
+const buildGeneratorFromSource = (source) => {
+  if (typeof source !== 'string') {
+    return null;
+  }
+
+  const trimmed = source.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  try {
+    // eslint-disable-next-line no-new-func
+    const factory = new Function(`return (${trimmed});`);
+    const generator = factory();
+    return typeof generator === 'function' ? generator : null;
+  } catch (error) {
+    console.warn('[objects] No se pudo interpretar el generador Canvas remoto', error);
+    return null;
+  }
+};
+
+export const resolveSpriteGenerator = (id) => {
+  if (!id) {
+    return null;
+  }
+
+  const key = `${id}`.trim();
+  if (!key) {
+    return null;
+  }
+
+  if (CUSTOM_SPRITE_GENERATORS.has(key)) {
+    return CUSTOM_SPRITE_GENERATORS.get(key);
+  }
+
+  return BUILTIN_SPRITE_GENERATORS[key] ?? null;
+};
+
+export const registerSpriteGenerator = (id, generator) => {
+  if (typeof id !== 'string' || typeof generator !== 'function') {
+    return null;
+  }
+
+  const key = id.trim();
+  if (!key) {
+    return null;
+  }
+
+  CUSTOM_SPRITE_GENERATORS.set(key, generator);
+  return { id: key, generator };
+};
+
+export const registerSpriteGeneratorSource = (id, source) => {
+  const generator = buildGeneratorFromSource(source);
+  if (!generator) {
+    return null;
+  }
+  return registerSpriteGenerator(id, generator);
+};
+
+export const registerSpriteGeneratorDefinitions = (definitions = []) => {
+  const registered = [];
+
+  definitions.forEach((definition) => {
+    if (!definition || typeof definition !== 'object') {
+      return;
+    }
+
+    const identifier =
+      (typeof definition.id === 'string' && definition.id.trim()) ||
+      (typeof definition.name === 'string' && definition.name.trim()) ||
+      null;
+
+    if (!identifier) {
+      return;
+    }
+
+    try {
+      if (typeof definition.generator === 'function') {
+        const result = registerSpriteGenerator(identifier, definition.generator);
+        if (result) {
+          registered.push(result);
+        }
+        return;
+      }
+
+      const source =
+        (typeof definition.source === 'string' && definition.source.trim()) ||
+        (typeof definition.generatorSource === 'string' && definition.generatorSource.trim()) ||
+        null;
+
+      if (source) {
+        const result = registerSpriteGeneratorSource(identifier, source);
+        if (result) {
+          registered.push(result);
+        }
+      }
+    } catch (error) {
+      console.warn(`[objects] No se pudo registrar el generador Canvas ${identifier}`, error);
+    }
+  });
+
+  return registered;
+};
+
+export const SPRITE_GENERATORS = BUILTIN_SPRITE_GENERATORS;
 
 export default SPRITE_GENERATORS;

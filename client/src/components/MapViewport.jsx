@@ -52,6 +52,21 @@ export default function MapViewport() {
     chatMessages
   } = useWorld();
 
+  const sceneMap = useMemo(() => {
+    if (!currentMap) {
+      return null;
+    }
+
+    const layers = Array.isArray(currentMap.layers) ? currentMap.layers : [];
+    const objectLayers = Array.isArray(currentMap.objectLayers) ? currentMap.objectLayers : [];
+
+    return {
+      ...currentMap,
+      layers,
+      objectLayers
+    };
+  }, [currentMap]);
+
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) {
@@ -161,7 +176,7 @@ export default function MapViewport() {
       return;
     }
 
-    if (!currentMap) {
+    if (!sceneMap) {
       engine.setScene({ map: null });
       return;
     }
@@ -175,13 +190,13 @@ export default function MapViewport() {
     };
 
     engine.setScene({
-      map: currentMap,
+      map: sceneMap,
       player: localPlayer,
       remotePlayers,
       chatBubbles
     });
   }, [
-    currentMap,
+    sceneMap,
     localPlayerId,
     playerDirection,
     playerIsMoving,

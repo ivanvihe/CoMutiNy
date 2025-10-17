@@ -1,6 +1,8 @@
 jest.mock('../../maps.js', () => ({
   MAPS: [],
-  fetchServerMaps: jest.fn().mockResolvedValue([]),
+  fetchServerMaps: jest
+    .fn()
+    .mockResolvedValue({ maps: [], objectDefinitions: [], canvasDefinitions: [] }),
   resolveDefaultMapId: () => null
 }));
 
@@ -38,7 +40,9 @@ describe('GameStateManager', () => {
 
   test('fetches remote map definitions when an unknown map is requested', async () => {
     const remoteMap = buildMap('remote');
-    const fetchMaps = jest.fn().mockResolvedValue([remoteMap]);
+    const fetchMaps = jest
+      .fn()
+      .mockResolvedValue({ maps: [remoteMap], objectDefinitions: [], canvasDefinitions: [] });
     const manager = new GameStateManager({ maps: [], fetchMaps });
 
     const result = await manager.handleMapChange({ mapId: 'remote' });
