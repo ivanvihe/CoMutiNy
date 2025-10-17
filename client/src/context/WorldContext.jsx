@@ -390,6 +390,10 @@ export function WorldProvider({ children }) {
       }
 
       const alias = typeof profileData?.alias === 'string' ? profileData.alias.trim() : '';
+      const mapId =
+        typeof profileData?.mapId === 'string' && profileData.mapId.trim()
+          ? profileData.mapId.trim()
+          : null;
 
       if (!alias) {
         return Promise.reject(new Error('El alias es obligatorio.'));
@@ -418,7 +422,8 @@ export function WorldProvider({ children }) {
       const nextProfile = {
         alias,
         avatar,
-        playerId: desiredId
+        playerId: desiredId,
+        ...(mapId ? { mapId } : {})
       };
 
       profileRef.current = nextProfile;
@@ -457,7 +462,8 @@ export function WorldProvider({ children }) {
             animation: nextState.animation,
             metadata,
             direction,
-            sprite
+            sprite,
+            ...(mapId ? { mapId } : {})
           },
           (ack) => {
             if (!ack?.ok) {
@@ -498,10 +504,13 @@ export function WorldProvider({ children }) {
               metadata: mergedMetadata
             };
 
+            const resolvedWorldId = ack.state?.world?.id ?? mapId ?? null;
+
             const resolvedProfile = {
               alias: resolvedAlias,
               avatar: resolvedAvatar,
-              playerId: resolvedId
+              playerId: resolvedId,
+              ...(resolvedWorldId ? { mapId: resolvedWorldId } : {})
             };
 
             profileRef.current = resolvedProfile;
@@ -516,8 +525,19 @@ export function WorldProvider({ children }) {
   );
 
   const joinWorld = useCallback(
-    (aliasInput) => {
-      const trimmed = typeof aliasInput === 'string' ? aliasInput.trim() : '';
+    (input) => {
+      const aliasSource =
+        typeof input === 'string'
+          ? input
+          : typeof input?.alias === 'string'
+            ? input.alias
+            : '';
+      const trimmed = typeof aliasSource === 'string' ? aliasSource.trim() : '';
+      const requestedMapId =
+        typeof input === 'object' && input !== null && typeof input.mapId === 'string'
+          ? input.mapId.trim()
+          : '';
+      const mapId = requestedMapId || profileRef.current?.mapId || null;
 
       if (!trimmed) {
         const error = new Error('Introduce un alias para unirte.');
@@ -532,7 +552,12 @@ export function WorldProvider({ children }) {
         : previousProfile?.avatar ?? generateRandomAvatar();
       const playerId = previousProfile?.playerId ?? ensureLocalPlayerId();
 
-      const profileData = { alias: trimmed, avatar, playerId };
+      const profileData = {
+        alias: trimmed,
+        avatar,
+        playerId,
+        ...(mapId ? { mapId } : {})
+      };
       profileRef.current = profileData;
       setProfile(profileData);
       setJoinState({ status: 'pending', error: null });
