@@ -11,6 +11,7 @@ import {
   updateLandscapeAsset,
   deleteLandscapeAsset
 } from '../controllers/adminAssetController.js'
+import { listMessages } from '../controllers/adminMessageController.js'
 import { authenticate } from '../middlewares/auth.js'
 import { requireAdmin } from '../middlewares/authorizeAdmin.js'
 
@@ -21,6 +22,8 @@ router.use(authenticate, requireAdmin)
 router.get('/users', listUsers)
 router.patch('/users/:id', updateUser)
 router.delete('/users/:id', deleteUser)
+
+router.get('/messages', listMessages)
 
 router.get('/assets/sprites', listSpriteAssets)
 router.post('/assets/sprites', createSpriteAsset)

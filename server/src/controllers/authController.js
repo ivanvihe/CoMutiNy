@@ -70,6 +70,23 @@ export const login = async (req, res, next) => {
       return res.status(401).json({ message: 'Invalid credentials' })
     }
 
+    if (user.isBanned) {
+      return res.status(403).json({ message: 'Your account has been banned by an administrator' })
+    }
+
+    const now = new Date()
+
+    if (user.suspensionUntil && user.suspensionUntil > now) {
+      return res.status(403).json({
+        message: `Your account is suspended until ${user.suspensionUntil.toISOString()}`
+      })
+    }
+
+    if (user.suspensionUntil && user.suspensionUntil <= now) {
+      await userRepository.update(user.id, { suspensionUntil: null })
+      user.suspensionUntil = null
+    }
+
     const token = signSessionToken(user.id)
     setAuthCookie(res, token)
 

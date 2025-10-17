@@ -2,10 +2,12 @@ import { useState } from 'react';
 import { Box, Paper, Tab, Tabs, Typography } from '@mui/material';
 
 import AdminUserTable from './AdminUserTable.jsx';
+import AdminMessageTable from './AdminMessageTable.jsx';
 import AssetManager from './AssetManager.jsx';
 
 const tabConfig = [
   { value: 'users', label: 'Usuarios', component: <AdminUserTable /> },
+  { value: 'messages', label: 'Mensajes', component: <AdminMessageTable /> },
   { value: 'sprites', label: 'Sprites', component: <AssetManager kind="sprite" /> },
   { value: 'landscapes', label: 'Paisajes', component: <AssetManager kind="landscape" /> }
 ];

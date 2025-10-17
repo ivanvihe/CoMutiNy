@@ -29,17 +29,67 @@ export const listUsers = async (req, res, next) => {
 export const updateUser = async (req, res, next) => {
   try {
     const { id } = req.params
-    const { role } = req.body ?? {}
+    const body = req.body ?? {}
+    const updates = {}
 
-    if (!['user', 'admin'].includes(role)) {
-      return res.status(400).json({ message: 'role must be "user" or "admin"' })
+    if (body.role !== undefined) {
+      if (!['user', 'admin'].includes(body.role)) {
+        return res.status(400).json({ message: 'role must be "user" or "admin"' })
+      }
+
+      if (req.user?.id === id) {
+        return res.status(400).json({ message: 'You cannot modify your own role' })
+      }
+
+      updates.role = body.role
     }
 
-    if (req.user?.id === id) {
-      return res.status(400).json({ message: 'You cannot modify your own role' })
+    const moderationFieldsProvided =
+      body.isBanned !== undefined || body.suspensionUntil !== undefined || body.suspensionReason !== undefined
+
+    if (moderationFieldsProvided && req.user?.id === id) {
+      return res.status(400).json({ message: 'You cannot modify your own moderation status' })
     }
 
-    const updated = await userRepository.update(id, { role })
+    if (body.isBanned !== undefined) {
+      updates.isBanned = Boolean(body.isBanned)
+
+      if (updates.isBanned) {
+        updates.suspensionUntil = null
+      }
+    }
+
+    if (body.suspensionUntil !== undefined) {
+      if (body.suspensionUntil === null || body.suspensionUntil === '') {
+        updates.suspensionUntil = null
+      } else {
+        const until = new Date(body.suspensionUntil)
+
+        if (Number.isNaN(until.getTime())) {
+          return res.status(400).json({ message: 'suspensionUntil must be a valid date' })
+        }
+
+        updates.suspensionUntil = until
+        updates.isBanned = false
+      }
+    }
+
+    if (body.suspensionReason !== undefined) {
+      if (body.suspensionReason === null || body.suspensionReason === '') {
+        updates.moderationReason = null
+      } else if (typeof body.suspensionReason === 'string') {
+        const trimmed = body.suspensionReason.trim()
+        updates.moderationReason = trimmed ? trimmed.slice(0, 500) : null
+      } else {
+        return res.status(400).json({ message: 'suspensionReason must be a string' })
+      }
+    }
+
+    if (Object.keys(updates).length === 0) {
+      return res.status(400).json({ message: 'No updates provided' })
+    }
+
+    const updated = await userRepository.update(id, updates)
 
     if (!updated) {
       return res.status(404).json({ message: 'User not found' })
