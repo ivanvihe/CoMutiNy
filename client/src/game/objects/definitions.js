@@ -138,15 +138,20 @@ const normaliseDefinition = (raw, { sourcePath } = {}) => {
   };
 };
 
-const definitionSources = loadDefinitionSources();
-
 const OBJECT_DEFINITIONS = new Map();
+
+const registerDefinition = (rawDefinition, { sourcePath } = {}) => {
+  const definition = normaliseDefinition(rawDefinition, { sourcePath });
+  OBJECT_DEFINITIONS.set(definition.id, definition);
+  return definition;
+};
+
+const definitionSources = loadDefinitionSources();
 
 Object.entries(definitionSources).forEach(([filePath, rawContents]) => {
   try {
     const parsed = typeof rawContents === 'string' ? JSON.parse(rawContents) : rawContents;
-    const definition = normaliseDefinition(parsed, { sourcePath: filePath });
-    OBJECT_DEFINITIONS.set(definition.id, definition);
+    registerDefinition(parsed, { sourcePath: filePath });
   } catch (error) {
     console.warn('[objects] No se pudo cargar', filePath, error.message);
   }
@@ -157,6 +162,34 @@ export const resolveObjectDefinition = (objectId) => {
     return null;
   }
   return OBJECT_DEFINITIONS.get(objectId) ?? null;
+};
+
+export const listObjectDefinitions = () => Array.from(OBJECT_DEFINITIONS.values());
+
+export const registerObjectDefinitions = (definitions = []) => {
+  const registered = [];
+
+  definitions.forEach((candidate) => {
+    if (!candidate || typeof candidate !== 'object') {
+      return;
+    }
+
+    const sourcePath =
+      typeof candidate.sourcePath === 'string' && candidate.sourcePath.trim()
+        ? candidate.sourcePath.trim()
+        : typeof candidate.source === 'string' && candidate.source.trim()
+          ? candidate.source.trim()
+          : null;
+
+    try {
+      registered.push(registerDefinition({ ...candidate }, { sourcePath }));
+    } catch (error) {
+      const identifier = candidate?.id ?? '(sin id)';
+      console.warn(`[objects] No se pudo registrar la definición ${identifier}`, error.message);
+    }
+  });
+
+  return registered;
 };
 
 export { OBJECT_DEFINITIONS };

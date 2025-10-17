@@ -13,8 +13,10 @@ import {
   fetchServerMaps,
   resolveDefaultMapId
 } from '../game/maps.js';
+import { fetchObjectDefinitions } from '../api/objects.js';
 import { useWorld } from './WorldContext.jsx';
 import { createErrorEvent, normaliseInteractionEvent } from '../game/interaction/index.js';
+import { listObjectDefinitions, registerObjectDefinitions } from '../game/objects/definitions.js';
 
 const MapContext = createContext(undefined);
 
@@ -78,6 +80,7 @@ export function MapProvider({ children }) {
   const [playerDirection, setPlayerDirection] = useState(DEFAULT_DIRECTION);
   const [playerIsMoving, setPlayerIsMoving] = useState(false);
   const [activeEvent, setActiveEvent] = useState(null);
+  const [objectDefinitions, setObjectDefinitions] = useState(listObjectDefinitions());
   const { updateLocalPlayerState, interactWithObject: sendInteractionRequest } = useWorld();
 
   const movementRef = useRef(null);
@@ -97,6 +100,31 @@ export function MapProvider({ children }) {
     return () => {
       if (typeof window !== 'undefined' && animationFrameRef.current) {
         window.cancelAnimationFrame(animationFrameRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+
+    fetchObjectDefinitions({ signal: controller?.signal })
+      .then((definitions) => {
+        if (cancelled) {
+          return;
+        }
+
+        if (Array.isArray(definitions) && definitions.length > 0) {
+          registerObjectDefinitions(definitions);
+          setObjectDefinitions(listObjectDefinitions());
+        }
+      })
+      .catch(() => {});
+
+    return () => {
+      cancelled = true;
+      if (controller) {
+        controller.abort();
       }
     };
   }, []);
@@ -478,7 +506,8 @@ export function MapProvider({ children }) {
       activeEvent,
       switchMap,
       clearEvent,
-      objectAtPlayerPosition: findObjectAt(playerPosition)
+      objectAtPlayerPosition: findObjectAt(playerPosition),
+      objectDefinitions
     }),
     [
       activeEvent,
@@ -490,6 +519,7 @@ export function MapProvider({ children }) {
       findObjectAt,
       interact,
       movePlayer,
+      objectDefinitions,
       playerDirection,
       playerIsMoving,
       playerPosition,

@@ -5,6 +5,31 @@ import { fileURLToPath } from 'node:url'
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const DEFAULT_OBJECT_DIRECTORY = path.resolve(__dirname, '../../objects/definitions')
 
+const parseDirectoryList = (value) => {
+  if (!value) {
+    return []
+  }
+
+  return `${value}`
+    .split(',')
+    .flatMap((entry) => entry.split(path.delimiter))
+    .map((entry) => entry.trim())
+    .filter(Boolean)
+    .map((entry) => path.resolve(entry))
+}
+
+const ENVIRONMENT_DIRECTORIES = parseDirectoryList(
+  process.env.OBJECT_DEFINITION_DIRECTORIES ??
+    process.env.OBJECT_DEFINITION_DIRECTORY ??
+    process.env.OBJECT_DIRECTORY
+)
+
+const DEFAULT_DIRECTORIES = [
+  DEFAULT_OBJECT_DIRECTORY,
+  path.resolve(process.cwd(), 'server', 'objects', 'definitions'),
+  path.resolve(process.cwd(), 'objects', 'definitions')
+]
+
 const STATE = {
   loaded: false,
   directory: DEFAULT_OBJECT_DIRECTORY,
@@ -214,13 +239,60 @@ const loadObjectFile = async (filePath) => {
   }
 }
 
-const ensureDefinitionsLoaded = async ({ directory = DEFAULT_OBJECT_DIRECTORY, force = false } = {}) => {
-  if (STATE.loaded && !force && STATE.directory === directory) {
+const dedupeDirectories = (directories) => {
+  const seen = new Set()
+  return directories.filter((directory) => {
+    const key = directory.toLowerCase()
+    if (seen.has(key)) {
+      return false
+    }
+    seen.add(key)
+    return true
+  })
+}
+
+const findReadableDirectory = async (directory) => {
+  const candidates = dedupeDirectories([
+    ...(directory ? [path.resolve(directory)] : []),
+    ...ENVIRONMENT_DIRECTORIES,
+    ...DEFAULT_DIRECTORIES
+  ])
+
+  for (const candidate of candidates) {
+    try {
+      const entries = await fs.readdir(candidate, { withFileTypes: true })
+      return { directory: candidate, entries }
+    } catch (error) {
+      // Continue with other candidates
+    }
+  }
+
+  return { directory: null, entries: [] }
+}
+
+const ensureDefinitionsLoaded = async ({ directory = null, force = false } = {}) => {
+  if (STATE.loaded && !force && (!directory || STATE.directory === path.resolve(directory))) {
     return STATE
   }
 
-  const resolvedDirectory = path.resolve(directory)
-  const entries = await fs.readdir(resolvedDirectory, { withFileTypes: true })
+  const { directory: resolvedDirectory, entries } = await findReadableDirectory(directory)
+
+  if (!resolvedDirectory || entries.length === 0) {
+    if (!STATE.loaded || force) {
+      console.warn('[objects] No se encontraron definiciones de objetos disponibles')
+      STATE.loaded = true
+      STATE.directory = null
+      STATE.definitions = new Map()
+    }
+    return STATE
+  }
+
+  const resolvedPath = path.resolve(resolvedDirectory)
+
+  if (STATE.directory !== resolvedPath || force) {
+    console.info(`[objects] Cargando definiciones desde ${resolvedPath}`)
+  }
+
   const definitions = new Map()
 
   for (const entry of entries) {
@@ -228,7 +300,7 @@ const ensureDefinitionsLoaded = async ({ directory = DEFAULT_OBJECT_DIRECTORY, f
       continue
     }
 
-    const filePath = path.join(resolvedDirectory, entry.name)
+    const filePath = path.join(resolvedPath, entry.name)
     try {
       const definition = await loadObjectFile(filePath)
       definitions.set(definition.id, definition)
@@ -238,8 +310,10 @@ const ensureDefinitionsLoaded = async ({ directory = DEFAULT_OBJECT_DIRECTORY, f
   }
 
   STATE.loaded = true
-  STATE.directory = resolvedDirectory
+  STATE.directory = resolvedPath
   STATE.definitions = definitions
+
+  console.info(`[objects] Se cargaron ${definitions.size} definiciones de objetos`)
 
   return STATE
 }
