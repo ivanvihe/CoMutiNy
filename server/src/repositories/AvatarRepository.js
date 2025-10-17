@@ -14,6 +14,12 @@ class AvatarRepository {
     })
   }
 
+  async findByIdWithSprite (id) {
+    return Avatar.findByPk(id, {
+      include: [{ model: SpriteAsset, as: 'spriteAsset' }]
+    })
+  }
+
   async findByIdBasic (id) {
     return Avatar.findByPk(id)
   }

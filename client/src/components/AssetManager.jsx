@@ -19,7 +19,9 @@ import {
   Typography
 } from '@mui/material';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
+
+import SpriteCanvasEditor from './SpriteCanvasEditor.jsx';
 
 import {
   createLandscapeAsset,
@@ -71,6 +73,7 @@ export default function AssetManager({ kind }) {
   const [selectedAsset, setSelectedAsset] = useState(null);
   const [formError, setFormError] = useState('');
   const [feedback, setFeedback] = useState(null);
+  const [spriteMetadata, setSpriteMetadata] = useState(null);
 
   const queryKey = useMemo(
     () => [...config.queryKey, { page, limit: rowsPerPage }],
@@ -121,12 +124,15 @@ export default function AssetManager({ kind }) {
     }
   });
 
+  const isSpriteKind = config === assetConfig.sprite;
+
   const openCreateDialog = () => {
     setDialogMode('create');
     setSelectedAsset(null);
     setFormValues({ ...emptyForm });
     setFormError('');
     setDialogOpen(true);
+    setSpriteMetadata(null);
   };
 
   const openEditDialog = (asset) => {
@@ -140,11 +146,13 @@ export default function AssetManager({ kind }) {
     });
     setFormError('');
     setDialogOpen(true);
+    setSpriteMetadata(asset.metadata ?? null);
   };
 
   const closeDialog = () => {
     setDialogOpen(false);
     setFormError('');
+    setSpriteMetadata(null);
   };
 
   const handleChange = (event) => {
@@ -184,6 +192,21 @@ export default function AssetManager({ kind }) {
       updateMutation.mutate({ id: selectedAsset.id, payload });
     }
   };
+
+  const handleSpriteChange = useCallback(({ imageUrl, metadata }) => {
+    setFormValues((prev) => ({
+      ...prev,
+      imageUrl
+    }));
+
+    if (metadata) {
+      setSpriteMetadata(metadata);
+      setFormValues((prev) => ({
+        ...prev,
+        metadata: JSON.stringify(metadata, null, 2)
+      }));
+    }
+  }, []);
 
   const handleDelete = (asset) => {
     if (!window.confirm(`¿Eliminar "${asset.name}"?`)) {
@@ -346,24 +369,59 @@ export default function AssetManager({ kind }) {
                 />
               </Grid>
             </Grid>
-            <TextField
-              label="URL de la imagen"
-              name="imageUrl"
-              value={formValues.imageUrl}
-              onChange={handleChange}
-              fullWidth
-              required
-            />
-            <TextField
-              label="Metadata (JSON)"
-              name="metadata"
-              value={formValues.metadata}
-              onChange={handleChange}
-              fullWidth
-              minRows={4}
-              multiline
-              placeholder={'{ "tema": "espacio" }'}
-            />
+            {isSpriteKind ? (
+              <Stack spacing={2}>
+                <SpriteCanvasEditor
+                  key={dialogMode === 'edit' ? selectedAsset?.id ?? 'edit' : 'create'}
+                  initialImage={selectedAsset?.imageUrl ?? null}
+                  initialMetadata={spriteMetadata}
+                  onChange={handleSpriteChange}
+                />
+                <TextField
+                  label="Datos del sprite (PNG en base64)"
+                  name="imageUrl"
+                  value={formValues.imageUrl}
+                  onChange={handleChange}
+                  fullWidth
+                  multiline
+                  minRows={2}
+                  InputProps={{ readOnly: true }}
+                  helperText="El editor genera automáticamente este campo."
+                  required
+                />
+                <TextField
+                  label="Metadata"
+                  name="metadata"
+                  value={formValues.metadata}
+                  onChange={handleChange}
+                  fullWidth
+                  minRows={3}
+                  multiline
+                  helperText="Puedes complementar la información generada por el editor si lo necesitas."
+                />
+              </Stack>
+            ) : (
+              <>
+                <TextField
+                  label="URL de la imagen"
+                  name="imageUrl"
+                  value={formValues.imageUrl}
+                  onChange={handleChange}
+                  fullWidth
+                  required
+                />
+                <TextField
+                  label="Metadata (JSON)"
+                  name="metadata"
+                  value={formValues.metadata}
+                  onChange={handleChange}
+                  fullWidth
+                  minRows={4}
+                  multiline
+                  placeholder={'{ "tema": "espacio" }'}
+                />
+              </>
+            )}
             {formError && (
               <Alert severity="error" onClose={() => setFormError('')}>
                 {formError}
