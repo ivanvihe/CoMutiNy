@@ -15,20 +15,15 @@ import {
   MenuItem,
   Select,
   Stack,
-  Tab,
-  Tabs,
   Tooltip,
   Typography
 } from '@mui/material';
 import NavigateBeforeIcon from '@mui/icons-material/NavigateBefore';
 import NavigateNextIcon from '@mui/icons-material/NavigateNext';
-import GroupsIcon from '@mui/icons-material/Groups';
-import HistoryIcon from '@mui/icons-material/History';
 import TravelExploreIcon from '@mui/icons-material/TravelExplore';
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { useMap } from '../context/MapContext.jsx';
 import { useWorld } from '../context/WorldContext.jsx';
-import MissionStatusList from './MissionStatusList.jsx';
 
 const CELL_SIZE = 32;
 
@@ -109,14 +104,6 @@ const cellStyles = {
   }
 };
 
-const formatTimestamp = (timestamp) => {
-  try {
-    return new Date(timestamp).toLocaleTimeString();
-  } catch (error) {
-    return '';
-  }
-};
-
 export default function MapViewport() {
   const {
     maps = [],
@@ -128,12 +115,9 @@ export default function MapViewport() {
     activeEvent,
     clearEvent,
     objectAtPlayerPosition,
-    switchMap,
-    missions,
-    missionLog
+    switchMap
   } = useMap();
   const { players: remotePlayers, localPlayerId, connectionStatus } = useWorld();
-  const [activePanel, setActivePanel] = useState('info');
 
   const canInteract = Boolean(objectAtPlayerPosition?.interaction);
 
@@ -202,7 +186,6 @@ export default function MapViewport() {
     const nextMap = maps[nextIndex];
     if (nextMap?.id) {
       switchMap(nextMap.id);
-      setActivePanel('info');
     }
   };
 
@@ -221,14 +204,6 @@ export default function MapViewport() {
       };
     });
   }, [currentMap?.portals, maps]);
-
-  const handlePanelChange = (_, nextPanel) => {
-    setActivePanel(nextPanel);
-  };
-
-  const missionPanelLabel = missions.length ? `Misiones (${missions.length})` : 'Misiones';
-  const crewPanelLabel = `Tripulación (${remotePlayersInMap.length})`;
-  const logPanelLabel = missionLog.length ? `Registro (${missionLog.length})` : 'Registro';
 
   const statusChipColor =
     connectionStatus === 'connected'
@@ -274,7 +249,6 @@ export default function MapViewport() {
                     label="Mapa"
                     onChange={(event) => {
                       switchMap(event.target.value);
-                      setActivePanel('info');
                     }}
                   >
                     {maps.map((map, index) => (
@@ -321,39 +295,33 @@ export default function MapViewport() {
             )}
           </Stack>
 
-          <Tabs value={activePanel} onChange={handlePanelChange} textColor="inherit" indicatorColor="primary">
-            <Tab value="info" label="Información" />
-            <Tab value="missions" label={missionPanelLabel} />
-            <Tab value="crew" label={crewPanelLabel} icon={<GroupsIcon fontSize="small" />} iconPosition="start" />
-            <Tab value="log" label={logPanelLabel} icon={<HistoryIcon fontSize="small" />} iconPosition="start" />
-          </Tabs>
-
-          {activePanel === 'info' && (
-            <Stack spacing={1}>
-              {objectAtPlayerPosition ? (
-                <Typography variant="body2" color="secondary.main">
-                  Objeto cercano: {objectAtPlayerPosition.name}
-                </Typography>
-              ) : (
-                <Typography variant="body2" color="text.secondary">
-                  Acércate a un objeto resaltado para interactuar.
-                </Typography>
-              )}
-              <Typography variant="body2" color="text.secondary">
-                Compañeros en este mapa: {remotePlayersInMap.length}
+          <Stack spacing={1}>
+            {objectAtPlayerPosition ? (
+              <Typography variant="body2" color="secondary.main">
+                Objeto cercano: {objectAtPlayerPosition.name}
               </Typography>
-            </Stack>
-          )}
+            ) : (
+              <Typography variant="body2" color="text.secondary">
+                Acércate a un objeto resaltado para interactuar.
+              </Typography>
+            )}
+            <Typography variant="body2" color="text.secondary">
+              Compañeros en este mapa: {remotePlayersInMap.length}
+            </Typography>
+          </Stack>
 
-          {activePanel === 'missions' && <MissionStatusList missions={missions} />}
+          <Divider flexItem />
 
-          {activePanel === 'crew' && (
+          <Stack spacing={1}>
+            <Typography variant="subtitle2" color="text.secondary">
+              Tripulación en este sector
+            </Typography>
             <List dense>
               {remotePlayersInMap.length === 0 && (
                 <ListItem>
                   <ListItemText
                     primary="No hay tripulación remota"
-                    secondary="Invita a tus compañeros para coordinar misiones en este sector."
+                    secondary="Invita a tus compañeros para coordinarse en este sector."
                   />
                 </ListItem>
               )}
@@ -366,30 +334,7 @@ export default function MapViewport() {
                 </ListItem>
               ))}
             </List>
-          )}
-
-          {activePanel === 'log' && (
-            <List dense>
-              {missionLog.length === 0 && (
-                <ListItem>
-                  <ListItemText
-                    primary="Sin eventos registrados"
-                    secondary="Completa misiones o interactúa con objetos para generar entradas."
-                  />
-                </ListItem>
-              )}
-              {missionLog.map((entry) => (
-                <ListItem key={entry.id} divider>
-                  <ListItemText
-                    primary={`${entry.missionTitle} → ${entry.status}`}
-                    secondary={`${formatTimestamp(entry.timestamp)} · ${entry.mapName}${
-                      entry.message ? ` · ${entry.message}` : ''
-                    }`}
-                  />
-                </ListItem>
-              ))}
-            </List>
-          )}
+          </Stack>
 
           <Divider flexItem />
 

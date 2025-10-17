@@ -1,58 +1,60 @@
-import {
-  applyMissionUpdatesToState,
-  createInitialMissionState,
-  DEFAULT_MISSION_STATUS
-} from '../mapMissions.js';
+import React from 'react';
+import { act, renderHook } from '@testing-library/react';
+import { MapProvider, useMap } from '../MapContext.jsx';
 
-describe('MapContext mission helpers', () => {
-  it('crea el estado inicial de misiones con valores por defecto', () => {
-    const maps = [
-      {
-        id: 'demo',
-        missions: [
-          { id: 'a', status: 'completed' },
-          { id: 'b' }
-        ]
-      }
-    ];
+jest.mock('../WorldContext.jsx', () => ({
+  useWorld: () => ({
+    updateLocalPlayerState: jest.fn(),
+    players: [],
+    localPlayerId: 'local',
+    connectionStatus: 'connected'
+  })
+}));
 
-    const initialState = createInitialMissionState(maps);
+describe('MapContext', () => {
+  const wrapper = ({ children }) => <MapProvider>{children}</MapProvider>;
 
-    expect(initialState.demo.a).toBe('completed');
-    expect(initialState.demo.b).toBe(DEFAULT_MISSION_STATUS);
+  it('normaliza los mapas iniciales con tiles bloqueados', () => {
+    const { result } = renderHook(() => useMap(), { wrapper });
+
+    expect(result.current.currentMap).toBeTruthy();
+    expect(result.current.currentMap.blockedTiles).toBeInstanceOf(Set);
+    expect(result.current.currentMap.blockedTiles.size).toBeGreaterThan(0);
   });
 
-  it('actualiza estados de misión sin mutar el estado original', () => {
-    const initial = {
-      bridge: {
-        alpha: 'available'
-      }
-    };
+  it('permite cambiar de mapa y restablecer la posición de aparición', () => {
+    const { result } = renderHook(() => useMap(), { wrapper });
 
-    const updates = [
-      { mapId: 'bridge', missionId: 'alpha', status: 'completed', log: 'Listo' },
-      { missionId: 'beta', status: 'in-progress' }
-    ];
+    const initialMapId = result.current.currentMapId;
 
-    const next = applyMissionUpdatesToState(initial, updates, 'bridge');
+    act(() => {
+      result.current.switchMap('hydroponics');
+    });
 
-    expect(next).not.toBe(initial);
-    expect(next.bridge.alpha).toBe('completed');
-    expect(next.bridge.beta).toBe('in-progress');
-    expect(initial.bridge.alpha).toBe('available');
+    expect(result.current.currentMapId).toBe('hydroponics');
+    expect(result.current.playerPosition).toEqual(result.current.currentMap.spawn);
+    expect(result.current.currentMapId).not.toBe(initialMapId);
   });
 
-  it('devuelve el mismo objeto cuando no hay cambios', () => {
-    const initial = {
-      bridge: {
-        alpha: 'completed'
-      }
-    };
+  it('crea un evento al interactuar con un objeto cercano', () => {
+    const { result } = renderHook(() => useMap(), { wrapper });
 
-    const updates = [{ mapId: 'bridge', missionId: 'alpha', status: 'completed' }];
+    act(() => {
+      result.current.switchMap('bridge', { position: { x: 3, y: 1 } });
+    });
 
-    const next = applyMissionUpdatesToState(initial, updates, 'bridge');
+    expect(result.current.objectAtPlayerPosition?.id).toBe('nav-console');
 
-    expect(next).toBe(initial);
+    let event;
+    act(() => {
+      event = result.current.interact();
+    });
+
+    expect(event).toMatchObject({
+      objectId: 'nav-console',
+      objectName: 'Consola de navegación',
+      mapId: 'bridge'
+    });
+    expect(result.current.activeEvent).toEqual(event);
   });
 });
