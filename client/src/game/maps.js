@@ -1,6 +1,23 @@
+import resolveServerUrl from '../utils/resolveServerUrl.js';
+
 const MAP_DIRECTORY = '../../../server/maps';
 const MAP_FILE_EXTENSION = '.map';
 const STATIC_MAP_ENDPOINT = '/maps/static';
+
+const resolveStaticMapUrl = () => {
+  const baseUrl = resolveServerUrl();
+
+  if (!baseUrl) {
+    return STATIC_MAP_ENDPOINT;
+  }
+
+  try {
+    return new URL(STATIC_MAP_ENDPOINT, baseUrl).toString();
+  } catch {
+    const trimmedBase = `${baseUrl}`.replace(/\/+$/, '');
+    return `${trimmedBase}${STATIC_MAP_ENDPOINT}`;
+  }
+};
 
 const toCamelCase = (rawKey) =>
   rawKey
@@ -207,7 +224,8 @@ export const fetchServerMaps = async ({ signal } = {}) => {
   }
 
   try {
-    const response = await fetch(STATIC_MAP_ENDPOINT, { signal });
+    const endpoint = resolveStaticMapUrl();
+    const response = await fetch(endpoint, { signal });
     if (!response.ok) {
       return [];
     }
