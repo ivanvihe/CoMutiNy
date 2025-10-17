@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { io } from 'socket.io-client';
 import LagCompensator from '../utils/lagCompensation.js';
+import resolveServerUrl from '../utils/resolveServerUrl.js';
 
 const DEFAULT_APPEARANCE = {
   hair: 'Corto',
@@ -89,19 +90,6 @@ const generateClientPlayerId = () => {
   const random = Math.random().toString(36).slice(2, 10);
   const timestamp = Date.now().toString(36);
   return `client-${timestamp}${random}`;
-};
-
-const deriveServerUrl = () => {
-  if (typeof window === 'undefined') {
-    return null;
-  }
-
-  return (
-    window.__COMUTINY_SOCKET_URL__ ||
-    import.meta.env.VITE_SOCKET_URL ||
-    import.meta.env.VITE_API_BASE_URL ||
-    'http://localhost:4000'
-  );
 };
 
 export function WorldProvider({ children }) {
@@ -583,7 +571,7 @@ export function WorldProvider({ children }) {
       return undefined;
     }
 
-    const url = deriveServerUrl();
+    const url = resolveServerUrl();
 
     if (!url) {
       return undefined;
