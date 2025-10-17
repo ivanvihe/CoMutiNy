@@ -40,7 +40,11 @@ const parseCoordinate = (value) => {
 
 const loadMapSources = () => {
   if (typeof import.meta !== 'undefined' && typeof import.meta.glob === 'function') {
-    return import.meta.glob('../../../server/maps/*.map', { as: 'raw', eager: true });
+    return import.meta.glob('../../../server/maps/*.map', {
+      query: '?raw',
+      import: 'default',
+      eager: true
+    });
   }
 
   if (typeof process !== 'undefined' && process.versions?.node && typeof require !== 'undefined') {
@@ -232,14 +236,14 @@ export const fetchServerMaps = async ({ signal } = {}) => {
             : {
                 x:
                   (definition.spawn && Number.parseInt(definition.spawn.x, 10)) ??
-                  Number.parseInt(definition.spawnX ?? size.width / 2, 10) ||
-                  Math.floor(size.width / 2) ||
-                  0,
+                  (Number.parseInt(definition.spawnX ?? size.width / 2, 10) ||
+                    Math.floor(size.width / 2) ||
+                    0),
                 y:
                   (definition.spawn && Number.parseInt(definition.spawn.y, 10)) ??
-                  Number.parseInt(definition.spawnY ?? size.height / 2, 10) ||
-                  Math.floor(size.height / 2) ||
-                  0
+                  (Number.parseInt(definition.spawnY ?? size.height / 2, 10) ||
+                    Math.floor(size.height / 2) ||
+                    0)
               });
 
         return {
