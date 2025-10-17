@@ -11,10 +11,31 @@ const MAX_CHAT_HISTORY = 50
 const APPEARANCE_KEYS = Object.freeze(['hair', 'face', 'outfit', 'shoes'])
 const VALID_DIRECTIONS = new Set(['up', 'down', 'left', 'right'])
 
+const DEFAULT_SIZE = Object.freeze({
+  width: 48,
+  height: 48
+})
+
+const DEFAULT_SPAWN = Object.freeze({
+  x: 24,
+  y: 24,
+  z: 0
+})
+
+const DEFAULT_THEME = Object.freeze({ borderColour: null })
+
 const HELLO_WORLD = Object.freeze({
-  id: 'comunidad-inicial',
-  name: 'Plaza Comunitaria',
-  description: 'Espacio de bienvenida para encuentros colaborativos'
+  id: 'hello_world',
+  name: 'Hello world! Welcome to the CoMutiNy',
+  description: '',
+  size: DEFAULT_SIZE,
+  spawn: DEFAULT_SPAWN,
+  biome: 'Comunidad',
+  blockedAreas: [],
+  objects: [],
+  portals: [],
+  theme: DEFAULT_THEME,
+  sourcePath: 'server/maps/init.map'
 })
 
 const toNumber = (value, fallback = 0) => {
@@ -23,15 +44,23 @@ const toNumber = (value, fallback = 0) => {
   return Number.isFinite(parsed) ? parsed : fallback
 }
 
-const sanitizePosition = (position = DEFAULT_POSITION) => {
+const sanitizePosition = (position, fallback = DEFAULT_POSITION) => {
+  const base = fallback && typeof fallback === 'object'
+    ? {
+        x: toNumber(fallback.x, DEFAULT_POSITION.x),
+        y: toNumber(fallback.y, DEFAULT_POSITION.y),
+        z: toNumber(fallback.z, DEFAULT_POSITION.z)
+      }
+    : { ...DEFAULT_POSITION }
+
   if (!position || typeof position !== 'object') {
-    return { ...DEFAULT_POSITION }
+    return { ...base }
   }
 
   return {
-    x: toNumber(position.x, DEFAULT_POSITION.x),
-    y: toNumber(position.y, DEFAULT_POSITION.y),
-    z: toNumber(position.z, DEFAULT_POSITION.z)
+    x: toNumber(position.x, base.x),
+    y: toNumber(position.y, base.y),
+    z: toNumber(position.z, base.z)
   }
 }
 
@@ -208,9 +237,83 @@ const createSystemMessage = () => ({
   timestamp: new Date().toISOString()
 })
 
+const sanitizeSize = (size, fallback = DEFAULT_SIZE) => {
+  const fallbackWidth = Math.max(1, Math.trunc(toNumber(fallback?.width, DEFAULT_SIZE.width)))
+  const fallbackHeight = Math.max(1, Math.trunc(toNumber(fallback?.height, DEFAULT_SIZE.height)))
+
+  const width = Math.max(1, Math.trunc(toNumber(size?.width, fallbackWidth)))
+  const height = Math.max(1, Math.trunc(toNumber(size?.height, fallbackHeight)))
+
+  return { width, height }
+}
+
+const sanitizeSpawn = (spawn, size, fallback = DEFAULT_SPAWN) => {
+  const base = {
+    x: Math.trunc(toNumber(fallback?.x, DEFAULT_SPAWN.x)),
+    y: Math.trunc(toNumber(fallback?.y, DEFAULT_SPAWN.y)),
+    z: toNumber(fallback?.z, DEFAULT_SPAWN.z)
+  }
+
+  const raw = spawn && typeof spawn === 'object' ? spawn : {}
+  const resolvedSize = sanitizeSize(size, DEFAULT_SIZE)
+
+  const width = Math.max(1, resolvedSize.width)
+  const height = Math.max(1, resolvedSize.height)
+
+  const clamp = (value, min, max, fallbackValue) => {
+    const numeric = Math.trunc(toNumber(value, fallbackValue))
+    return Math.min(Math.max(numeric, min), max)
+  }
+
+  return {
+    x: clamp(raw.x, 0, width - 1, base.x),
+    y: clamp(raw.y, 0, height - 1, base.y),
+    z: toNumber(raw.z, base.z)
+  }
+}
+
+const cloneMapCollection = (collection) => {
+  if (!Array.isArray(collection)) {
+    return []
+  }
+
+  return collection.map((entry) => {
+    if (!entry || typeof entry !== 'object') {
+      return entry
+    }
+
+    return JSON.parse(JSON.stringify(entry))
+  })
+}
+
+const cloneTheme = (theme, fallback = DEFAULT_THEME) => {
+  if (!theme || typeof theme !== 'object') {
+    return { ...fallback }
+  }
+
+  return { ...fallback, ...theme }
+}
+
+const cloneWorld = (world = HELLO_WORLD) => ({
+  id: world.id,
+  name: world.name,
+  description: world.description,
+  size: sanitizeSize(world.size, DEFAULT_SIZE),
+  spawn: sanitizeSpawn(world.spawn, world.size ?? DEFAULT_SIZE, DEFAULT_SPAWN),
+  biome: typeof world.biome === 'string' ? world.biome : HELLO_WORLD.biome,
+  blockedAreas: cloneMapCollection(world.blockedAreas),
+  objects: cloneMapCollection(world.objects),
+  portals: cloneMapCollection(world.portals),
+  theme: cloneTheme(world.theme, DEFAULT_THEME),
+  sourcePath:
+    typeof world.sourcePath === 'string' && world.sourcePath.trim()
+      ? world.sourcePath.trim()
+      : HELLO_WORLD.sourcePath ?? null
+})
+
 class WorldState {
   constructor () {
-    this.world = HELLO_WORLD
+    this.world = cloneWorld(HELLO_WORLD)
     this.playersById = new Map()
     this.socketToPlayer = new Map()
     this.playerToSocket = new Map()
@@ -224,7 +327,7 @@ class WorldState {
   }
 
   getWorld () {
-    return this.world
+    return cloneWorld(this.world)
   }
 
   setWorld (world) {
@@ -232,21 +335,47 @@ class WorldState {
       return
     }
 
-    const id = typeof world.id === 'string' && world.id.trim() ? world.id.trim() : HELLO_WORLD.id
+    const current = this.getWorld()
+    const id = typeof world.id === 'string' && world.id.trim() ? world.id.trim() : current.id
     const name =
       typeof world.name === 'string' && world.name.trim()
         ? world.name.trim().slice(0, 100)
-        : HELLO_WORLD.name
+        : current.name
     const description =
       typeof world.description === 'string' && world.description.trim()
         ? world.description.trim().slice(0, 500)
-        : HELLO_WORLD.description
+        : current.description
+
+    const size = sanitizeSize(world.size, current.size)
+    const spawn = sanitizeSpawn(world.spawn, size, current.spawn)
+
+    const biome = typeof world.biome === 'string' ? world.biome : current.biome
+    const blockedAreas = cloneMapCollection(Array.isArray(world.blockedAreas) ? world.blockedAreas : current.blockedAreas)
+    const objects = cloneMapCollection(Array.isArray(world.objects) ? world.objects : current.objects)
+    const portals = cloneMapCollection(Array.isArray(world.portals) ? world.portals : current.portals)
+    const theme = cloneTheme(world.theme, current.theme)
+    const sourcePath =
+      typeof world.sourcePath === 'string' && world.sourcePath.trim()
+        ? world.sourcePath.trim()
+        : current.sourcePath ?? null
 
     this.world = {
       id,
       name,
-      description
+      description,
+      size,
+      spawn,
+      biome,
+      blockedAreas,
+      objects,
+      portals,
+      theme,
+      sourcePath
     }
+  }
+
+  getSpawnPosition () {
+    return { ...this.world.spawn }
   }
 
   getSpriteAtlas () {
@@ -328,7 +457,8 @@ class WorldState {
 
     const alias = sanitizeName(aliasCandidate, aliasCandidate)
     const name = sanitizeName(payload.name, alias)
-    const position = sanitizePosition(payload.position)
+    const spawn = this.getSpawnPosition()
+    const position = sanitizePosition(payload.position, spawn)
     const animation = sanitizeAnimation(payload.animation)
 
     const existingSocketId = this.playerToSocket.get(playerId)
@@ -393,7 +523,7 @@ class WorldState {
     }
 
     if (payload.position) {
-      player.position = sanitizePosition(payload.position)
+      player.position = sanitizePosition(payload.position, player.position)
     }
 
     if (payload.animation) {
@@ -518,7 +648,7 @@ class WorldState {
 
     const alias = sanitizeName(aliasCandidate, aliasCandidate)
     const name = sanitizeName(payload.name, alias)
-    const position = sanitizePosition(payload.position)
+    const position = sanitizePosition(payload.position, this.getSpawnPosition())
     const animation = sanitizeAnimation(payload.animation)
     let metadata = mergeMetadata({}, payload.metadata)
 
