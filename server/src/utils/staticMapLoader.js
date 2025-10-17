@@ -375,7 +375,8 @@ const parseLayerSections = (sections, { tileTypes, symbolMap }) => {
     } else if (key.startsWith('layer_')) {
       layerId = properties.get('id') ?? key.slice('layer_'.length)
     } else {
-      layerId = properties.get('id') ?? key.replace(/^layer_?/, '') || key
+      const fallbackId = key.replace(/^layer_?/, '') || key
+      layerId = properties.get('id') ?? fallbackId
     }
     layerId = layerId || `layer_${layers.length + 1}`
 
