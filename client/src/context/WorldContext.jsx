@@ -2,6 +2,13 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { io } from 'socket.io-client';
 import LagCompensator from '../utils/lagCompensation.js';
 
+const DEFAULT_APPEARANCE = {
+  hair: 'Corto',
+  face: 'Clásica',
+  outfit: 'Aventurero',
+  shoes: 'Botas'
+};
+
 const WorldContext = createContext({
   connected: false,
   connectionError: null,
@@ -15,6 +22,8 @@ const WorldContext = createContext({
   spriteAtlas: null,
   chatMessages: [],
   sendChatMessage: () => Promise.resolve(null),
+  appearance: DEFAULT_APPEARANCE,
+  setAppearance: () => {},
   updateLocalPlayerState: () => {}
 });
 
@@ -103,6 +112,7 @@ export function WorldProvider({ children }) {
   const [chatMessages, setChatMessages] = useState([]);
   const [profile, setProfile] = useState(null);
   const [joinState, setJoinState] = useState({ status: 'idle', error: null });
+  const [appearanceState, setAppearanceState] = useState(DEFAULT_APPEARANCE);
 
   const socketRef = useRef(null);
   const localPlayerIdRef = useRef(null);
@@ -811,6 +821,26 @@ export function WorldProvider({ children }) {
     [appendChatMessage, ensureLocalPlayerId, localPlayerId]
   );
 
+  const setAppearance = useCallback((nextAppearance) => {
+    setAppearanceState((previous) => {
+      const resolved =
+        typeof nextAppearance === 'function' ? nextAppearance(previous) : nextAppearance;
+
+      if (!resolved || typeof resolved !== 'object') {
+        return previous;
+      }
+
+      return { ...DEFAULT_APPEARANCE, ...previous, ...resolved };
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!appearanceState) {
+      return;
+    }
+    updateLocalPlayerState({ metadata: { appearance: appearanceState } });
+  }, [appearanceState, updateLocalPlayerState]);
+
   const value = useMemo(
     () => ({
       connected: connectionState.status === 'connected',
@@ -825,6 +855,8 @@ export function WorldProvider({ children }) {
       spriteAtlas,
       chatMessages,
       sendChatMessage,
+      appearance: appearanceState,
+      setAppearance,
       updateLocalPlayerState
     }),
     [
@@ -838,6 +870,8 @@ export function WorldProvider({ children }) {
       players,
       spriteAtlas,
       sendChatMessage,
+      appearanceState,
+      setAppearance,
       updateLocalPlayerState,
       joinWorld
     ]
