@@ -1,0 +1,90 @@
+id: parque-urbano
+title: Parque urbano colaborativo
+biome: Exterior
+description: Zona verde con senderos curvos, estaciones creativas y acceso a talleres comunitarios.
+dimensions: 24x18
+starting_point: 12x14
+border colour: #2E7D32
+door in: 23x9 -> comunidad-inicial
+door out: 24x9 -> comunidad-inicial@4x14
+
+[tiles]
+. = cesped; name=Césped mullido; color=#81c784; transparent=true
+~ = agua; name=Espejo de agua; color=#64b5f6; transparent=true
+= = sendero; name=Sendero de grava; color=#bcaaa4; transparent=true
+# = borde; name=Barda baja; color=#455a64; collides=true
+
+[layer borde]
+order: 0
+########################
+#======================#
+#======================#
+#======================#
+#======================#
+#======================#
+#======================#
+#======================#
+#======================#
+#======================#
+#======================#
+#======================#
+#======================#
+#======================#
+#======================#
+#======================#
+#======================#
+########################
+
+[layer sendero]
+order: 1
+########################
+#======================#
+#====~~~~~~~===========#
+#===~~~~~~~~~==========#
+#==~~~~~~~~~~~=========#
+#==~~~~~~~~~~~~========#
+#==~~~~~~~~~~~~========#
+#==~~~~~~~~~~~~========#
+#==~~~~~~~~~~~=========#
+#===~~~~~~~~~==========#
+#====~~~~~~~===========#
+#=====~~~~~============#
+#======~~~=============#
+#======================#
+#======================#
+#======================#
+#======================#
+########################
+
+[layer pradera]
+order: 2
+########################
+#======================#
+#====.............=====#
+#===...............====#
+#==.........~~......===#
+#==........~~~~.....===#
+#==.......~~~~~~....===#
+#==.......~~~~~~....===#
+#==........~~~~.....===#
+#===........~~......===#
+#====..............====#
+#=====............=====#
+#======================#
+#======================#
+#======================#
+#======================#
+#======================#
+########################
+
+[objects]
+plant_atrium_totem@7x10 | Columna botánica A
+plant_atrium_totem@17x8 | Columna botánica B
+!wall_modern_partition@4x6 | Muro de jardineras
+!wall_modern_partition@19x6 | Muro de exhibición
+door_glass_arc@23x9 | Salida a la plaza
+
+[objects_estaciones]
+order: 5
+visible: true
+table_collaborative_island@12x12 | Estación de prototipado
