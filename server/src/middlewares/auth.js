@@ -3,6 +3,7 @@ import cookieParser from 'cookie-parser'
 
 import { authCookieName } from '../services/authService.js'
 import userRepository from '../repositories/UserRepository.js'
+import sanitizeUser from '../utils/sanitizeUser.js'
 
 const { JWT_SECRET = 'change-me' } = process.env
 
@@ -37,7 +38,8 @@ export const authenticate = async (req, res, next) => {
       return res.status(401).json({ message: 'User no longer exists' })
     }
 
-    req.user = { id: user.id }
+    req.authenticatedUser = user
+    req.user = sanitizeUser(user)
     next()
   } catch (error) {
     next(error)

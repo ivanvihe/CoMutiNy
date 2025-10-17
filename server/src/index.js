@@ -6,6 +6,7 @@ import dotenv from 'dotenv'
 import { connectDatabase } from './config/database.js'
 import authRoutes from './routes/authRoutes.js'
 import avatarRoutes from './routes/avatarRoutes.js'
+import adminRoutes from './routes/adminRoutes.js'
 import { cookies } from './middlewares/auth.js'
 import worldState from './services/worldState.js'
 import avatarRepository from './repositories/AvatarRepository.js'
@@ -22,6 +23,7 @@ app.get('/health', (req, res) => {
 
 app.use('/auth', authRoutes)
 app.use('/avatars', avatarRoutes)
+app.use('/admin', adminRoutes)
 
 app.use((err, req, res, next) => {
   console.error(err)
