@@ -1,0 +1,138 @@
+.game-view {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 320px);
+  width: 100%;
+  height: 100vh;
+  background: #04060c;
+  color: #eef5ff;
+}
+
+.game-view__map {
+  position: relative;
+  min-height: 0;
+}
+
+.game-view__chat {
+  background: rgba(5, 12, 24, 0.96);
+  border-left: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.map-viewport {
+  height: 100%;
+}
+
+.chat-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.chat-panel__header {
+  padding: 20px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.chat-panel__title {
+  font-weight: 600;
+  font-size: 1rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.chat-panel__subtitle {
+  margin-top: 4px;
+  font-size: 0.8rem;
+  color: rgba(219, 231, 255, 0.75);
+}
+
+.chat-panel__messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.chat-panel__message {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background: rgba(7, 14, 24, 0.65);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
+  padding: 12px;
+}
+
+.chat-panel__author {
+  font-weight: 600;
+  color: #ffb74d;
+}
+
+.chat-panel__content {
+  color: #eef5ff;
+  font-size: 0.9rem;
+}
+
+.chat-panel__empty {
+  margin-top: auto;
+  margin-bottom: auto;
+  text-align: center;
+  color: rgba(219, 231, 255, 0.6);
+  font-size: 0.9rem;
+}
+
+.chat-panel__form {
+  padding: 16px 20px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  gap: 12px;
+}
+
+.chat-panel__form input {
+  flex: 1;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(7, 14, 24, 0.85);
+  color: #eef5ff;
+  padding: 10px 16px;
+}
+
+.chat-panel__form input:disabled {
+  opacity: 0.6;
+}
+
+.chat-panel__form button {
+  border: none;
+  border-radius: 999px;
+  padding: 10px 20px;
+  background: linear-gradient(135deg, rgba(41, 182, 246, 0.9), rgba(25, 118, 210, 0.9));
+  color: #041424;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.2s ease;
+}
+
+.chat-panel__form button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+@media (max-width: 960px) {
+  .game-view {
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(0, 1fr) minmax(220px, auto);
+  }
+
+  .game-view__chat {
+    border-left: none;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+  }
+
+  .chat-panel__messages {
+    max-height: 240px;
+  }
+}
