@@ -7,6 +7,7 @@ import { connectDatabase } from './config/database.js'
 import authRoutes from './routes/authRoutes.js'
 import avatarRoutes from './routes/avatarRoutes.js'
 import { cookies } from './middlewares/auth.js'
+import worldState from './services/worldState.js'
 
 dotenv.config()
 
@@ -40,10 +41,80 @@ const io = new Server(server, {
   }
 })
 
+const safeAck = (ack, payload) => {
+  if (typeof ack === 'function') {
+    ack(payload)
+  }
+}
+
 io.on('connection', (socket) => {
   console.log(`Socket connected: ${socket.id}`)
 
+  socket.emit('world:state', worldState.getSnapshot())
+
+  socket.on('player:join', (payload, ack) => {
+    try {
+      const player = worldState.addPlayer(socket.id, payload)
+      socket.data.playerId = player.id
+
+      console.log(`Player joined: ${player.id} (${socket.id})`)
+
+      safeAck(ack, { ok: true, state: worldState.getSnapshot(), player })
+      socket.broadcast.emit('player:joined', player)
+    } catch (error) {
+      console.error('player:join failed', error)
+      safeAck(ack, { ok: false, message: error.message })
+    }
+  })
+
+  socket.on('player:update', (payload, ack) => {
+    try {
+      const player = worldState.updatePlayer(socket.id, payload)
+
+      safeAck(ack, { ok: true, player })
+      socket.broadcast.emit('player:updated', player)
+    } catch (error) {
+      console.error('player:update failed', error)
+      safeAck(ack, { ok: false, message: error.message })
+    }
+  })
+
+  socket.on('chat:message', (payload, ack) => {
+    try {
+      const message = worldState.addChatMessage({
+        socketId: socket.id,
+        playerId: payload?.playerId,
+        author: payload?.author,
+        content: payload?.content
+      })
+
+      io.emit('chat:message', message)
+      safeAck(ack, { ok: true, message })
+    } catch (error) {
+      console.error('chat:message failed', error)
+      safeAck(ack, { ok: false, message: error.message })
+    }
+  })
+
+  socket.on('player:leave', (ack) => {
+    const removed = worldState.removePlayer(socket.id)
+
+    if (removed) {
+      console.log(`Player left: ${removed.id} (${socket.id})`)
+      socket.broadcast.emit('player:left', { id: removed.id })
+    }
+
+    safeAck(ack, { ok: true })
+  })
+
   socket.on('disconnect', (reason) => {
+    const removed = worldState.removePlayer(socket.id)
+
+    if (removed) {
+      console.log(`Player disconnected: ${removed.id} (${socket.id})`)
+      socket.broadcast.emit('player:left', { id: removed.id })
+    }
+
     console.log(`Socket disconnected: ${socket.id} (${reason})`)
   })
 })
