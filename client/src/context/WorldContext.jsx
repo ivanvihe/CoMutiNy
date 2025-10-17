@@ -871,7 +871,11 @@ export function WorldProvider({ children }) {
             } else {
               reject(new Error(ack?.message ?? 'Failed to send chat message'));
             }
-    }
+          }
+        );
+      });
+    },
+    [appendChatMessage, ensureLocalPlayerId, localPlayerId]
   );
 
   const interactWithObject = useCallback(
@@ -914,10 +918,6 @@ export function WorldProvider({ children }) {
       });
     },
     []
-  );
-      });
-    },
-    [appendChatMessage, ensureLocalPlayerId, localPlayerId]
   );
 
   const setAppearance = useCallback((nextAppearance) => {
