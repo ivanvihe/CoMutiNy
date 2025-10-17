@@ -514,7 +514,7 @@ class WorldState {
         ? payload.metadata.alias.trim()
         : typeof payload.name === 'string' && payload.name.trim()
           ? payload.name.trim()
-          : `Tripulante ${payload.id}`
+          : `Usuario ${payload.id}`
 
     const alias = sanitizeName(aliasCandidate, aliasCandidate)
     const name = sanitizeName(payload.name, alias)

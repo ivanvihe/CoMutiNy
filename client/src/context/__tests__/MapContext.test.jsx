@@ -21,7 +21,9 @@ jest.mock('../../game/maps.js', () => ({
       portals: []
     }
   ],
-  DEFAULT_MAP_ID: 'mapa-prueba'
+  DEFAULT_MAP_ID: 'mapa-prueba',
+  resolveDefaultMapId: jest.fn(() => 'mapa-prueba'),
+  fetchServerMaps: jest.fn(() => Promise.resolve([]))
 }));
 
 jest.mock('../WorldContext.jsx', () => ({

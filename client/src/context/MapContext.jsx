@@ -7,7 +7,12 @@ import {
   useRef,
   useState
 } from 'react';
-import { DEFAULT_MAP_ID, MAPS } from '../game/maps.js';
+import {
+  DEFAULT_MAP_ID,
+  MAPS,
+  fetchServerMaps,
+  resolveDefaultMapId
+} from '../game/maps.js';
 import { useWorld } from './WorldContext.jsx';
 
 const MapContext = createContext(undefined);
@@ -50,18 +55,19 @@ const normaliseMap = (mapDefinition) => {
   };
 };
 
-const MAP_LOOKUP = new Map(MAPS.map((map) => [map.id, normaliseMap(map)]));
+const INITIAL_MAPS = MAPS.map((map) => normaliseMap(map));
+const INITIAL_DEFAULT_MAP_ID = resolveDefaultMapId(MAPS);
+const INITIAL_DEFAULT_MAP =
+  INITIAL_MAPS.find((map) => map.id === INITIAL_DEFAULT_MAP_ID) ?? INITIAL_MAPS[0] ?? null;
+const INITIAL_SPAWN = INITIAL_DEFAULT_MAP?.spawn ?? { x: 0, y: 0 };
 
 export function MapProvider({ children }) {
-  const [currentMapId, setCurrentMapId] = useState(DEFAULT_MAP_ID);
-  const [playerPosition, setPlayerPosition] = useState(() => {
-    const startMap = MAP_LOOKUP.get(DEFAULT_MAP_ID);
-    return startMap?.spawn ?? { x: 0, y: 0 };
-  });
-  const [playerRenderPosition, setPlayerRenderPosition] = useState(() => {
-    const startMap = MAP_LOOKUP.get(DEFAULT_MAP_ID);
-    return startMap?.spawn ?? { x: 0, y: 0 };
-  });
+  const [maps, setMaps] = useState(INITIAL_MAPS);
+  const [currentMapId, setCurrentMapId] = useState(
+    INITIAL_DEFAULT_MAP_ID ?? DEFAULT_MAP_ID ?? 'empty-map'
+  );
+  const [playerPosition, setPlayerPosition] = useState(INITIAL_SPAWN);
+  const [playerRenderPosition, setPlayerRenderPosition] = useState(INITIAL_SPAWN);
   const [playerDirection, setPlayerDirection] = useState(DEFAULT_DIRECTION);
   const [playerIsMoving, setPlayerIsMoving] = useState(false);
   const [activeEvent, setActiveEvent] = useState(null);
@@ -69,13 +75,12 @@ export function MapProvider({ children }) {
 
   const movementRef = useRef(null);
   const animationFrameRef = useRef(null);
-  const playerRenderPositionRef = useRef(playerRenderPosition);
+  const playerRenderPositionRef = useRef(INITIAL_SPAWN);
 
-  const availableMaps = useMemo(() => {
-    const primary = MAP_LOOKUP.get(DEFAULT_MAP_ID);
-    return primary ? [primary] : [];
-  }, []);
-  const currentMap = useMemo(() => MAP_LOOKUP.get(currentMapId), [currentMapId]);
+  const mapLookup = useMemo(() => new Map(maps.map((map) => [map.id, map])), [maps]);
+  const currentMap = useMemo(() => mapLookup.get(currentMapId) ?? null, [mapLookup, currentMapId]);
+  const defaultMapId = useMemo(() => resolveDefaultMapId(maps.length ? maps : MAPS), [maps]);
+  const availableMaps = maps;
 
   useEffect(() => {
     playerRenderPositionRef.current = playerRenderPosition;
@@ -88,6 +93,78 @@ export function MapProvider({ children }) {
       }
     };
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+
+    fetchServerMaps({ signal: controller?.signal })
+      .then((remoteMaps) => {
+        if (cancelled || !remoteMaps.length) {
+          return;
+        }
+        setMaps((existing) => {
+          const normalised = remoteMaps.map((map) => normaliseMap(map));
+          return normalised.length ? normalised : existing;
+        });
+      })
+      .catch(() => {});
+
+    return () => {
+      cancelled = true;
+      if (controller) {
+        controller.abort();
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    const fallbackId = defaultMapId ?? DEFAULT_MAP_ID;
+    setCurrentMapId((previous) => {
+      if (previous && mapLookup.has(previous)) {
+        return previous;
+      }
+      return fallbackId;
+    });
+  }, [defaultMapId, mapLookup]);
+
+  useEffect(() => {
+    if (!currentMap) {
+      return;
+    }
+
+    const spawn = currentMap.spawn ?? { x: 0, y: 0 };
+
+    setPlayerPosition((previous) => {
+      if (!previous) {
+        return spawn;
+      }
+      const withinBounds =
+        previous.x >= 0 &&
+        previous.y >= 0 &&
+        previous.x < currentMap.size.width &&
+        previous.y < currentMap.size.height;
+      return withinBounds ? previous : spawn;
+    });
+
+    setPlayerRenderPosition((previous) => {
+      if (!previous) {
+        playerRenderPositionRef.current = spawn;
+        return spawn;
+      }
+      const withinBounds =
+        previous.x >= 0 &&
+        previous.y >= 0 &&
+        previous.x < currentMap.size.width &&
+        previous.y < currentMap.size.height;
+      if (withinBounds) {
+        playerRenderPositionRef.current = previous;
+        return previous;
+      }
+      playerRenderPositionRef.current = spawn;
+      return spawn;
+    });
+  }, [currentMap]);
 
   useEffect(() => {
     if (movementRef.current) {
@@ -172,7 +249,8 @@ export function MapProvider({ children }) {
 
   const switchMap = useCallback(
     (mapId, { position, event } = {}) => {
-      const targetMap = MAP_LOOKUP.get(DEFAULT_MAP_ID);
+      const fallbackId = defaultMapId ?? DEFAULT_MAP_ID;
+      const targetMap = mapLookup.get(mapId) ?? mapLookup.get(fallbackId);
       if (!targetMap) {
         return false;
       }
@@ -184,7 +262,7 @@ export function MapProvider({ children }) {
       animationFrameRef.current = null;
 
       const nextPosition = position ?? targetMap.spawn ?? { x: 0, y: 0 };
-      setCurrentMapId(DEFAULT_MAP_ID);
+      setCurrentMapId(targetMap.id);
       setPlayerPosition(nextPosition);
       setPlayerRenderPosition(nextPosition);
       playerRenderPositionRef.current = nextPosition;
@@ -202,7 +280,7 @@ export function MapProvider({ children }) {
       }
       return true;
     },
-    [updateLocalPlayerState]
+    [defaultMapId, mapLookup, updateLocalPlayerState]
   );
 
   const runMovementFrame = useCallback(
@@ -243,7 +321,7 @@ export function MapProvider({ children }) {
         animationFrameRef.current = window.requestAnimationFrame(runMovementFrame);
       }
     },
-    [currentMapId, updateLocalPlayerState]
+    [updateLocalPlayerState]
   );
 
   const movePlayer = useCallback(
@@ -268,7 +346,7 @@ export function MapProvider({ children }) {
 
       const portal = findPortalAt(nextPosition);
       if (portal) {
-        const targetMap = MAP_LOOKUP.get(portal.targetMap);
+        const targetMap = portal.targetMap ? mapLookup.get(portal.targetMap) : null;
         if (targetMap) {
           const travelEvent = {
             type: 'travel',
@@ -327,8 +405,8 @@ export function MapProvider({ children }) {
     },
     [
       canMoveTo,
-      currentMapId,
       findPortalAt,
+      mapLookup,
       playerPosition,
       runMovementFrame,
       switchMap,
