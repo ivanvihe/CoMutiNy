@@ -10,6 +10,8 @@ const WorldContext = createContext({
   players: [],
   localPlayerId: null,
   spriteAtlas: null,
+  chatMessages: [],
+  sendChatMessage: () => Promise.resolve(null),
   updateLocalPlayerState: () => {}
 });
 
@@ -68,12 +70,14 @@ export function WorldProvider({ children }) {
   const [players, setPlayers] = useState([]);
   const [localPlayerId, setLocalPlayerId] = useState(null);
   const [spriteAtlas, setSpriteAtlas] = useState(null);
+  const [chatMessages, setChatMessages] = useState([]);
 
   const socketRef = useRef(null);
   const localPlayerIdRef = useRef(null);
   const fallbackPlayerIdRef = useRef(null);
   const playersRef = useRef(new Map());
   const compensatorsRef = useRef(new Map());
+  const chatRef = useRef([]);
   const localStateRef = useRef({
     position: { x: 0, y: 0, z: 0 },
     animation: DEFAULT_ANIMATION,
@@ -124,6 +128,39 @@ export function WorldProvider({ children }) {
     compensatorsRef.current.delete(playerId);
   }, []);
 
+  const appendChatMessage = useCallback((message) => {
+    if (!message?.id) {
+      return;
+    }
+
+    chatRef.current = (() => {
+      const existingIndex = chatRef.current.findIndex((entry) => entry.id === message.id);
+      const payload = {
+        id: message.id,
+        playerId: message.playerId ?? null,
+        author: message.author ?? 'Player',
+        content: message.content ?? '',
+        timestamp: message.timestamp ?? new Date().toISOString()
+      };
+
+      if (existingIndex >= 0) {
+        const next = [...chatRef.current];
+        next[existingIndex] = { ...next[existingIndex], ...payload };
+        return next;
+      }
+
+      const next = [...chatRef.current, payload];
+
+      if (next.length > 200) {
+        return next.slice(next.length - 200);
+      }
+
+      return next;
+    })();
+
+    setChatMessages(chatRef.current);
+  }, []);
+
   const applySnapshot = useCallback(
     (snapshot) => {
       if (!snapshot) {
@@ -140,6 +177,21 @@ export function WorldProvider({ children }) {
 
       if (snapshot.spriteAtlas) {
         setSpriteAtlas(snapshot.spriteAtlas);
+      }
+
+      if (Array.isArray(snapshot.chat)) {
+        const nextChat = snapshot.chat
+          .filter((entry) => entry?.id)
+          .map((entry) => ({
+            id: entry.id,
+            playerId: entry.playerId ?? null,
+            author: entry.author ?? 'Player',
+            content: entry.content ?? '',
+            timestamp: entry.timestamp ?? new Date().toISOString()
+          }));
+
+        chatRef.current = nextChat.slice(-200);
+        setChatMessages(chatRef.current);
       }
 
       for (const existingId of playersRef.current.keys()) {
@@ -296,6 +348,15 @@ export function WorldProvider({ children }) {
       setConnectionState({ status: 'error', error });
     };
 
+    const handleSessionTerminated = (payload) => {
+      setConnectionState({ status: 'terminated', error: payload?.reason ?? 'Session terminated' });
+      playersRef.current.clear();
+      compensatorsRef.current.clear();
+      chatRef.current = [];
+      setPlayers([]);
+      setChatMessages([]);
+    };
+
     socket.on('connect', handleConnect);
     socket.on('disconnect', handleDisconnect);
     socket.on('connect_error', handleConnectError);
@@ -304,6 +365,8 @@ export function WorldProvider({ children }) {
     socket.on('player:joined', (player) => applyPlayerSnapshot(player));
     socket.on('player:updated', (player) => applyPlayerSnapshot(player));
     socket.on('player:left', ({ id }) => removePlayer(id));
+    socket.on('chat:message', appendChatMessage);
+    socket.on('session:terminated', handleSessionTerminated);
 
     return () => {
       socket.off('connect', handleConnect);
@@ -314,6 +377,8 @@ export function WorldProvider({ children }) {
       socket.off('player:joined', applyPlayerSnapshot);
       socket.off('player:updated', applyPlayerSnapshot);
       socket.off('player:left', removePlayer);
+      socket.off('chat:message', appendChatMessage);
+      socket.off('session:terminated', handleSessionTerminated);
       socket.disconnect();
       socketRef.current = null;
       playersRef.current.clear();
@@ -321,8 +386,10 @@ export function WorldProvider({ children }) {
       localPlayerIdRef.current = null;
       setPlayers([]);
       setSpriteAtlas(null);
+      chatRef.current = [];
+      setChatMessages([]);
     };
-  }, [applyPlayerSnapshot, applySnapshot, removePlayer, sendJoinRequest]);
+  }, [appendChatMessage, applyPlayerSnapshot, applySnapshot, removePlayer, sendJoinRequest]);
 
   useEffect(() => {
     sendJoinRequest();
@@ -375,6 +442,38 @@ export function WorldProvider({ children }) {
     [determinePlayerId, ensureCompensator, localPlayerId, user]
   );
 
+  const sendChatMessage = useCallback(
+    (content) => {
+      const socket = socketRef.current;
+      const playerId = localPlayerIdRef.current ?? determinePlayerId();
+      const trimmed = typeof content === 'string' ? content.trim() : '';
+
+      if (!socket?.connected || !trimmed) {
+        return Promise.resolve(null);
+      }
+
+      return new Promise((resolve, reject) => {
+        socket.emit(
+          'chat:message',
+          {
+            content: trimmed,
+            playerId,
+            author: user?.username ?? undefined
+          },
+          (ack) => {
+            if (ack?.ok && ack.message) {
+              appendChatMessage(ack.message);
+              resolve(ack.message);
+            } else {
+              reject(new Error(ack?.message ?? 'Failed to send chat message'));
+            }
+          }
+        );
+      });
+    },
+    [appendChatMessage, determinePlayerId, user]
+  );
+
   const value = useMemo(
     () => ({
       connected: connectionState.status === 'connected',
@@ -383,14 +482,18 @@ export function WorldProvider({ children }) {
       players,
       localPlayerId,
       spriteAtlas,
+      chatMessages,
+      sendChatMessage,
       updateLocalPlayerState
     }),
     [
       connectionState.error,
       connectionState.status,
+      chatMessages,
       localPlayerId,
       players,
       spriteAtlas,
+      sendChatMessage,
       updateLocalPlayerState
     ]
   );

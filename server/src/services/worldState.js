@@ -145,19 +145,21 @@ const sanitizeMessageContent = (content) => {
 
 const generateMessageId = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
 
+const createSystemMessage = () => ({
+  id: generateMessageId(),
+  playerId: 'system',
+  author: 'System',
+  content: 'Hello World',
+  timestamp: new Date().toISOString()
+})
+
 class WorldState {
   constructor () {
     this.world = HELLO_WORLD
-    this.playersBySocket = new Map()
-    this.chat = [
-      {
-        id: generateMessageId(),
-        playerId: 'system',
-        author: 'System',
-        content: 'Hello World',
-        timestamp: new Date().toISOString()
-      }
-    ]
+    this.playersById = new Map()
+    this.socketToPlayer = new Map()
+    this.playerToSocket = new Map()
+    this.chat = [createSystemMessage()]
     this.spriteAtlas = {
       version: 1,
       updatedAt: null,
@@ -168,6 +170,28 @@ class WorldState {
 
   getWorld () {
     return this.world
+  }
+
+  setWorld (world) {
+    if (!world || typeof world !== 'object') {
+      return
+    }
+
+    const id = typeof world.id === 'string' && world.id.trim() ? world.id.trim() : HELLO_WORLD.id
+    const name =
+      typeof world.name === 'string' && world.name.trim()
+        ? world.name.trim().slice(0, 100)
+        : HELLO_WORLD.name
+    const description =
+      typeof world.description === 'string' && world.description.trim()
+        ? world.description.trim().slice(0, 500)
+        : HELLO_WORLD.description
+
+    this.world = {
+      id,
+      name,
+      description
+    }
   }
 
   getSpriteAtlas () {
@@ -200,14 +224,32 @@ class WorldState {
   getSnapshot () {
     return {
       world: this.getWorld(),
-      players: Array.from(this.playersBySocket.values()).map((player) => ({ ...player })),
+      players: Array.from(this.playersById.values()).map((player) => ({ ...player })),
       chat: [...this.chat],
       spriteAtlas: this.getSpriteAtlas()
     }
   }
 
   getPlayerBySocket (socketId) {
-    return this.playersBySocket.get(socketId)
+    const playerId = this.socketToPlayer.get(socketId)
+
+    if (!playerId) {
+      return null
+    }
+
+    const player = this.playersById.get(playerId)
+
+    return player ? { ...player } : null
+  }
+
+  getPlayerById (playerId) {
+    const player = this.playersById.get(playerId)
+
+    return player ? { ...player } : null
+  }
+
+  getSocketIdForPlayer (playerId) {
+    return this.playerToSocket.get(playerId) ?? null
   }
 
   addPlayer (socketId, payload = {}) {
@@ -222,10 +264,11 @@ class WorldState {
     const position = sanitizePosition(payload.position)
     const animation = sanitizeAnimation(payload.animation)
 
-    for (const [existingSocketId, existingPlayer] of this.playersBySocket.entries()) {
-      if (existingPlayer.id === playerId && existingSocketId !== socketId) {
-        this.playersBySocket.delete(existingSocketId)
-      }
+    const existingSocketId = this.playerToSocket.get(playerId)
+
+    if (existingSocketId && existingSocketId !== socketId) {
+      this.socketToPlayer.delete(existingSocketId)
+      this.playerToSocket.delete(playerId)
     }
 
     const metadata = mergeMetadata({}, payload.metadata)
@@ -238,13 +281,21 @@ class WorldState {
       metadata
     }
 
-    this.playersBySocket.set(socketId, player)
+    this.playersById.set(playerId, player)
+    this.socketToPlayer.set(socketId, playerId)
+    this.playerToSocket.set(playerId, socketId)
 
     return { ...player }
   }
 
   updatePlayer (socketId, payload = {}) {
-    const player = this.playersBySocket.get(socketId)
+    const playerId = this.socketToPlayer.get(socketId)
+
+    if (!playerId) {
+      throw new Error('Player not registered')
+    }
+
+    const player = this.playersById.get(playerId)
 
     if (!player) {
       throw new Error('Player not registered')
@@ -266,23 +317,88 @@ class WorldState {
       player.metadata = mergeMetadata(player.metadata, payload.metadata)
     }
 
+    this.playersById.set(player.id, player)
+
     return { ...player }
   }
 
   removePlayer (socketId) {
-    const player = this.playersBySocket.get(socketId)
+    const playerId = this.socketToPlayer.get(socketId)
+
+    if (!playerId) {
+      return null
+    }
+
+    this.socketToPlayer.delete(socketId)
+
+    const controllingSocketId = this.playerToSocket.get(playerId)
+
+    if (controllingSocketId && controllingSocketId !== socketId) {
+      return null
+    }
+
+    this.playerToSocket.delete(playerId)
+
+    const player = this.playersById.get(playerId)
 
     if (!player) {
       return null
     }
 
-    this.playersBySocket.delete(socketId)
+    this.playersById.delete(playerId)
+
+    return { ...player }
+  }
+
+  removePlayerById (playerId) {
+    if (!playerId) {
+      return null
+    }
+
+    const socketId = this.playerToSocket.get(playerId)
+
+    if (socketId) {
+      this.socketToPlayer.delete(socketId)
+      this.playerToSocket.delete(playerId)
+    }
+
+    const player = this.playersById.get(playerId)
+
+    if (!player) {
+      return null
+    }
+
+    this.playersById.delete(playerId)
+
+    return { ...player }
+  }
+
+  upsertPlayerSnapshot (payload = {}) {
+    if (!payload?.id) {
+      return null
+    }
+
+    const fallbackName = `Player ${payload.id}`
+    const name = sanitizeName(payload.name, fallbackName)
+    const position = sanitizePosition(payload.position)
+    const animation = sanitizeAnimation(payload.animation)
+    const metadata = mergeMetadata({}, payload.metadata)
+
+    const player = {
+      id: payload.id,
+      name,
+      position,
+      animation,
+      metadata
+    }
+
+    this.playersById.set(player.id, player)
 
     return { ...player }
   }
 
   addChatMessage ({ socketId, playerId, author, content }) {
-    const player = socketId ? this.playersBySocket.get(socketId) : null
+    const player = socketId ? this.getPlayerBySocket(socketId) : null
     const resolvedPlayerId = typeof playerId === 'string' && playerId.trim() ? playerId.trim() : player?.id
 
     if (!resolvedPlayerId) {
@@ -307,6 +423,60 @@ class WorldState {
     }
 
     return { ...message }
+  }
+
+  addChatMessageSnapshot (message = {}) {
+    if (!message?.id) {
+      return null
+    }
+
+    const sanitized = {
+      id: message.id,
+      playerId: message.playerId,
+      author: sanitizeName(message.author, message.playerId ? `Player ${message.playerId}` : 'Player'),
+      content: sanitizeMessageContent(message.content),
+      timestamp: typeof message.timestamp === 'string' ? message.timestamp : new Date().toISOString()
+    }
+
+    this.chat.push(sanitized)
+
+    if (this.chat.length > MAX_CHAT_HISTORY) {
+      this.chat.splice(0, this.chat.length - MAX_CHAT_HISTORY)
+    }
+
+    return { ...sanitized }
+  }
+
+  hydrateSnapshot (snapshot = {}) {
+    if (snapshot.world) {
+      this.setWorld(snapshot.world)
+    }
+
+    this.playersById.clear()
+    this.socketToPlayer.clear()
+    this.playerToSocket.clear()
+
+    if (Array.isArray(snapshot.players)) {
+      for (const player of snapshot.players) {
+        this.upsertPlayerSnapshot(player)
+      }
+    }
+
+    this.chat = []
+
+    if (Array.isArray(snapshot.chat)) {
+      for (const message of snapshot.chat) {
+        this.addChatMessageSnapshot(message)
+      }
+    }
+
+    if (this.chat.length === 0) {
+      this.chat.push(createSystemMessage())
+    }
+
+    if (snapshot.spriteAtlas) {
+      this.setSpriteAtlas(snapshot.spriteAtlas)
+    }
   }
 }
 

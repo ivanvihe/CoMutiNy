@@ -1,7 +1,6 @@
 import http from 'http'
 import path from 'node:path'
 import express from 'express'
-import { Server } from 'socket.io'
 import dotenv from 'dotenv'
 
 import { connectDatabase } from './config/database.js'
@@ -10,10 +9,11 @@ import avatarRoutes from './routes/avatarRoutes.js'
 import adminRoutes from './routes/adminRoutes.js'
 import assetRoutes from './routes/assetRoutes.js'
 import { cookies } from './middlewares/auth.js'
-import worldState from './services/worldState.js'
+import sessionManager from './services/sessionManager.js'
 import avatarRepository from './repositories/AvatarRepository.js'
 import spriteGenerationService from './sprites/spriteGenerationService.js'
 import spriteEvents, { SPRITE_EVENTS } from './sprites/events.js'
+import createSocketServer from './network/socketServer.js'
 
 dotenv.config()
 
@@ -50,17 +50,6 @@ app.use((err, req, res, next) => {
 })
 
 const server = http.createServer(app)
-const io = new Server(server, {
-  cors: {
-    origin: process.env.CORS_ORIGIN || '*'
-  }
-})
-
-const safeAck = (ack, payload) => {
-  if (typeof ack === 'function') {
-    ack(payload)
-  }
-}
 
 const enrichJoinPayloadWithAvatar = async (payload = {}) => {
   const enriched = { ...(payload ?? {}) }
@@ -149,86 +138,19 @@ const enrichJoinPayloadWithAvatar = async (payload = {}) => {
   return enriched
 }
 
-io.on('connection', (socket) => {
-  console.log(`Socket connected: ${socket.id}`)
-
-  socket.emit('world:state', worldState.getSnapshot())
-
-  socket.on('player:join', async (payload, ack) => {
-    try {
-      const enrichedPayload = await enrichJoinPayloadWithAvatar(payload)
-      const player = worldState.addPlayer(socket.id, enrichedPayload)
-      socket.data.playerId = player.id
-
-      console.log(`Player joined: ${player.id} (${socket.id})`)
-
-      safeAck(ack, { ok: true, state: worldState.getSnapshot(), player })
-      socket.broadcast.emit('player:joined', player)
-    } catch (error) {
-      console.error('player:join failed', error)
-      safeAck(ack, { ok: false, message: error.message })
-    }
-  })
-
-  socket.on('player:update', (payload, ack) => {
-    try {
-      const player = worldState.updatePlayer(socket.id, payload)
-
-      safeAck(ack, { ok: true, player })
-      socket.broadcast.emit('player:updated', player)
-    } catch (error) {
-      console.error('player:update failed', error)
-      safeAck(ack, { ok: false, message: error.message })
-    }
-  })
-
-  socket.on('chat:message', (payload, ack) => {
-    try {
-      const message = worldState.addChatMessage({
-        socketId: socket.id,
-        playerId: payload?.playerId,
-        author: payload?.author,
-        content: payload?.content
-      })
-
-      io.emit('chat:message', message)
-      safeAck(ack, { ok: true, message })
-    } catch (error) {
-      console.error('chat:message failed', error)
-      safeAck(ack, { ok: false, message: error.message })
-    }
-  })
-
-  socket.on('player:leave', (ack) => {
-    const removed = worldState.removePlayer(socket.id)
-
-    if (removed) {
-      console.log(`Player left: ${removed.id} (${socket.id})`)
-      socket.broadcast.emit('player:left', { id: removed.id })
-    }
-
-    safeAck(ack, { ok: true })
-  })
-
-  socket.on('disconnect', (reason) => {
-    const removed = worldState.removePlayer(socket.id)
-
-    if (removed) {
-      console.log(`Player disconnected: ${removed.id} (${socket.id})`)
-      socket.broadcast.emit('player:left', { id: removed.id })
-    }
-
-    console.log(`Socket disconnected: ${socket.id} (${reason})`)
-  })
-})
-
 const PORT = Number(process.env.SERVER_PORT || 4000)
 
 const start = async () => {
   try {
     await connectDatabase()
+    await sessionManager.initialize()
     const atlas = await spriteGenerationService.getAtlasSnapshot()
-    worldState.setSpriteAtlas(atlas)
+    sessionManager.setSpriteAtlas(atlas)
+
+    createSocketServer(server, {
+      corsOrigin: process.env.CORS_ORIGIN || '*',
+      enrichJoinPayload: enrichJoinPayloadWithAvatar
+    })
 
     server.listen(PORT, '0.0.0.0', () => {
       console.log(`Server listening on port ${PORT}`)
@@ -241,6 +163,5 @@ const start = async () => {
 start()
 
 spriteEvents.on(SPRITE_EVENTS.ATLAS_UPDATED, (atlas) => {
-  worldState.setSpriteAtlas(atlas)
-  io.emit('sprites:atlasUpdated', atlas)
+  sessionManager.setSpriteAtlas(atlas)
 })
