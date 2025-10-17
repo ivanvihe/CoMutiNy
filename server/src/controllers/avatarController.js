@@ -1,11 +1,43 @@
 import avatarRepository from '../repositories/AvatarRepository.js'
 
+const layerKeyMap = Object.freeze({
+  hair: 'layerHair',
+  face: 'layerFace',
+  outfit: 'layerOutfit',
+  shoes: 'layerShoes'
+})
+
+const extractLayerFields = (appearance) => {
+  if (!appearance || typeof appearance !== 'object') {
+    return {}
+  }
+
+  const layerFields = {}
+
+  for (const [appearanceKey, modelKey] of Object.entries(layerKeyMap)) {
+    if (appearance[appearanceKey] !== undefined) {
+      layerFields[modelKey] = appearance[appearanceKey] ?? null
+    }
+  }
+
+  return layerFields
+}
+
 const sanitizeAvatar = (avatar) => {
   if (!avatar) {
     return null
   }
 
-  return typeof avatar.get === 'function' ? avatar.get({ plain: true }) : { ...avatar }
+  const plain = typeof avatar.get === 'function' ? avatar.get({ plain: true }) : { ...avatar }
+
+  const appearance = Object.fromEntries(
+    Object.entries(layerKeyMap).map(([appearanceKey, modelKey]) => [appearanceKey, plain[modelKey] ?? null])
+  )
+
+  return {
+    ...plain,
+    appearance
+  }
 }
 
 export const getMyAvatar = async (req, res, next) => {
@@ -24,12 +56,13 @@ export const getMyAvatar = async (req, res, next) => {
 
 export const updateMyAvatar = async (req, res, next) => {
   try {
-    const { name, description, spriteAssetId } = req.body ?? {}
+    const { name, description, spriteAssetId, appearance } = req.body ?? {}
 
     const providedFields = {
       ...(name !== undefined ? { name } : {}),
       ...(description !== undefined ? { description } : {}),
-      ...(spriteAssetId !== undefined ? { spriteAssetId } : {})
+      ...(spriteAssetId !== undefined ? { spriteAssetId } : {}),
+      ...extractLayerFields(appearance)
     }
 
     if (Object.keys(providedFields).length === 0) {
@@ -47,7 +80,8 @@ export const updateMyAvatar = async (req, res, next) => {
         userId: req.user.id,
         name,
         description: description ?? null,
-        spriteAssetId: spriteAssetId ?? null
+        spriteAssetId: spriteAssetId ?? null,
+        ...extractLayerFields(appearance)
       })
 
       const created = await avatarRepository.findById(avatar.id)

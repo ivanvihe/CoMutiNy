@@ -17,6 +17,26 @@ const defineAvatar = (sequelize) => {
       allowNull: true,
       field: 'sprite_asset_id'
     },
+    layerHair: {
+      type: DataTypes.STRING(100),
+      allowNull: true,
+      field: 'layer_hair'
+    },
+    layerFace: {
+      type: DataTypes.STRING(100),
+      allowNull: true,
+      field: 'layer_face'
+    },
+    layerOutfit: {
+      type: DataTypes.STRING(100),
+      allowNull: true,
+      field: 'layer_outfit'
+    },
+    layerShoes: {
+      type: DataTypes.STRING(100),
+      allowNull: true,
+      field: 'layer_shoes'
+    },
     name: {
       type: DataTypes.STRING(100),
       allowNull: false

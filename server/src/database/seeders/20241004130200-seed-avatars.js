@@ -7,13 +7,25 @@ const avatarDefinitions = [
     username: 'commander',
     spriteName: 'Explorer Base',
     name: 'Commander Nova',
-    description: 'Leader of the CoMutiNy expedition.'
+    description: 'Leader of the CoMutiNy expedition.',
+    layers: {
+      hair: 'Corto',
+      face: 'Clásica',
+      outfit: 'Aventurero',
+      shoes: 'Botas'
+    }
   },
   {
     username: 'navigator',
     spriteName: 'Explorer Base',
     name: 'Navigator Flux',
-    description: 'Charting the cosmos with precision.'
+    description: 'Charting the cosmos with precision.',
+    layers: {
+      hair: 'Largo',
+      face: 'Sonriente',
+      outfit: 'Piloto',
+      shoes: 'Tenis'
+    }
   }
 ]
 
@@ -37,6 +49,10 @@ export const up = async ({ context: queryInterface }) => {
     sprite_asset_id: spriteByName[definition.spriteName] ?? null,
     name: definition.name,
     description: definition.description,
+    layer_hair: definition.layers?.hair ?? null,
+    layer_face: definition.layers?.face ?? null,
+    layer_outfit: definition.layers?.outfit ?? null,
+    layer_shoes: definition.layers?.shoes ?? null,
     created_at: now,
     updated_at: now
   }))
