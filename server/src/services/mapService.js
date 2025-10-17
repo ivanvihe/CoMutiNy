@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 import mapRepository from '../repositories/mapRepository.js'
 import loadStaticMapDefinitions from '../utils/staticMapLoader.js'
 import { attachObjectDefinitions } from '../objects/objectRegistry.js'
+import objectService from './objectService.js'
 
 const slugify = (value) => {
   if (!value) {
@@ -387,11 +388,16 @@ const mapService = {
   async listStaticMaps () {
     const maps = await loadStaticMapDefinitions()
     if (!Array.isArray(maps) || maps.length === 0) {
-      return []
+      return { maps: [], objectDefinitions: [] }
     }
 
     const enriched = await Promise.all(maps.map((map) => enrichMapObjects(map)))
-    return enriched.filter(Boolean)
+    const objectDefinitions = await objectService.listDefinitions()
+
+    return {
+      maps: enriched.filter(Boolean),
+      objectDefinitions: Array.isArray(objectDefinitions) ? objectDefinitions : []
+    }
   },
 
   async listMaps ({ limit = 20, offset = 0 } = {}) {

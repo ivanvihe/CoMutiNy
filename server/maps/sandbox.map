@@ -1,0 +1,45 @@
+[meta]
+id: sandbox
+title: Sandbox experimental
+biome: Laboratorio
+description: Espacio pequeño para probar objetos y tiles.
+dimensions: 10x10
+starting_point: 5x5
+border colour: #3f51b5
+
+[tiles]
+. = floor; name=Suelo experimental; color=#9db4ff; transparent=true
+# = wall; name=Pared virtual; color=#6b4f3a; collides=true
+
+[layer ground]
+order: 0
+..........
+..........
+..........
+..........
+..........
+..........
+..........
+..........
+..........
+..........
+
+[layer perimeter]
+order: 1
+##########
+#........#
+#........#
+#........#
+#........#
+#........#
+#........#
+#........#
+#........#
+##########
+
+[objects]
+!wall_01@2x2 | Bloque de pared A
+!wall_01@7x2 | Bloque de pared B
+!wall_01@2x7 | Bloque de pared C
+!wall_01@7x7 | Bloque de pared D
+plant_01@5x6 | Planta experimental
