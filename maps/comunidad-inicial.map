@@ -1,0 +1,7 @@
+name: Plaza Comunitaria
+biome: Comunidad
+description: Espacio central para encuentros y colaboraciones.
+dimensions: 28x28
+spawn: 14x14
+border colour: black
+door position: 1x14

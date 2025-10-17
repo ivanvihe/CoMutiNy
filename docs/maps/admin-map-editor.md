@@ -36,7 +36,7 @@ Este módulo introduce un flujo completo para crear y mantener mapas isométrico
 ## Persistencia
 
 - Nuevas migraciones crean las tablas `maps` y `map_objects` con relaciones en cascada.
-- El seeder `20241004130500-seed-maps.js` inicializa un mapa de ejemplo alineado con el mapa `hello-world` existente en el cliente.
+- El seeder `20241004130500-seed-maps.js` inicializa un mapa de ejemplo alineado con el mapa `comunidad-inicial` existente en el cliente.
 
 ## Flujo recomendado
 

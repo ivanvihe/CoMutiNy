@@ -12,9 +12,9 @@ const APPEARANCE_KEYS = Object.freeze(['hair', 'face', 'outfit', 'shoes'])
 const VALID_DIRECTIONS = new Set(['up', 'down', 'left', 'right'])
 
 const HELLO_WORLD = Object.freeze({
-  id: 'hello-world',
-  name: 'Hello World',
-  description: 'Demo scene for initial multiplayer tests'
+  id: 'comunidad-inicial',
+  name: 'Plaza Comunitaria',
+  description: 'Espacio de bienvenida para encuentros colaborativos'
 })
 
 const toNumber = (value, fallback = 0) => {
@@ -204,7 +204,7 @@ const createSystemMessage = () => ({
   id: generateMessageId(),
   playerId: 'system',
   author: 'System',
-  content: 'Hello World',
+  content: 'Bienvenida a la comunidad',
   timestamp: new Date().toISOString()
 })
 

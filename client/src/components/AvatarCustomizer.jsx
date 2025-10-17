@@ -12,10 +12,10 @@ import {
 import AvatarPreview from './AvatarPreview.jsx';
 
 const OPTIONS = {
-  hair: ['Corto', 'Largo', 'Rastas', 'Moicano'],
-  face: ['Clásica', 'Sonriente', 'Cicatriz', 'Android'],
-  outfit: ['Aventurero', 'Piloto', 'Científico', 'Mecánico'],
-  shoes: ['Botas', 'Tenis', 'Sandalias', 'Descalzo']
+  hair: ['Corto', 'Largo', 'Trenzas', 'Rizado'],
+  face: ['Clásica', 'Sonriente', 'Freckles', 'Cyber'],
+  outfit: ['Casual', 'Creativo', 'Profesional', 'Festivo'],
+  shoes: ['Botas', 'Tenis', 'Sandalias', 'Sin calzado']
 };
 
 export default function AvatarCustomizer({ appearance, onChange }) {
@@ -26,8 +26,8 @@ export default function AvatarCustomizer({ appearance, onChange }) {
   return (
     <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
       <CardHeader
-        title="Tu tripulante"
-        subheader="Elige el aspecto perfecto para esta misión"
+        title="Tu presencia"
+        subheader="Elige el aspecto con el que participarás en la comunidad"
         sx={{ pb: 0 }}
       />
       <CardContent sx={{ flex: 1, display: 'flex', flexDirection: 'column' }}>

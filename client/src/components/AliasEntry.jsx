@@ -56,13 +56,13 @@ export default function AliasEntry() {
     }
   };
 
-  const actionLabel = profile ? 'Actualizar alias' : 'Unirme a la nave';
+  const actionLabel = profile ? 'Actualizar alias' : 'Unirme a la comunidad';
 
   return (
     <Box component="form" onSubmit={handleSubmit} noValidate>
       <Stack spacing={2.5}>
         <Typography variant="body2" color="text.secondary">
-          Elige un alias para que el resto de la tripulación pueda identificarte dentro de la nave.
+          Elige un alias para que el resto de la comunidad pueda identificarte dentro del espacio compartido.
         </Typography>
 
         {combinedError && <Alert severity="error">{combinedError}</Alert>}

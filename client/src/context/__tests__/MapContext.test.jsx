@@ -2,6 +2,27 @@ import React from 'react';
 import { act, renderHook } from '@testing-library/react';
 import { MapProvider, useMap } from '../MapContext.jsx';
 
+jest.mock('../../game/maps.js', () => ({
+  MAPS: [
+    {
+      id: 'mapa-prueba',
+      name: 'Mapa de prueba',
+      biome: 'Colaborativo',
+      description: 'Espacio ficticio para pruebas automatizadas.',
+      size: { width: 28, height: 28 },
+      spawn: { x: 14, y: 14 },
+      blockedAreas: [
+        { x: 0, y: 0, width: 28, height: 1 },
+        { x: 0, y: 27, width: 28, height: 1 },
+        { x: 0, y: 0, width: 1, height: 28 },
+        { x: 27, y: 0, width: 1, height: 28 }
+      ],
+      objects: [],
+      portals: []
+    }
+  ]
+}));
+
 jest.mock('../WorldContext.jsx', () => ({
   useWorld: () => ({
     updateLocalPlayerState: jest.fn(),

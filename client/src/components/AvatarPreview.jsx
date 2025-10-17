@@ -14,7 +14,7 @@ const ICONS = {
 export default function AvatarPreview({ appearance }) {
   return (
     <Stack spacing={2} alignItems="center" textAlign="center">
-      <Tooltip title="Representación artística del tripulante" arrow placement="top">
+      <Tooltip title="Representación visual de la persona participante" arrow placement="top">
         <Avatar
           sx={{
             width: 120,
@@ -25,16 +25,16 @@ export default function AvatarPreview({ appearance }) {
             border: '2px solid rgba(255,255,255,0.2)'
           }}
         >
-          ⚓
+          🤝
         </Avatar>
       </Tooltip>
 
       <Box>
         <Typography variant="h6" fontWeight={600} gutterBottom>
-          Almirante Fantasma
+          Perfil comunitario
         </Typography>
         <Typography variant="body2" color="text.secondary">
-          Tu estilo define cómo te verán los demás miembros de la tripulación.
+          Tu estilo define cómo te verán quienes compartan este espacio.
         </Typography>
       </Box>
 

@@ -13,10 +13,10 @@ Este documento resume los cambios visuales aplicados al HUD y navegación de map
 
 ```
 ┌────────────────────────────────────┐
-│ Puente de mando        [Bioma]     │
+│ Plaza central          [Entorno]   │
 │ Estado de red: Conectado           │
-│ "La sala de control..."           │
-│ Portales → Camarotes | Hidropónicos│
+│ "Espacio para encuentros..."      │
+│ Portales → Taller | Invernadero    │
 └────────────────────────────────────┘
 ```
 
@@ -27,19 +27,19 @@ Este documento resume los cambios visuales aplicados al HUD y navegación de map
 
 ```
 ┌─────────────────────────────┐
-│ Objeto cercano: Consola NAV │
-│ Compañeros en este mapa: 2  │
+│ Objeto cercano: Panel común │
+│ Personas en este mapa: 2    │
 └─────────────────────────────┘
 ```
 
-## Tripulación visible en el mapa
+## Presencia visible en el mapa
 - Lista densa (`List` + `ListItemText`) que aparece tras un `Divider`.
 - Cada entrada muestra el nombre reportado en la metadata del jugador remoto.
-- Mensaje vacío comunica que aún no hay tripulación remota conectada.
+- Mensaje vacío comunica que aún no hay participación remota conectada.
 
 ```
 ┌──────────────────────────────┐
-│ Tripulación en este sector   │
+│ Personas en este sector      │
 ├──────────────────────────────┤
 │ Vega                       │
 │ Noor                       │

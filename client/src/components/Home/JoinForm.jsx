@@ -77,13 +77,13 @@ export default function JoinForm() {
             Bienvenido a CoMutiNy
           </Typography>
           <Typography variant="body1" className="join-subtitle">
-            Prepara tu identidad y apariencia antes de abordar la nave.
+            Prepara tu identidad y apariencia antes de entrar a la comunidad.
           </Typography>
 
           <Box component="form" onSubmit={handleSubmit} noValidate className="join-form">
             <Stack spacing={2.5}>
               <Typography variant="body2" color="text.secondary">
-                Elige un alias visible para el resto de la tripulación e ingresa cuando estés listo.
+                Elige un alias visible para el resto de la comunidad e ingresa cuando estés listo.
               </Typography>
 
               {combinedError && <Alert severity="error">{combinedError}</Alert>}
@@ -110,7 +110,7 @@ export default function JoinForm() {
                   endIcon={isPending ? <CircularProgress color="inherit" size={18} /> : null}
                   className="join-submit"
                 >
-                  {profile ? 'Actualizar y entrar' : 'Entrar a la nave'}
+                  {profile ? 'Actualizar y entrar' : 'Entrar a la comunidad'}
                 </Button>
                 <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
                   Estado de conexión: {connectionLabel}

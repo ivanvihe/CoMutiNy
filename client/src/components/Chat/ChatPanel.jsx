@@ -35,7 +35,7 @@ export default function ChatPanel() {
   return (
     <div className="chat-panel">
       <div className="chat-panel__header">
-        <div className="chat-panel__title">Chat de tripulación</div>
+        <div className="chat-panel__title">Chat de la comunidad</div>
         {profile?.alias ? (
           <div className="chat-panel__subtitle">Conectado como {profile.alias}</div>
         ) : null}
@@ -43,7 +43,7 @@ export default function ChatPanel() {
 
       <div className="chat-panel__messages" ref={listRef}>
         {chatMessages.length === 0 ? (
-          <div className="chat-panel__empty">Aún no hay mensajes. ¡Saluda a la tripulación!</div>
+          <div className="chat-panel__empty">Aún no hay mensajes. ¡Saluda al resto de la comunidad!</div>
         ) : (
           chatMessages.map((entry) => (
             <div key={entry.id} className="chat-panel__message">

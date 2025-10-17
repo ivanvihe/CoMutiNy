@@ -4,7 +4,7 @@
       "id": "bridge",
       "name": "Puente de mando",
       "biome": "Comando",
-      "description": "Sala de control principal de la nave con acceso a rutas estratégicas.",
+      "description": "Sala de coordinación principal con acceso a rutas estratégicas de la comunidad.",
       "missions": [
         { "id": "course-relock", "title": "Reconfigurar el rumbo", "status": "available" },
         { "id": "sensor-diagnostics", "title": "Diagnosticar sensores", "status": "in-progress" }
@@ -14,7 +14,7 @@
       "id": "quarters",
       "name": "Camarotes",
       "biome": "Habitacional",
-      "description": "Zona de descanso y almacenaje personal de la tripulación.",
+      "description": "Zona de descanso y almacenaje personal para las personas participantes.",
       "missions": [
         { "id": "inventory-pass", "title": "Organizar inventario", "status": "available" },
         { "id": "shift-rotation", "title": "Coordinar turnos", "status": "available" }
