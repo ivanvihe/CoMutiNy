@@ -1,6 +1,6 @@
 # Sprite generation pipeline
 
-La plataforma incluye un pipeline automático para producir sprites compatibles con el motor del juego a partir de descripciones en texto. El flujo se apoya en el servicio `SpriteGenerationService` del backend (`server/src/sprites/spriteGenerationService.js`) y expone endpoints y utilidades para uso interno desde la UI de administración.
+La plataforma incluye un pipeline automático para producir sprites compatibles con el motor del juego a partir de descripciones en texto. El flujo se apoya en el servicio `SpriteGenerationService` del backend (`server/src/sprites/spriteGenerationService.js`) y se consume mediante scripts internos o procesos automatizados.
 
 ## Flujo general
 
@@ -9,9 +9,9 @@ La plataforma incluye un pipeline automático para producir sprites compatibles 
    - `dall-e`: integración con la API de OpenAI. Requiere configurar `OPENAI_API_KEY`.
    - `stable-diffusion`: integración con Stability AI. Requiere `STABILITY_API_KEY`.
 
-   La lista de generadores disponibles puede consultarse en `GET /admin/assets/sprites/generators`. Cada entrada indica si el proveedor está disponible en función de las variables de entorno.
+  La lista de generadores disponibles puede consultarse con `spriteGenerationService.listAvailableGenerators()`. Cada entrada indica si el proveedor está disponible en función de las variables de entorno.
 
-2. **Generación**. El endpoint `POST /admin/assets/sprites/generate` acepta una carga como:
+2. **Generación**. El método `spriteGenerationService.generateSprite()` acepta una carga como:
 
    ```json
    {
@@ -38,15 +38,33 @@ La plataforma incluye un pipeline automático para producir sprites compatibles 
 
 5. **Atlas y runtime**. Cada nueva generación emite un evento `sprites:atlasUpdated` mediante Socket.IO. El `WorldState` incorpora el atlas y lo expone en el snapshot inicial (`world:state`). El frontend escucha estos eventos (ver `client/src/context/WorldContext.jsx`) y actualiza el atlas compartido, de modo que los sprites recién generados están disponibles sin recargar la aplicación.
 
-## Uso desde la UI de administración
+## Ejecución desde scripts
 
-En la sección **Sprites** del panel de administración se añadió el botón "Generar desde descripción". Este abre un cuadro de diálogo con:
+Para invocar el generador de manera local puede usarse un script de Node similar a:
 
-- Selector del generador disponible.
-- Campos para descripción, tamaño, frames opcionales, paleta (separada por comas), nombre y categoría.
-- Vista previa del sprite generado y acceso directo a la URL servida (`/static/sprites/...`).
+```js
+import spriteGenerationService from '../server/src/sprites/spriteGenerationService.js'
 
-La generación dispara la actualización automática de la tabla de assets. Los administradores pueden editar los metadatos resultantes o usar el editor de píxeles para ajustes finos.
+const main = async () => {
+  const result = await spriteGenerationService.generateSprite({
+    description: 'robot explorador con linterna',
+    generator: 'procedural',
+    width: 32,
+    height: 32,
+    name: 'Explorador',
+    category: 'npc'
+  })
+
+  console.log('Sprite disponible en:', result.resources)
+}
+
+main().catch((error) => {
+  console.error('No se pudo generar el sprite:', error)
+  process.exitCode = 1
+})
+```
+
+El script puede ejecutarse con `node --env-file .env.local scripts/generate-sprite.js`, reutilizando las mismas variables que el servidor.
 
 ## Consumo del atlas desde herramientas internas
 

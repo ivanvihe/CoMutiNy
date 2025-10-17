@@ -21,7 +21,7 @@ class MessageRepository {
     const userInclude = {
       model: User,
       as: 'user',
-      attributes: ['id', 'username', 'email', 'role', 'isBanned', 'suspensionUntil', 'moderationReason'],
+      attributes: ['id', 'username', 'email', 'isBanned', 'suspensionUntil', 'moderationReason'],
       required: false
     }
 

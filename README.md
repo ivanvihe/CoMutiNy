@@ -34,4 +34,4 @@ Environment defaults are defined in the root `.env` file and in `server/.env`.
 
 ### Generación automática de sprites
 
-El pipeline para generar sprites a partir de descripciones de texto, junto con los endpoints y procedimientos para usarlos desde la UI de administración, está documentado en [docs/sprite-generation.md](docs/sprite-generation.md).
+El pipeline para generar sprites a partir de descripciones de texto, junto con el proceso para ejecutarlo desde scripts internos, está documentado en [docs/sprite-generation.md](docs/sprite-generation.md).

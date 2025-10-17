@@ -39,7 +39,7 @@ export const authenticate = async (req, res, next) => {
     }
 
     if (user.isBanned) {
-      return res.status(403).json({ message: 'Your account has been banned by an administrator' })
+      return res.status(403).json({ message: 'Your account has been banned by the moderation team' })
     }
 
     const now = new Date()

@@ -6,7 +6,6 @@ const users = [
     username: 'commander',
     email: 'commander@example.com',
     password_hash: '$2b$10$KbQiYrQmFXoYz7V6czS4QeC9n.WxJz9n9VfNQXmpfz6WZ0oS9dXG2',
-    role: 'admin',
     created_at: new Date(),
     updated_at: new Date()
   },
@@ -15,7 +14,6 @@ const users = [
     username: 'navigator',
     email: 'navigator@example.com',
     password_hash: '$2b$10$KbQiYrQmFXoYz7V6czS4QeC9n.WxJz9n9VfNQXmpfz6WZ0oS9dXG2',
-    role: 'user',
     created_at: new Date(),
     updated_at: new Date()
   }

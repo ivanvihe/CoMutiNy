@@ -24,11 +24,6 @@ const defineUser = (sequelize) => {
       type: DataTypes.STRING(255),
       allowNull: false
     },
-    role: {
-      type: DataTypes.ENUM('user', 'admin'),
-      allowNull: false,
-      defaultValue: 'user'
-    },
     isBanned: {
       type: DataTypes.BOOLEAN,
       allowNull: false,
