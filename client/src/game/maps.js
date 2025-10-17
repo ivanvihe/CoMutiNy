@@ -27,13 +27,6 @@ export const MAPS = [
           title: 'Consola de navegación',
           description:
             'Las coordenadas están bloqueadas para evitar otra mutinería... pero quizá alguien con el rol adecuado pueda cambiarlas.',
-          missionUpdates: [
-            {
-              missionId: 'course-relock',
-              status: 'in-progress',
-              log: 'Se desbloquearon los controles de rumbo para revisar la trayectoria.'
-            }
-          ]
         }
       },
       {
@@ -57,14 +50,7 @@ export const MAPS = [
         interaction: {
           type: 'mission',
           title: 'Diagnóstico de sensores',
-          description: 'Inicias un barrido de diagnóstico para recalibrar los sensores de largo alcance.',
-          missionUpdates: [
-            {
-              missionId: 'sensor-diagnostics',
-              status: 'completed',
-              log: 'Los sensores han sido recalibrados y reportan lecturas estables.'
-            }
-          ]
+            description: 'Inicias un barrido de diagnóstico para recalibrar los sensores de largo alcance.'
         }
       }
     ],
@@ -84,28 +70,6 @@ export const MAPS = [
         description: 'Acceso al vivero hidropónico.'
       }
     ],
-    missions: [
-      {
-        id: 'course-relock',
-        title: 'Reconfigurar el rumbo',
-        summary: 'Revierte la trayectoria impuesta por la mutinería y fija coordenadas seguras.',
-        status: 'available',
-        objectives: [
-          'Auditar los registros de salto',
-          'Desbloquear la consola principal',
-          'Enviar el plan de ruta aprobado'
-        ],
-        rewards: ['+5 reputación de puente', 'Desbloquea el laboratorio de asteroides']
-      },
-      {
-        id: 'sensor-diagnostics',
-        title: 'Diagnosticar sensores',
-        summary: 'Ejecuta un barrido completo para detectar amenazas cercanas.',
-        status: 'in-progress',
-        objectives: ['Revisar la matriz de sensores', 'Transmitir informe al equipo de vigilancia'],
-        rewards: ['Datos de vigilancia enriquecidos']
-      }
-    ]
   },
   {
     id: 'quarters',
@@ -130,14 +94,7 @@ export const MAPS = [
         interaction: {
           type: 'inventory',
           title: 'Taquilla de suministros',
-          description: 'Encuentras uniformes de repuesto y una caja con componentes electrónicos.',
-          missionUpdates: [
-            {
-              missionId: 'inventory-pass',
-              status: 'completed',
-              log: 'El inventario quedó registrado y actualizado para toda la tripulación.'
-            }
-          ]
+          description: 'Encuentras uniformes de repuesto y una caja con componentes electrónicos.'
         }
       },
       {
@@ -161,14 +118,7 @@ export const MAPS = [
         interaction: {
           type: 'mission',
           title: 'Coordinación de turnos',
-          description: 'Coordina los relevos y asigna responsables para vigilar los nuevos biomas.',
-          missionUpdates: [
-            {
-              missionId: 'shift-rotation',
-              status: 'in-progress',
-              log: 'Se organizó un turno de guardia para cubrir la bahía de motores.'
-            }
-          ]
+          description: 'Coordina los relevos y asigna responsables para vigilar los nuevos biomas.'
         }
       }
     ],
@@ -188,24 +138,6 @@ export const MAPS = [
         description: 'Montacargas hacia la bahía de motores.'
       }
     ],
-    missions: [
-      {
-        id: 'inventory-pass',
-        title: 'Organizar inventario',
-        summary: 'Clasifica suministros personales y comparte recursos con la tripulación.',
-        status: 'available',
-        objectives: ['Registrar taquillas', 'Emitir informe de suministros'],
-        rewards: ['Desbloquea recursos para otras misiones']
-      },
-      {
-        id: 'shift-rotation',
-        title: 'Coordinar turnos',
-        summary: 'Planifica un horario compartido para vigilar cada sector crítico.',
-        status: 'available',
-        objectives: ['Revisar solicitudes', 'Publicar el plan en la pizarra táctica'],
-        rewards: ['Moral de tripulación +3']
-      }
-    ]
   },
   {
     id: 'hydroponics',
@@ -232,14 +164,7 @@ export const MAPS = [
         interaction: {
           type: 'mission',
           title: 'Reactivar riego',
-          description: 'Restableces el flujo de nutrientes y monitorizas el nivel de humedad.',
-          missionUpdates: [
-            {
-              missionId: 'restore-irrigation',
-              status: 'completed',
-              log: 'Los aspersores vuelven a funcionar y las plantas recuperan su color.'
-            }
-          ]
+          description: 'Restableces el flujo de nutrientes y monitorizas el nivel de humedad.'
         }
       },
       {
@@ -251,14 +176,7 @@ export const MAPS = [
         interaction: {
           type: 'mission',
           title: 'Calibrar drones polinizadores',
-          description: 'Ejecutas una calibración fina para equilibrar la distribución de polen.',
-          missionUpdates: [
-            {
-              missionId: 'drone-calibration',
-              status: 'in-progress',
-              log: 'Los drones comienzan rutinas de prueba y requieren seguimiento en 4 ciclos.'
-            }
-          ]
+          description: 'Ejecutas una calibración fina para equilibrar la distribución de polen.'
         }
       },
       {
@@ -290,24 +208,6 @@ export const MAPS = [
         description: 'Conducto presurizado hacia el laboratorio de asteroides.'
       }
     ],
-    missions: [
-      {
-        id: 'restore-irrigation',
-        title: 'Reactivar riego',
-        summary: 'Reinicia el ciclo de humedad para salvar la cosecha experimental.',
-        status: 'available',
-        objectives: ['Inspeccionar el panel principal', 'Verificar niveles de nutrientes'],
-        rewards: ['Suministro de alimentos estabilizado']
-      },
-      {
-        id: 'drone-calibration',
-        title: 'Calibrar drones polinizadores',
-        summary: 'Programa rutas y sensores para asegurar la polinización pareja.',
-        status: 'in-progress',
-        objectives: ['Ajustar patrones de vuelo', 'Recolectar muestras de polen'],
-        rewards: ['Datos para investigación botánica']
-      }
-    ]
   },
   {
     id: 'engine-bay',
@@ -334,14 +234,7 @@ export const MAPS = [
         interaction: {
           type: 'mission',
           title: 'Purga de plasma',
-          description: 'Gestionas manualmente la purga para limpiar residuos del reactor.',
-          missionUpdates: [
-            {
-              missionId: 'plasma-purge',
-              status: 'in-progress',
-              log: 'La purga está en marcha. Monitoriza los indicadores durante el ciclo.'
-            }
-          ]
+          description: 'Gestionas manualmente la purga para limpiar residuos del reactor.'
         }
       },
       {
@@ -353,14 +246,7 @@ export const MAPS = [
         interaction: {
           type: 'mission',
           title: 'Reinicio del núcleo',
-          description: 'Desencadenas una secuencia de arranque seguro para el núcleo principal.',
-          missionUpdates: [
-            {
-              missionId: 'reactor-restart',
-              status: 'available',
-              log: 'El reinicio requiere autorización adicional desde el puente.'
-            }
-          ]
+          description: 'Desencadenas una secuencia de arranque seguro para el núcleo principal.'
         }
       },
       {
@@ -392,24 +278,6 @@ export const MAPS = [
         description: 'Compuerta presurizada hacia el laboratorio de asteroides.'
       }
     ],
-    missions: [
-      {
-        id: 'plasma-purge',
-        title: 'Ejecutar purga de plasma',
-        summary: 'Drena residuos energéticos para estabilizar los propulsores.',
-        status: 'available',
-        objectives: ['Abrir válvulas de alivio', 'Verificar niveles posteriores'],
-        rewards: ['Propulsores estabilizados']
-      },
-      {
-        id: 'reactor-restart',
-        title: 'Reinicio de núcleo',
-        summary: 'Restaura la potencia máxima tras la purga de emergencia.',
-        status: 'locked',
-        objectives: ['Sincronizar con el puente', 'Ejecutar la secuencia de arranque'],
-        rewards: ['Acceso a laboratorios de campo']
-      }
-    ]
   },
   {
     id: 'asteroid-research',
@@ -436,14 +304,7 @@ export const MAPS = [
         interaction: {
           type: 'mission',
           title: 'Cartografiar bioma',
-          description: 'Escaneas fragmentos para generar un mapa 3D del asteroide.',
-          missionUpdates: [
-            {
-              missionId: 'map-biome',
-              status: 'completed',
-              log: 'La cartografía revela cavernas aptas para bases avanzadas.'
-            }
-          ]
+          description: 'Escaneas fragmentos para generar un mapa 3D del asteroide.'
         }
       },
       {
@@ -455,14 +316,7 @@ export const MAPS = [
         interaction: {
           type: 'mission',
           title: 'Extraer muestras cristalinas',
-          description: 'Usas taladros de precisión para obtener fragmentos sin contaminar.',
-          missionUpdates: [
-            {
-              missionId: 'sample-extraction',
-              status: 'in-progress',
-              log: 'Las muestras están aseguradas y listas para transporte controlado.'
-            }
-          ]
+          description: 'Usas taladros de precisión para obtener fragmentos sin contaminar.'
         }
       },
       {
@@ -494,23 +348,5 @@ export const MAPS = [
         description: 'Elevador de servicio hacia la bahía de motores.'
       }
     ],
-    missions: [
-      {
-        id: 'map-biome',
-        title: 'Cartografiar bioma',
-        summary: 'Escanea el bioma cristalino para planificar nuevas rutas mineras.',
-        status: 'available',
-        objectives: ['Activar el escáner de bioma', 'Compartir datos con el puente'],
-        rewards: ['Rutas de navegación adicionales']
-      },
-      {
-        id: 'sample-extraction',
-        title: 'Extraer muestras cristalinas',
-        summary: 'Obtén fragmentos puros para estudios energéticos.',
-        status: 'locked',
-        objectives: ['Preparar equipo de extracción', 'Transportar muestras al laboratorio central'],
-        rewards: ['Materiales raros para mejoras de nave']
-      }
-    ]
   }
 ];
