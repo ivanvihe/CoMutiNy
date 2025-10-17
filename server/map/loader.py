@@ -3,11 +3,19 @@
 from __future__ import annotations
 
 import re
-from dataclasses import asdict
 from pathlib import Path
 from typing import Dict, Iterable, List, Tuple
 
-from .models import MapArea, MapDefinition, MapDoor, MapObject, MapPosition, MapSize
+from .models import (
+    MapArea,
+    MapDefinition,
+    MapDoor,
+    MapLayer,
+    MapObject,
+    MapPosition,
+    MapSize,
+    MapTileType,
+)
 
 
 class MapLoaderError(RuntimeError):
@@ -57,6 +65,224 @@ def _parse_key_values(lines: Iterable[str]) -> Dict[str, str]:
         result[normalised_key] = value.strip()
 
     return result
+
+
+def _parse_bool(value: str | None, *, default: bool = False) -> bool:
+    if value is None:
+        return default
+
+    text = value.strip().lower()
+    if text in {"true", "1", "yes", "y", "on", "solid"}:
+        return True
+    if text in {"false", "0", "no", "n", "off", "transparent", "none"}:
+        return False
+    return default
+
+
+_DEFAULT_TILE_TYPE = MapTileType(
+    id="floor",
+    symbol=".",
+    name="Suelo",
+    collides=False,
+    transparent=True,
+    color="#8eb5ff",
+    metadata={"default": True},
+)
+
+
+def _parse_tile_definitions(lines: Iterable[str]) -> Tuple[Dict[str, MapTileType], Dict[str, str]]:
+    tile_types: Dict[str, MapTileType] = {}
+    symbol_map: Dict[str, str] = {}
+
+    for line in lines:
+        cleaned = line.strip()
+        if not cleaned or cleaned.startswith("#"):
+            continue
+
+        if "=" not in cleaned:
+            continue
+
+        symbol_part, remainder = cleaned.split("=", 1)
+        symbol = symbol_part.strip()
+        if not symbol:
+            raise MapLoaderError(f"Definición de tile sin símbolo: '{line}'")
+
+        tokens = [token.strip() for token in remainder.split(";") if token.strip()]
+        if not tokens:
+            raise MapLoaderError(f"Definición de tile incompleta: '{line}'")
+
+        tile_id = tokens[0]
+        if not tile_id:
+            raise MapLoaderError(f"Tile sin identificador: '{line}'")
+
+        props: Dict[str, str] = {}
+        for token in tokens[1:]:
+            if "=" in token:
+                key, value = token.split("=", 1)
+                normalised_key = _normalise_key(key)
+                props[normalised_key] = value.strip()
+            else:
+                normalised_key = _normalise_key(token)
+                props[normalised_key] = "true"
+
+        name = props.get("name") or props.get("label") or tile_id
+        collides = _parse_bool(
+            props.get("collides")
+            or props.get("solid")
+            or props.get("collision"),
+            default=False,
+        )
+        transparent = _parse_bool(props.get("transparent"), default=True)
+        color = props.get("color") or props.get("colour")
+
+        metadata = {
+            key: value
+            for key, value in props.items()
+            if key
+            not in {
+                "name",
+                "label",
+                "collides",
+                "solid",
+                "collision",
+                "transparent",
+                "color",
+                "colour",
+            }
+        }
+
+        tile_type = MapTileType(
+            id=tile_id,
+            symbol=symbol,
+            name=name,
+            collides=collides,
+            transparent=transparent,
+            color=color,
+            metadata=metadata,
+        )
+
+        tile_types[tile_id] = tile_type
+        if symbol in symbol_map and symbol_map[symbol] != tile_id:
+            raise MapLoaderError(
+                f"El símbolo '{symbol}' ya está asignado a '{symbol_map[symbol]}'"
+            )
+        symbol_map[symbol] = tile_id
+
+    if not tile_types:
+        tile_types[_DEFAULT_TILE_TYPE.id] = _DEFAULT_TILE_TYPE
+        symbol_map[_DEFAULT_TILE_TYPE.symbol] = _DEFAULT_TILE_TYPE.id
+
+    return tile_types, symbol_map
+
+
+def _tokenise_layer_row(line: str) -> List[str]:
+    tokens = [token for token in line.split() if token]
+    if len(tokens) == 1 and len(tokens[0]) > 1:
+        # Allow compact notation without spaces (e.g. '..##..')
+        return list(tokens[0])
+    if not tokens and line.strip():
+        return list(line.strip())
+    return tokens
+
+
+def _resolve_tile_reference(
+    token: str,
+    *,
+    tile_types: Dict[str, MapTileType],
+    symbol_map: Dict[str, str],
+) -> str | None:
+    normalised = token.strip()
+    if not normalised:
+        return None
+
+    lowered = normalised.lower()
+    if lowered in {"none", "empty", "void", "transparent"}:
+        return None
+
+    if normalised in symbol_map:
+        return symbol_map[normalised]
+
+    if normalised in tile_types:
+        return normalised
+
+    raise MapLoaderError(f"Tile desconocido en capa: '{token}'")
+
+
+def _parse_layer_sections(
+    sections: Dict[str, List[str]],
+    *,
+    tile_types: Dict[str, MapTileType],
+    symbol_map: Dict[str, str],
+) -> List[MapLayer]:
+    layers: List[MapLayer] = []
+
+    for key, lines in sections.items():
+        if not key.startswith("layer"):
+            continue
+
+        properties = _parse_key_values(line for line in lines if ":" in line)
+        raw_rows = [line for line in lines if ":" not in line]
+
+        rows: List[List[str | None]] = []
+        for raw in raw_rows:
+            cleaned = raw.strip()
+            if not cleaned or cleaned.startswith("#"):
+                continue
+            tokens = _tokenise_layer_row(cleaned)
+            if not tokens:
+                continue
+            resolved_row: List[str | None] = []
+            for token in tokens:
+                resolved_row.append(
+                    _resolve_tile_reference(
+                        token,
+                        tile_types=tile_types,
+                        symbol_map=symbol_map,
+                    )
+                )
+            rows.append(resolved_row)
+
+        if not rows:
+            continue
+
+        width = max(len(row) for row in rows)
+        normalised_rows: List[List[str | None]] = []
+        for row in rows:
+            if len(row) != width:
+                raise MapLoaderError(
+                    f"Todas las filas de la capa '{key}' deben tener el mismo ancho"
+                )
+            normalised_rows.append(row)
+
+        if key == "layer":
+            layer_id = properties.get("id") or properties.get("name") or "layer"
+        elif key.startswith("layer_"):
+            layer_id = properties.get("id") or key[len("layer_"):]
+        else:
+            layer_id = properties.get("id") or key.split("layer", 1)[-1] or key
+
+        layer_id = layer_id or f"layer_{len(layers) + 1}"
+        name = properties.get("name") or properties.get("label") or layer_id
+
+        try:
+            order = int(properties.get("order", len(layers)))
+        except ValueError:
+            order = len(layers)
+
+        visible = _parse_bool(properties.get("visible"), default=True)
+
+        layers.append(
+            MapLayer(
+                id=layer_id,
+                name=name,
+                order=order,
+                visible=visible,
+                tiles=normalised_rows,
+            )
+        )
+
+    layers.sort(key=lambda layer: (layer.order, layer.id))
+    return layers
 
 
 def _parse_dimension(value: str) -> MapSize:
@@ -352,6 +578,11 @@ def load_map(path: str | Path) -> MapDefinition:
 
     theme = {"borderColour": metadata.get("border_colour") or metadata.get("border_color")}
 
+    tile_types, symbol_map = _parse_tile_definitions(sections.get("tiles", []))
+    layers = _parse_layer_sections(
+        sections, tile_types=tile_types, symbol_map=symbol_map
+    )
+
     registry: Dict[str, int] = {}
     objects: List[MapObject] = []
     doors: List[MapDoor] = []
@@ -372,7 +603,43 @@ def load_map(path: str | Path) -> MapDefinition:
     section_objects = sections.get("objects", [])
     objects.extend(_parse_objects(section_objects, registry=registry))
 
+    if layers:
+        layer_width = max(len(row) for layer in layers for row in layer.tiles) if layers else 0
+        layer_height = max(len(layer.tiles) for layer in layers) if layers else 0
+        if layer_width and (size.width <= 0 or layer_width != size.width):
+            size = MapSize(width=layer_width, height=size.height or layer_height)
+        if layer_height and (size.height <= 0 or layer_height != size.height):
+            size = MapSize(width=size.width or layer_width, height=layer_height)
+
+    if not layers:
+        fallback_width = size.width or 1
+        fallback_height = size.height or 1
+        default_tile_id = next(iter(tile_types.keys()))
+        fallback_tiles = [
+            [default_tile_id for _ in range(fallback_width)]
+            for _ in range(fallback_height)
+        ]
+        layers = [
+            MapLayer(
+                id="ground",
+                name="Ground",
+                order=0,
+                visible=True,
+                tiles=fallback_tiles,
+            )
+        ]
+
     blocked_areas = _build_blocked_areas(size)
+
+    collidable_lookup: Dict[Tuple[int, int], MapPosition] = {}
+    for layer in layers:
+        for y, row in enumerate(layer.tiles):
+            for x, tile_id in enumerate(row):
+                if tile_id is None:
+                    continue
+                tile = tile_types.get(tile_id)
+                if tile and tile.collides:
+                    collidable_lookup.setdefault((x, y), MapPosition(x=x, y=y))
 
     extra = {
         key: value
@@ -396,6 +663,10 @@ def load_map(path: str | Path) -> MapDefinition:
         }
     }
 
+    collidable_tiles = sorted(
+        collidable_lookup.values(), key=lambda position: (position.y, position.x)
+    )
+
     return MapDefinition(
         id=map_id,
         name=title,
@@ -410,6 +681,9 @@ def load_map(path: str | Path) -> MapDefinition:
         theme=theme,
         source_path=str(file_path),
         extra=extra,
+        tile_types=tile_types,
+        layers=layers,
+        collidable_tiles=collidable_tiles,
     )
 
 

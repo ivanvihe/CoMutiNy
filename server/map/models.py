@@ -62,6 +62,59 @@ class MapObject:
 
 
 @dataclass(frozen=True)
+class MapTileType:
+    """Describes a tile type that can be referenced from map layers."""
+
+    id: str
+    symbol: str
+    name: str
+    collides: bool = False
+    transparent: bool = True
+    color: Optional[str] = None
+    metadata: Dict[str, object] = field(default_factory=dict)
+
+    def to_dict(self) -> Dict[str, object]:
+        payload: Dict[str, object] = {
+            "id": self.id,
+            "symbol": self.symbol,
+            "name": self.name,
+            "collides": bool(self.collides),
+            "transparent": bool(self.transparent),
+        }
+
+        if self.color:
+            payload["color"] = self.color
+
+        if self.metadata:
+            payload["metadata"] = {**self.metadata}
+
+        return payload
+
+
+@dataclass(frozen=True)
+class MapLayer:
+    """Single tile layer expressed as a matrix of tile type identifiers."""
+
+    id: str
+    name: str
+    order: int
+    visible: bool
+    tiles: List[List[str | None]]
+
+    def to_dict(self) -> Dict[str, object]:
+        return {
+            "id": self.id,
+            "name": self.name,
+            "order": self.order,
+            "visible": self.visible,
+            "tiles": [
+                [tile if tile is not None else None for tile in row]
+                for row in self.tiles
+            ],
+        }
+
+
+@dataclass(frozen=True)
 class MapDoor:
     """Simple descriptor for an inbound or outbound door."""
 
@@ -107,6 +160,9 @@ class MapDefinition:
     theme: Dict[str, object] = field(default_factory=dict)
     source_path: Optional[str] = None
     extra: Dict[str, object] = field(default_factory=dict)
+    tile_types: Dict[str, MapTileType] = field(default_factory=dict)
+    layers: List[MapLayer] = field(default_factory=list)
+    collidable_tiles: List[MapPosition] = field(default_factory=list)
 
     def to_dict(self) -> Dict[str, object]:
         """Serialise the map definition for consumption by the runtime."""
@@ -127,6 +183,14 @@ class MapDefinition:
             "portals": [dict(portal) for portal in self.portals],
             "theme": {**self.theme},
             "sourcePath": self.source_path,
+            "tileTypes": {
+                tile_id: tile.to_dict() for tile_id, tile in self.tile_types.items()
+            },
+            "layers": [layer.to_dict() for layer in self.layers],
+            "collidableTiles": [
+                {"x": position.x, "y": position.y}
+                for position in self.collidable_tiles
+            ],
             **({k: v for k, v in self.extra.items() if k not in {
                 "id",
                 "name",
@@ -139,5 +203,8 @@ class MapDefinition:
                 "portals",
                 "theme",
                 "sourcePath",
+                "tileTypes",
+                "layers",
+                "collidableTiles",
             }}),
         }

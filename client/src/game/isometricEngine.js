@@ -37,6 +37,14 @@ const PLAYER_COLORS = {
   }
 };
 
+const DEFAULT_TILE_TYPE = {
+  id: 'floor',
+  name: 'Suelo',
+  collides: false,
+  transparent: true,
+  color: '#8eb5ff'
+};
+
 const DEFAULT_CAMERA_CONFIG = {
   lerpSpeed: 8
 };
@@ -66,6 +74,68 @@ const expandArea = ({ x = 0, y = 0, width = 1, height = 1 }) => {
   }
   return tiles;
 };
+
+const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
+
+const normaliseHexColor = (value) => {
+  if (typeof value !== 'string') {
+    return null;
+  }
+  const trimmed = value.trim().replace(/^#/, '');
+  if (!/^[0-9a-f]{3,6}$/i.test(trimmed)) {
+    return null;
+  }
+  if (trimmed.length === 3) {
+    return `#${trimmed
+      .split('')
+      .map((char) => `${char}${char}`)
+      .join('')}`.toLowerCase();
+  }
+  if (trimmed.length === 6) {
+    return `#${trimmed.toLowerCase()}`;
+  }
+  return null;
+};
+
+const shadeColor = (color, amount) => {
+  const hex = normaliseHexColor(color);
+  if (!hex) {
+    return null;
+  }
+
+  const numeric = Number.parseInt(hex.slice(1), 16);
+  if (!Number.isFinite(numeric)) {
+    return null;
+  }
+
+  const r = (numeric >> 16) & 0xff;
+  const g = (numeric >> 8) & 0xff;
+  const b = numeric & 0xff;
+
+  const transform = (channel) => {
+    if (amount >= 0) {
+      return clamp(Math.round(channel + (255 - channel) * amount), 0, 255);
+    }
+    return clamp(Math.round(channel * (1 + amount)), 0, 255);
+  };
+
+  const red = transform(r);
+  const green = transform(g);
+  const blue = transform(b);
+
+  const combined = (red << 16) | (green << 8) | blue;
+  return `#${combined.toString(16).padStart(6, '0')}`;
+};
+
+const derivePaletteFromColor = (color) => {
+  const base = normaliseHexColor(color) ?? DEFAULT_TILE_TYPE.color;
+  const top = shadeColor(base, 0.25) ?? base;
+  const bottom = shadeColor(base, -0.2) ?? base;
+  const stroke = shadeColor(base, -0.45) ?? '#1b3a8a';
+  return { top, bottom, stroke };
+};
+
+const DEFAULT_TILE_PALETTE = derivePaletteFromColor(DEFAULT_TILE_TYPE.color);
 
 class SpriteAnimator {
   constructor(config = {}) {
@@ -155,7 +225,10 @@ export class IsometricEngine {
       map: null,
       blockedTiles: new Set(),
       objectTiles: new Set(),
+      collisionTiles: new Set(),
       portalTiles: new Set(),
+      layers: [],
+      tileTypes: new Map(),
       player: null,
       remotePlayers: [],
       chatBubbles: new Map()
@@ -189,7 +262,10 @@ export class IsometricEngine {
         map: null,
         blockedTiles: new Set(),
         objectTiles: new Set(),
+        collisionTiles: new Set(),
         portalTiles: new Set(),
+        layers: [],
+        tileTypes: new Map(),
         player: null,
         remotePlayers: [],
         chatBubbles: new Map()
@@ -224,11 +300,48 @@ export class IsometricEngine {
       });
     }
 
+    const collisionTiles = new Set();
+    map.collidableTiles?.forEach((position) => {
+      if (position && Number.isFinite(position.x) && Number.isFinite(position.y)) {
+        collisionTiles.add(toKey(position.x, position.y));
+      }
+    });
+
+    const tileTypes = new Map();
+    if (map.tileTypes && typeof map.tileTypes === 'object') {
+      Object.entries(map.tileTypes).forEach(([key, value]) => {
+        if (value && typeof value === 'object') {
+          tileTypes.set(key, { ...value, id: value.id ?? key });
+        }
+      });
+    }
+    if (!tileTypes.size) {
+      tileTypes.set(DEFAULT_TILE_TYPE.id, { ...DEFAULT_TILE_TYPE });
+    }
+
+    const layers = Array.isArray(map.layers)
+      ? map.layers
+          .filter((layer) => Array.isArray(layer?.tiles))
+          .map((layer) => ({
+            id: layer.id ?? layer.name ?? `layer-${Math.random().toString(16).slice(2)}`,
+            name: layer.name ?? layer.id ?? 'Layer',
+            order: Number.isFinite(layer.order) ? layer.order : 0,
+            visible: layer.visible !== false,
+            tiles: layer.tiles.map((row) =>
+              Array.isArray(row) ? row.map((tile) => (tile === undefined ? null : tile)) : []
+            )
+          }))
+          .sort((a, b) => (a.order === b.order ? a.id.localeCompare(b.id) : a.order - b.order))
+      : [];
+
     this.scene = {
       map,
       blockedTiles,
       objectTiles,
+      collisionTiles,
       portalTiles,
+      layers,
+      tileTypes,
       player: player ?? null,
       remotePlayers: Array.isArray(remotePlayers) ? remotePlayers : [],
       chatBubbles: bubbleMap
@@ -241,6 +354,20 @@ export class IsometricEngine {
       this.camera = { x: map.size.width / 2, y: map.size.height / 2 };
       this.cameraTarget = { ...this.camera };
     }
+  }
+
+  resolveTileType(tileId) {
+    const lookup = this.scene?.tileTypes;
+    if (lookup instanceof Map) {
+      if (lookup.has(tileId)) {
+        return lookup.get(tileId);
+      }
+      const stringKey = `${tileId}`;
+      if (lookup.has(stringKey)) {
+        return lookup.get(stringKey);
+      }
+    }
+    return { ...DEFAULT_TILE_TYPE, id: tileId ?? DEFAULT_TILE_TYPE.id };
   }
 
   start() {
@@ -270,7 +397,10 @@ export class IsometricEngine {
       map: null,
       blockedTiles: new Set(),
       objectTiles: new Set(),
+      collisionTiles: new Set(),
       portalTiles: new Set(),
+      layers: [],
+      tileTypes: new Map(),
       player: null,
       remotePlayers: [],
       chatBubbles: new Map()
@@ -346,6 +476,9 @@ export class IsometricEngine {
     const originY = height / 2;
     const camera = this.camera ?? { x: 0, y: 0 };
 
+    const layers = Array.isArray(this.scene.layers) ? this.scene.layers : [];
+    const hasLayers = layers.length > 0;
+
     for (let y = 0; y < map.size.height; y += 1) {
       for (let x = 0; x < map.size.width; x += 1) {
         const relX = x - camera.x;
@@ -355,14 +488,41 @@ export class IsometricEngine {
         const drawY = originY + screen.y - tileHeight / 2;
         const key = toKey(x, y);
 
-        let tileIndex = 0;
-        if (this.scene.blockedTiles.has(key)) {
-          tileIndex = 1;
-        } else if (this.scene.objectTiles.has(key)) {
-          tileIndex = 2;
+        if (hasLayers) {
+          layers.forEach((layer) => {
+            if (!layer?.visible) {
+              return;
+            }
+            const row = Array.isArray(layer.tiles) ? layer.tiles[y] : null;
+            if (!row) {
+              return;
+            }
+            const tileId = row[x];
+            if (tileId === null || tileId === undefined) {
+              return;
+            }
+            const tileType = this.resolveTileType(tileId);
+            this.drawTileType(tileType, drawX, drawY);
+          });
+        } else {
+          let tileIndex = 0;
+          if (this.scene.blockedTiles.has(key)) {
+            tileIndex = 1;
+          } else if (this.scene.objectTiles.has(key)) {
+            tileIndex = 2;
+          }
+          this.drawTile(tileIndex, drawX, drawY);
         }
 
-        this.drawTile(tileIndex, drawX, drawY);
+        if (this.scene.collisionTiles?.has?.(key)) {
+          this.drawCollisionOverlay(drawX, drawY);
+        } else if (this.scene.blockedTiles.has(key) && hasLayers) {
+          this.drawHighlightOverlay(drawX, drawY, 'rgba(100, 181, 246, 0.18)');
+        }
+
+        if (this.scene.objectTiles.has(key)) {
+          this.drawHighlightOverlay(drawX, drawY, 'rgba(255, 213, 79, 0.22)');
+        }
 
         if (this.scene.portalTiles.has(key)) {
           this.drawPortalMarker(drawX + tileWidth / 2, drawY + tileHeight / 2);
@@ -374,21 +534,60 @@ export class IsometricEngine {
   }
 
   drawTile(tileIndex, x, y) {
-    const { tileWidth, tileHeight } = this.tileConfig;
     const palette = TILE_PALETTE[tileIndex] ?? TILE_PALETTE[0];
+    this.drawStyledTile(palette, x, y, 1);
+  }
+
+  drawStyledTile(palette, x, y, alpha = 1) {
+    const { tileWidth, tileHeight } = this.tileConfig;
+    const top = palette?.top ?? DEFAULT_TILE_PALETTE.top;
+    const bottom = palette?.bottom ?? DEFAULT_TILE_PALETTE.bottom;
+    const stroke = palette?.stroke ?? DEFAULT_TILE_PALETTE.stroke;
 
     const gradient = this.ctx.createLinearGradient(x, y, x, y + tileHeight);
-    gradient.addColorStop(0, palette.top);
-    gradient.addColorStop(1, palette.bottom);
+    gradient.addColorStop(0, top);
+    gradient.addColorStop(1, bottom);
 
     this.ctx.save();
+    this.ctx.globalAlpha = clamp(alpha, 0, 1);
     this.ctx.fillStyle = gradient;
-    this.ctx.strokeStyle = palette.stroke;
+    this.ctx.strokeStyle = stroke;
     this.ctx.lineWidth = 1;
     this.ctx.beginPath();
     this.ctx.rect(x, y, tileWidth, tileHeight);
     this.ctx.fill();
     this.ctx.stroke();
+    this.ctx.restore();
+  }
+
+  drawTileType(tileType, x, y) {
+    const palette = derivePaletteFromColor(tileType?.color);
+    const alpha = tileType?.transparent === false ? 1 : 0.92;
+    this.drawStyledTile(palette, x, y, alpha);
+  }
+
+  drawCollisionOverlay(x, y) {
+    const { tileWidth, tileHeight } = this.tileConfig;
+    this.ctx.save();
+    this.ctx.fillStyle = 'rgba(244, 67, 54, 0.18)';
+    this.ctx.fillRect(x, y, tileWidth, tileHeight);
+    this.ctx.strokeStyle = 'rgba(211, 47, 47, 0.85)';
+    this.ctx.lineWidth = 2;
+    this.ctx.strokeRect(x + 1, y + 1, tileWidth - 2, tileHeight - 2);
+    this.ctx.beginPath();
+    this.ctx.moveTo(x + 2, y + 2);
+    this.ctx.lineTo(x + tileWidth - 2, y + tileHeight - 2);
+    this.ctx.moveTo(x + tileWidth - 2, y + 2);
+    this.ctx.lineTo(x + 2, y + tileHeight - 2);
+    this.ctx.stroke();
+    this.ctx.restore();
+  }
+
+  drawHighlightOverlay(x, y, color) {
+    const { tileWidth, tileHeight } = this.tileConfig;
+    this.ctx.save();
+    this.ctx.fillStyle = color;
+    this.ctx.fillRect(x, y, tileWidth, tileHeight);
     this.ctx.restore();
   }
 
