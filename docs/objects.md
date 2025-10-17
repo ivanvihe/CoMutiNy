@@ -120,3 +120,7 @@ La sección `appearance` controla cómo debe dibujarse el objeto:
 - Mantén las opciones (`options`) libres de funciones u objetos no serializables; el cargador eliminará los valores que no puedan convertirse a JSON.
 - Si necesitas definir la apariencia mediante código, exporta una función desde el archivo `.obj`. El servidor ejecutará la función con un contexto Canvas simulado y enviará el nombre y el código fuente para que los clientes puedan inspeccionarlo.
 - Cuando existan archivos con el mismo `id`, las definiciones ubicadas en `/app/objects` prevalecen sobre las incluidas en el repositorio base.
+
+## Funciones Canvas dinámicas
+
+El backend puede adjuntar funciones Canvas adicionales junto con cada definición de objeto. Estas funciones se envían como texto (`generatorSource`) o como literales serializados en colecciones como `canvasDefinitions`, `canvasGenerators` o `spriteGenerators`. El cliente registra automáticamente cada función y las expone bajo el nombre proporcionado (`createBrickWall`, `createGardenPlant`, etc.), de modo que los mapas y objetos pueden utilizarlas sin requerir una actualización del código fuente. Esta sincronización también es compatible con los generadores empacados en la respuesta de `/maps/static`.

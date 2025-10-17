@@ -151,6 +151,185 @@ const derivePaletteFromColor = (color) => {
 
 const DEFAULT_TILE_PALETTE = derivePaletteFromColor(DEFAULT_TILE_TYPE.color);
 
+const DEFAULT_SPRITE_ANCHOR = { x: 0.5, y: 1 };
+const DEFAULT_SPRITE_OFFSET = { x: 0, y: 0 };
+const DEFAULT_SPRITE_SCALE = { x: 1, y: 1 };
+const UNASSIGNED_LAYER_ID = '__unassigned__';
+
+const normaliseAnchorValue = (value, fallback = DEFAULT_SPRITE_ANCHOR) => {
+  if (typeof value === 'number') {
+    const numeric = clamp(toFiniteNumber(value, fallback.x), -2, 2);
+    return { x: numeric, y: numeric };
+  }
+
+  if (Array.isArray(value) && value.length) {
+    const x = clamp(toFiniteNumber(value[0], fallback.x), -2, 2);
+    const y = clamp(toFiniteNumber(value[1] ?? value[0], fallback.y), -2, 2);
+    return { x, y };
+  }
+
+  if (value && typeof value === 'object') {
+    const rawX = value.x ?? value[0];
+    const rawY = value.y ?? value[1];
+    const x = clamp(toFiniteNumber(rawX, fallback.x), -2, 2);
+    const y = clamp(toFiniteNumber(rawY, fallback.y), -2, 2);
+    return { x, y };
+  }
+
+  return { ...fallback };
+};
+
+const normaliseOffsetValue = (value, fallback = DEFAULT_SPRITE_OFFSET) => {
+  if (typeof value === 'number') {
+    const numeric = toFiniteNumber(value, fallback.x);
+    return { x: numeric, y: numeric };
+  }
+
+  if (Array.isArray(value) && value.length) {
+    const x = toFiniteNumber(value[0], fallback.x);
+    const y = toFiniteNumber(value[1] ?? value[0], fallback.y);
+    return { x, y };
+  }
+
+  if (value && typeof value === 'object') {
+    const rawX = value.x ?? value[0];
+    const rawY = value.y ?? value[1];
+    const x = toFiniteNumber(rawX, fallback.x);
+    const y = toFiniteNumber(rawY, fallback.y);
+    return { x, y };
+  }
+
+  return { ...fallback };
+};
+
+const normaliseScaleValue = (value, fallback = DEFAULT_SPRITE_SCALE) => {
+  if (typeof value === 'number') {
+    const numeric = clamp(toFiniteNumber(value, fallback.x), 0.05, 8);
+    return { x: numeric, y: numeric };
+  }
+
+  if (Array.isArray(value) && value.length) {
+    const x = clamp(toFiniteNumber(value[0], fallback.x), 0.05, 8);
+    const y = clamp(toFiniteNumber(value[1] ?? value[0], fallback.y), 0.05, 8);
+    return { x, y };
+  }
+
+  if (value && typeof value === 'object') {
+    const rawX = value.x ?? value[0];
+    const rawY = value.y ?? value[1];
+    const x = clamp(toFiniteNumber(rawX, fallback.x), 0.05, 8);
+    const y = clamp(toFiniteNumber(rawY, fallback.y), 0.05, 8);
+    return { x, y };
+  }
+
+  return { ...fallback };
+};
+
+const combineAnchor = (base, override) => {
+  const baseAnchor = normaliseAnchorValue(base, DEFAULT_SPRITE_ANCHOR);
+  if (override === null || override === undefined) {
+    return baseAnchor;
+  }
+
+  if (typeof override === 'number') {
+    const numeric = clamp(toFiniteNumber(override, baseAnchor.x), -2, 2);
+    return { x: numeric, y: numeric };
+  }
+
+  if (Array.isArray(override) && override.length) {
+    const x = clamp(toFiniteNumber(override[0], baseAnchor.x), -2, 2);
+    const y = clamp(toFiniteNumber(override[1] ?? override[0], baseAnchor.y), -2, 2);
+    return { x, y };
+  }
+
+  if (override && typeof override === 'object') {
+    const rawX = override.x ?? override[0];
+    const rawY = override.y ?? override[1];
+    const x = rawX === undefined ? baseAnchor.x : clamp(toFiniteNumber(rawX, baseAnchor.x), -2, 2);
+    const y = rawY === undefined ? baseAnchor.y : clamp(toFiniteNumber(rawY, baseAnchor.y), -2, 2);
+    return { x, y };
+  }
+
+  return baseAnchor;
+};
+
+const combineOffset = (base, override) => {
+  const baseOffset = normaliseOffsetValue(base, DEFAULT_SPRITE_OFFSET);
+  if (override === null || override === undefined) {
+    return baseOffset;
+  }
+
+  const extra = normaliseOffsetValue(override, DEFAULT_SPRITE_OFFSET);
+  return { x: baseOffset.x + extra.x, y: baseOffset.y + extra.y };
+};
+
+const combineScale = (base, override) => {
+  const baseScale = normaliseScaleValue(base, DEFAULT_SPRITE_SCALE);
+  if (override === null || override === undefined) {
+    return baseScale;
+  }
+
+  return normaliseScaleValue(override, baseScale);
+};
+
+const groupObjectsByLayer = (objects = []) => {
+  const groups = new Map();
+
+  objects.forEach((object) => {
+    if (!object) {
+      return;
+    }
+    const layerId =
+      (typeof object.layerId === 'string' && object.layerId.trim()) ||
+      UNASSIGNED_LAYER_ID;
+    if (!groups.has(layerId)) {
+      groups.set(layerId, []);
+    }
+    groups.get(layerId).push(object);
+  });
+
+  return groups;
+};
+
+const collectLayerGroups = (groups, layerLookup) => {
+  const entries = [];
+
+  groups.forEach((objects, layerId) => {
+    if (!objects.length) {
+      return;
+    }
+
+    const layer = layerLookup.get(layerId);
+    const visible = layer ? layer.visible !== false : true;
+
+    const orderCandidates = [layer?.order];
+    objects.forEach((object) => {
+      if (Number.isFinite(object?.layerOrder)) {
+        orderCandidates.push(object.layerOrder);
+      }
+    });
+
+    let order = 0;
+    for (const candidate of orderCandidates) {
+      if (Number.isFinite(candidate)) {
+        order = candidate;
+        break;
+      }
+    }
+
+    entries.push({ id: layerId, order, visible, objects });
+  });
+
+  entries.sort((a, b) => {
+    if (a.order === b.order) {
+      return `${a.id}`.localeCompare(`${b.id}`);
+    }
+    return a.order - b.order;
+  });
+
+  return entries;
+};
+
 class SpriteAnimator {
   constructor(config = {}) {
     this.config = { ...DEFAULT_SPRITE_CONFIG, ...config };
@@ -732,9 +911,7 @@ export class IsometricEngine {
       }
     }
 
-    this.drawObjects(width, height, this.scene.objectsBeforePlayers);
-    this.drawPlayers(delta, width, height);
-    this.drawObjects(width, height, this.scene.objectsAfterPlayers);
+    this.drawLayeredObjects(delta, width, height);
   }
 
   drawTile(tileIndex, x, y) {
@@ -819,17 +996,14 @@ export class IsometricEngine {
       return;
     }
 
-    const tileWidth = this.getTileWidth();
-    const tileHeight = this.getTileHeight();
-
     objects.forEach((object) => {
       const appearance = object?.appearance;
       if (!appearance?.generator) {
         return;
       }
 
-      const width = appearance.width ?? object.size?.width ?? 1;
-      const height = appearance.height ?? object.size?.height ?? 1;
+      const width = Math.max(1, appearance.width ?? object.size?.width ?? 1);
+      const height = Math.max(1, appearance.height ?? object.size?.height ?? 1);
       const tileSize = appearance.tileSize ?? 16;
 
       const canvas = createSpriteCanvas({
@@ -850,28 +1024,69 @@ export class IsometricEngine {
         return;
       }
 
-      const coverageWidth = object.size?.width ?? width;
-      const coverageHeight = object.size?.height ?? height;
-
-      const scaleX = ((tileWidth * coverageWidth) / canvas.width) * (appearance.scale?.x ?? 1);
-      const scaleY = ((tileHeight * coverageHeight) / canvas.height) * (appearance.scale?.y ?? 1);
-
       this.objectSprites.set(object.id, {
         canvas,
-        scaleX,
-        scaleY,
-        anchor: appearance.anchor ?? { x: 0.5, y: 1 },
-        offset: appearance.offset ?? { x: 0, y: 0 }
+        baseAnchor: normaliseAnchorValue(appearance.anchor ?? DEFAULT_SPRITE_ANCHOR, DEFAULT_SPRITE_ANCHOR),
+        baseOffset: normaliseOffsetValue(appearance.offset ?? DEFAULT_SPRITE_OFFSET, DEFAULT_SPRITE_OFFSET),
+        baseScale: normaliseScaleValue(appearance.scale ?? DEFAULT_SPRITE_SCALE, DEFAULT_SPRITE_SCALE),
+        appearanceSize: { width, height }
       });
     });
   }
 
-  drawObjects(width, height, objects) {
+  drawLayeredObjects(delta, width, height) {
+    const before = Array.isArray(this.scene?.objectsBeforePlayers)
+      ? this.scene.objectsBeforePlayers
+      : [];
+    const after = Array.isArray(this.scene?.objectsAfterPlayers)
+      ? this.scene.objectsAfterPlayers
+      : [];
+    const layerList = Array.isArray(this.scene?.objectLayers) ? this.scene.objectLayers : [];
+
+    const layerLookup = new Map();
+    layerList.forEach((layer) => {
+      if (layer?.id) {
+        layerLookup.set(layer.id, {
+          order: Number.isFinite(layer.order) ? layer.order : 0,
+          visible: layer.visible !== false
+        });
+      }
+    });
+
+    const beforeLayers = collectLayerGroups(groupObjectsByLayer(before), layerLookup).filter(
+      (layer) => layer.visible !== false
+    );
+    const afterLayers = collectLayerGroups(groupObjectsByLayer(after), layerLookup).filter(
+      (layer) => layer.visible !== false
+    );
+
+    if (!beforeLayers.length && !afterLayers.length) {
+      const fallback = Array.isArray(this.scene?.objects) ? this.scene.objects : [];
+      if (fallback.length) {
+        this.drawObjectCollection(width, height, fallback);
+      }
+      this.drawPlayers(delta, width, height);
+      return;
+    }
+
+    beforeLayers.forEach((layer) => {
+      this.drawObjectCollection(width, height, layer.objects);
+    });
+
+    this.drawPlayers(delta, width, height);
+
+    afterLayers.forEach((layer) => {
+      this.drawObjectCollection(width, height, layer.objects);
+    });
+  }
+
+  drawObjectCollection(width, height, objects) {
     const list = Array.isArray(objects)
-      ? objects
+      ? objects.filter(Boolean)
       : Array.isArray(this.scene?.objects)
         ? this.scene.objects
         : [];
+
     if (!list.length) {
       return;
     }
@@ -881,8 +1096,9 @@ export class IsometricEngine {
     const camera = this.camera ?? { x: 0, y: 0 };
     const originX = width / 2;
     const originY = height / 2;
+
     list.forEach((object) => {
-      if (object.layerVisible === false) {
+      if (!object || object.layerVisible === false) {
         return;
       }
 
@@ -892,29 +1108,48 @@ export class IsometricEngine {
       }
 
       const position = object.position ?? { x: 0, y: 0 };
-      const size = object.size ?? { width: 1, height: 1 };
       const relX = position.x - camera.x;
       const relY = position.y - camera.y;
       const screen = gridToScreen(relX, relY, tileWidth, tileHeight);
       const baseX = originX + screen.x;
       const baseY = originY + screen.y;
 
-      const coverageWidth = tileWidth * (size.width ?? 1);
-      const coverageHeight = tileHeight * (size.height ?? 1);
+      const size = object.size ?? {};
+      const widthTiles = Number.isFinite(size.width)
+        ? size.width
+        : sprite.appearanceSize?.width ?? 1;
+      const heightTiles = Number.isFinite(size.height)
+        ? size.height
+        : sprite.appearanceSize?.height ?? 1;
 
-      const drawWidth = sprite.canvas.width * sprite.scaleX;
-      const drawHeight = sprite.canvas.height * sprite.scaleY;
+      const coverageWidth = tileWidth * Math.max(0, widthTiles);
+      const coverageHeight = tileHeight * Math.max(0, heightTiles);
 
-      const anchorX = sprite.anchor?.x ?? 0.5;
-      const anchorY = sprite.anchor?.y ?? 1;
-      const offsetX = sprite.offset?.x ?? 0;
-      const offsetY = sprite.offset?.y ?? 0;
+      const baseAnchor = sprite.baseAnchor ?? DEFAULT_SPRITE_ANCHOR;
+      const baseOffset = sprite.baseOffset ?? DEFAULT_SPRITE_OFFSET;
+      const baseScale = sprite.baseScale ?? DEFAULT_SPRITE_SCALE;
 
-      const anchorOffsetX = coverageWidth * anchorX - drawWidth * anchorX;
-      const anchorOffsetY = coverageHeight * anchorY - drawHeight * anchorY;
+      const anchor = combineAnchor(baseAnchor, object.anchor);
+      const offsetTiles = combineOffset(baseOffset, object.offset ?? object.positionOffset);
+      const scale = combineScale(baseScale, object.scale);
 
-      const drawX = baseX - tileWidth / 2 + anchorOffsetX + offsetX * tileWidth;
-      const drawY = baseY - tileHeight / 2 + anchorOffsetY + offsetY * tileHeight;
+      const drawWidth = coverageWidth * scale.x;
+      const drawHeight = coverageHeight * scale.y;
+
+      if (drawWidth <= 0 || drawHeight <= 0) {
+        return;
+      }
+
+      const anchorOffsetX = coverageWidth * anchor.x - drawWidth * anchor.x;
+      const anchorOffsetY = coverageHeight * anchor.y - drawHeight * anchor.y;
+
+      const offsetPixelsX =
+        offsetTiles.x * tileWidth + toFiniteNumber(object.offsetPixels?.x ?? object.offsetPixels ?? 0, 0);
+      const offsetPixelsY =
+        offsetTiles.y * tileHeight + toFiniteNumber(object.offsetPixels?.y ?? object.offsetPixels ?? 0, 0);
+
+      const drawX = baseX - tileWidth / 2 + anchorOffsetX + offsetPixelsX;
+      const drawY = baseY - tileHeight / 2 + anchorOffsetY + offsetPixelsY;
 
       this.ctx.drawImage(sprite.canvas, drawX, drawY, drawWidth, drawHeight);
     });

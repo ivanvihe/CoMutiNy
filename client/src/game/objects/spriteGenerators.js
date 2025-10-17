@@ -339,6 +339,117 @@ const BUILTIN_SPRITE_GENERATORS = {
 
 const CUSTOM_SPRITE_GENERATORS = new Map();
 
+const normaliseDefinitionIdentifier = (candidate, fallback = null) => {
+  if (typeof candidate === 'string') {
+    const trimmed = candidate.trim();
+    if (trimmed) {
+      return trimmed;
+    }
+  }
+
+  if (typeof candidate === 'number' && Number.isFinite(candidate)) {
+    return `${candidate}`;
+  }
+
+  return fallback;
+};
+
+const normaliseGeneratorSource = (candidate) => {
+  if (typeof candidate === 'string') {
+    const trimmed = candidate.trim();
+    return trimmed || null;
+  }
+
+  if (candidate && typeof candidate === 'object') {
+    if (typeof candidate.source === 'string' && candidate.source.trim()) {
+      return candidate.source.trim();
+    }
+    if (typeof candidate.generatorSource === 'string' && candidate.generatorSource.trim()) {
+      return candidate.generatorSource.trim();
+    }
+    if (typeof candidate.code === 'string' && candidate.code.trim()) {
+      return candidate.code.trim();
+    }
+  }
+
+  return null;
+};
+
+const normaliseGeneratorFactory = (candidate) => {
+  if (typeof candidate === 'function') {
+    return candidate;
+  }
+
+  if (candidate && typeof candidate === 'object' && typeof candidate.generator === 'function') {
+    return candidate.generator;
+  }
+
+  return null;
+};
+
+const normaliseGeneratorDefinition = (definition, fallbackId = null) => {
+  if (definition === null || definition === undefined) {
+    return null;
+  }
+
+  if (typeof definition === 'string' || typeof definition === 'number' || typeof definition === 'function') {
+    return {
+      id: normaliseDefinitionIdentifier(fallbackId ?? definition),
+      generator: typeof definition === 'function' ? definition : null,
+      source: typeof definition === 'string' ? normaliseGeneratorSource(definition) : null
+    };
+  }
+
+  if (Array.isArray(definition)) {
+    if (!definition.length) {
+      return null;
+    }
+    const [idCandidate, value] = definition;
+    const identifier = normaliseDefinitionIdentifier(idCandidate, fallbackId);
+    if (!identifier) {
+      return null;
+    }
+    const generator = normaliseGeneratorFactory(value);
+    const source = normaliseGeneratorSource(value);
+    return { id: identifier, generator, source };
+  }
+
+  if (typeof definition === 'object') {
+    const identifier = normaliseDefinitionIdentifier(
+      definition.id ?? definition.name ?? fallbackId,
+      fallbackId
+    );
+    if (!identifier) {
+      return null;
+    }
+    const generator = normaliseGeneratorFactory(definition);
+    const source = generator ? null : normaliseGeneratorSource(definition);
+    return { id: identifier, generator, source };
+  }
+
+  return null;
+};
+
+const expandGeneratorDefinitions = (input) => {
+  if (!input) {
+    return [];
+  }
+
+  if (Array.isArray(input)) {
+    return input
+      .map((entry, index) => normaliseGeneratorDefinition(entry, `generator-${index + 1}`))
+      .filter((entry) => entry && entry.id);
+  }
+
+  if (typeof input === 'object') {
+    return Object.entries(input)
+      .map(([key, value]) => normaliseGeneratorDefinition(value, key))
+      .filter((entry) => entry && entry.id);
+  }
+
+  return [];
+};
+
 const buildGeneratorFromSource = (source) => {
   if (typeof source !== 'string') {
     return null;
@@ -400,24 +511,21 @@ export const registerSpriteGeneratorSource = (id, source) => {
 };
 
 export const registerSpriteGeneratorDefinitions = (definitions = []) => {
+  const expanded = expandGeneratorDefinitions(definitions);
+  if (!expanded.length) {
+    return [];
+  }
+
   const registered = [];
 
-  definitions.forEach((definition) => {
-    if (!definition || typeof definition !== 'object') {
-      return;
-    }
-
-    const identifier =
-      (typeof definition.id === 'string' && definition.id.trim()) ||
-      (typeof definition.name === 'string' && definition.name.trim()) ||
-      null;
-
+  expanded.forEach((definition) => {
+    const identifier = normaliseDefinitionIdentifier(definition.id);
     if (!identifier) {
       return;
     }
 
     try {
-      if (typeof definition.generator === 'function') {
+      if (definition.generator) {
         const result = registerSpriteGenerator(identifier, definition.generator);
         if (result) {
           registered.push(result);
@@ -425,11 +533,7 @@ export const registerSpriteGeneratorDefinitions = (definitions = []) => {
         return;
       }
 
-      const source =
-        (typeof definition.source === 'string' && definition.source.trim()) ||
-        (typeof definition.generatorSource === 'string' && definition.generatorSource.trim()) ||
-        null;
-
+      const source = normaliseGeneratorSource(definition.source ?? definition);
       if (source) {
         const result = registerSpriteGeneratorSource(identifier, source);
         if (result) {

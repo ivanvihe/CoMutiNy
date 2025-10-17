@@ -1,5 +1,63 @@
 import normaliseAppearance from './appearance.js';
-import { registerSpriteGeneratorSource } from './spriteGenerators.js';
+import {
+  registerSpriteGeneratorSource,
+  registerSpriteGeneratorDefinitions
+} from './spriteGenerators.js';
+
+const collectCanvasGeneratorCollections = (rawDefinition) => {
+  if (!rawDefinition || typeof rawDefinition !== 'object') {
+    return [];
+  }
+
+  const candidates = [];
+
+  const enqueue = (value) => {
+    if (!value) {
+      return;
+    }
+    candidates.push(value);
+  };
+
+  enqueue(rawDefinition.canvasDefinitions);
+  enqueue(rawDefinition.spriteGeneratorDefinitions);
+  enqueue(rawDefinition.canvasGenerators);
+  enqueue(rawDefinition.spriteGenerators);
+  enqueue(rawDefinition.canvasFunctions);
+
+  if (rawDefinition.canvas && typeof rawDefinition.canvas === 'object') {
+    enqueue(rawDefinition.canvas.generators);
+    enqueue(rawDefinition.canvas.definitions);
+    enqueue(rawDefinition.canvas.functions);
+  }
+
+  return candidates;
+};
+
+const registerCanvasGeneratorsFromDefinition = (rawDefinition) => {
+  const collections = collectCanvasGeneratorCollections(rawDefinition);
+  if (!collections.length) {
+    return [];
+  }
+
+  const registered = [];
+
+  collections.forEach((collection) => {
+    try {
+      const result = registerSpriteGeneratorDefinitions(collection);
+      if (Array.isArray(result) && result.length) {
+        registered.push(...result);
+      }
+    } catch (error) {
+      const identifier = rawDefinition?.id ?? rawDefinition?.name ?? '(sin id)';
+      console.warn(
+        `[objects] No se pudieron registrar funciones Canvas adicionales para ${identifier}`,
+        error?.message ?? error
+      );
+    }
+  });
+
+  return registered;
+};
 
 const sanitizeString = (value, fallback = '') => {
   if (typeof value !== 'string') {
@@ -160,6 +218,8 @@ const registerDefinition = (rawDefinition, { sourcePath } = {}) => {
       );
     }
   }
+
+  registerCanvasGeneratorsFromDefinition(rawDefinition);
 
   OBJECT_DEFINITIONS.set(definition.id, definition);
   return definition;
