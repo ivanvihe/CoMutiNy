@@ -8,11 +8,13 @@ import { connectDatabase } from './config/database.js'
 import assetRoutes from './routes/assetRoutes.js'
 import mapRoutes from './routes/mapRoutes.js'
 import objectRoutes from './routes/objectRoutes.js'
+import preferencesRoutes from './routes/preferencesRoutes.js'
 import sessionManager from './services/sessionManager.js'
 import avatarRepository from './repositories/AvatarRepository.js'
 import spriteGenerationService from './sprites/spriteGenerationService.js'
 import spriteEvents, { SPRITE_EVENTS } from './sprites/events.js'
 import createSocketServer from './network/socketServer.js'
+import playerPreferencesService from './services/playerPreferencesService.js'
 
 dotenv.config()
 
@@ -57,6 +59,7 @@ app.get('/health', (req, res) => {
 app.use('/assets', assetRoutes)
 app.use('/maps', mapRoutes)
 app.use('/objects', objectRoutes)
+app.use('/preferences', preferencesRoutes)
 
 app.use((err, req, res, next) => {
   console.error(err)
@@ -89,6 +92,20 @@ const enrichJoinPayloadWithAvatar = async (payload = {}) => {
       : typeof enriched.name === 'string' && enriched.name.trim()
         ? enriched.name.trim()
         : null
+
+  if (alias) {
+    try {
+      const preferences = await playerPreferencesService.getPreferences(alias)
+      if (preferences?.appearance) {
+        metadata.appearance = {
+          ...(preferences.appearance ?? {}),
+          ...(metadata.appearance ?? {})
+        }
+      }
+    } catch (error) {
+      console.warn('No se pudieron cargar las preferencias previas del jugador:', error)
+    }
+  }
 
   if (alias) {
     enriched.name = alias

@@ -12,6 +12,17 @@
   min-height: 0;
 }
 
+.game-toolbar {
+  pointer-events: auto;
+  transition: transform 0.2s ease, opacity 0.2s ease;
+}
+
+.game-toolbar:focus-within,
+.game-toolbar:hover {
+  transform: translateY(-2px);
+  opacity: 1;
+}
+
 .game-view__chat {
   background: rgba(5, 12, 24, 0.96);
   border-left: 1px solid rgba(255, 255, 255, 0.08);

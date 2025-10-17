@@ -1,5 +1,5 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
-import JoinForm from './components/Home/JoinForm.jsx';
+import Login from './pages/Login';
 import GameView from './components/Game/GameView.jsx';
 import MapEditor from './components/Admin/MapEditor.jsx';
 import { MapProvider } from './context/MapContext.jsx';
@@ -26,7 +26,7 @@ function AppRoutes() {
 
   return (
     <Routes>
-      <Route path="/" element={<JoinForm />} />
+      <Route path="/" element={<Login />} />
       <Route
         path="/world"
         element={canAccessWorld ? <GameView /> : <Navigate to="/" replace />}
