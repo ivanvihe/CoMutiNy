@@ -53,6 +53,7 @@ class InteractiveObject:
         self.definition = definition
         self.name = definition.get("name", object_id)
         self.description = definition.get("description", "")
+        self.appearance = definition.get("appearance")
 
     def on_interact(self, player: Dict[str, Any], context: Optional[Dict[str, Any]] = None) -> InteractionResult:
         """Handle a player interaction.
@@ -72,6 +73,7 @@ class InteractiveObject:
             "description": self.description,
             "interaction": self.definition.get("interaction"),
             "behavior": self.definition.get("behavior"),
+            "appearance": self.definition.get("appearance"),
             "metadata": self.definition.get("metadata", {}),
         }
 

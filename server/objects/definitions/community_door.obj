@@ -8,6 +8,20 @@
     "title": "Puerta comunitaria",
     "description": "Parece que aún no conduce a ningún sitio, pero inspira curiosidad."
   },
+  "appearance": {
+    "generator": "communityDoor",
+    "width": 1,
+    "height": 2,
+    "tileSize": 32,
+    "anchor": { "x": 0.5, "y": 1 },
+    "offset": { "x": 0, "y": -0.15 },
+    "scale": { "x": 1, "y": 1.2 },
+    "options": {
+      "frameColor": "#263238",
+      "panelColor": "#455a64",
+      "accentColor": "#ffca28"
+    }
+  },
   "behavior": {
     "type": "message",
     "title": "Puerta comunitaria",

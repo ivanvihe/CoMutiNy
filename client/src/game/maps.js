@@ -3,6 +3,8 @@ import parseMapDefinition, {
   parseCoordinate as parseCoordinateString,
   parseDimensions as parseDimensionsString
 } from './map/parser.js';
+import { resolveObjectDefinition } from './objects/definitions.js';
+import normaliseAppearance from './objects/appearance.js';
 
 const MAP_DIRECTORY = '../../../server/maps';
 const MAP_FILE_EXTENSION = '.map';
@@ -264,9 +266,17 @@ const normaliseServerObject = (object, registry) => {
     metadata.objectId = objectId;
   }
 
+  const definition = objectId ? resolveObjectDefinition(objectId) : null;
+
+  const definitionMetadata =
+    definition?.metadata && typeof definition.metadata === 'object' && !Array.isArray(definition.metadata)
+      ? { ...definition.metadata }
+      : {};
+  const mergedMetadata = { ...definitionMetadata, ...metadata };
+
   const baseId =
     (typeof object.id === 'string' && object.id.trim()) ||
-    (typeof metadata.instanceId === 'string' && metadata.instanceId.trim()) ||
+    (typeof mergedMetadata.instanceId === 'string' && mergedMetadata.instanceId.trim()) ||
     (objectId ? `${objectId}` : '');
 
   const id = ensureUniqueObjectId(baseId, registry);
@@ -274,16 +284,17 @@ const normaliseServerObject = (object, registry) => {
     return null;
   }
 
-  if (!metadata.instanceId) {
-    metadata.instanceId = id;
+  if (!mergedMetadata.instanceId) {
+    mergedMetadata.instanceId = id;
   }
   if (baseId && baseId !== id) {
-    metadata.originalInstanceId = metadata.originalInstanceId ?? baseId;
+    mergedMetadata.originalInstanceId = mergedMetadata.originalInstanceId ?? baseId;
   }
 
   const name =
     (typeof object.name === 'string' && object.name.trim()) ||
     (typeof object.label === 'string' && object.label.trim()) ||
+    definition?.name ||
     id;
 
   const position =
@@ -297,6 +308,11 @@ const normaliseServerObject = (object, registry) => {
   const size = normaliseObjectSize(object.size ?? { width: object.width, height: object.height });
   const solid = Boolean(object.solid);
 
+  const description =
+    (typeof object.description === 'string' && object.description.trim()) ||
+    (typeof definition?.description === 'string' && definition.description.trim()) ||
+    '';
+
   const payload = {
     id,
     name,
@@ -304,23 +320,33 @@ const normaliseServerObject = (object, registry) => {
     position,
     size,
     solid,
-    metadata
+    metadata: mergedMetadata
   };
 
   if (objectId) {
     payload.objectId = objectId;
   }
 
-  if (typeof object.description === 'string' && object.description.trim()) {
-    payload.description = object.description.trim();
+  if (description) {
+    payload.description = description;
   }
 
   if (Array.isArray(object.palette)) {
     payload.palette = [...object.palette];
+  } else if (Array.isArray(definition?.metadata?.palette)) {
+    payload.palette = [...definition.metadata.palette];
   }
 
   if (Array.isArray(object.actions)) {
     payload.actions = object.actions.map((action) => ({ ...action }));
+  }
+
+  const appearanceSource =
+    object.appearance ?? mergedMetadata.appearance ?? definition?.appearance ?? null;
+  const appearance = normaliseAppearance(appearanceSource, { fallbackSize: size });
+  if (appearance) {
+    payload.appearance = appearance;
+    delete mergedMetadata.appearance;
   }
 
   return payload;

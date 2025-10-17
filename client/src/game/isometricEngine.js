@@ -1,3 +1,5 @@
+import createSpriteCanvas from './objects/canvasSprites.js';
+
 const DEFAULT_TILESET_CONFIG = {
   tileWidth: 48,
   tileHeight: 48
@@ -231,10 +233,12 @@ export class IsometricEngine {
       tileTypes: new Map(),
       player: null,
       remotePlayers: [],
-      chatBubbles: new Map()
+      chatBubbles: new Map(),
+      objects: []
     };
 
     this.animator = new SpriteAnimator(this.spriteConfig);
+    this.objectSprites = new Map();
 
     this.camera = { x: 0, y: 0 };
     this.cameraTarget = { x: 0, y: 0 };
@@ -268,8 +272,10 @@ export class IsometricEngine {
         tileTypes: new Map(),
         player: null,
         remotePlayers: [],
-        chatBubbles: new Map()
+        chatBubbles: new Map(),
+        objects: []
       };
+      this.objectSprites = new Map();
       return;
     }
 
@@ -278,6 +284,21 @@ export class IsometricEngine {
     map.objects?.forEach((object) => {
       expandArea({ ...object.position, ...object.size }).forEach((tile) => objectTiles.add(tile));
     });
+
+    const renderableObjects = Array.isArray(map.objects)
+      ? map.objects.map((object) => ({
+          ...object,
+          appearance: object.appearance
+            ? {
+                ...object.appearance,
+                options:
+                  object.appearance.options && typeof object.appearance.options === 'object'
+                    ? { ...object.appearance.options }
+                    : {}
+              }
+            : null
+        }))
+      : [];
 
     const portalTiles = new Set();
     map.portals?.forEach((portal) => {
@@ -344,8 +365,11 @@ export class IsometricEngine {
       tileTypes,
       player: player ?? null,
       remotePlayers: Array.isArray(remotePlayers) ? remotePlayers : [],
-      chatBubbles: bubbleMap
+      chatBubbles: bubbleMap,
+      objects: renderableObjects
     };
+
+    this.buildObjectSprites(renderableObjects);
 
     if (player?.position) {
       this.camera = { ...player.position };
@@ -403,8 +427,10 @@ export class IsometricEngine {
       tileTypes: new Map(),
       player: null,
       remotePlayers: [],
-      chatBubbles: new Map()
+      chatBubbles: new Map(),
+      objects: []
     };
+    this.objectSprites = new Map();
   }
 
   handleResize() {
@@ -530,6 +556,7 @@ export class IsometricEngine {
       }
     }
 
+    this.drawObjects(width, height);
     this.drawPlayers(delta, width, height);
   }
 
@@ -603,6 +630,113 @@ export class IsometricEngine {
     this.ctx.arc(x, y - 4, radius * 1.2, 0, Math.PI * 2);
     this.ctx.fill();
     this.ctx.restore();
+  }
+
+  buildObjectSprites(objects) {
+    this.objectSprites = new Map();
+
+    if (!Array.isArray(objects) || !objects.length) {
+      return;
+    }
+
+    const tileWidth = this.tileConfig.tileWidth;
+    const tileHeight = this.tileConfig.tileHeight;
+
+    objects.forEach((object) => {
+      const appearance = object?.appearance;
+      if (!appearance?.generator) {
+        return;
+      }
+
+      const width = appearance.width ?? object.size?.width ?? 1;
+      const height = appearance.height ?? object.size?.height ?? 1;
+      const tileSize = appearance.tileSize ?? 16;
+
+      const canvas = createSpriteCanvas({
+        generator: appearance.generator,
+        width,
+        height,
+        tileSize,
+        options: {
+          ...(appearance.options ?? {}),
+          ...(appearance.variant ? { variant: appearance.variant } : {}),
+          palette: Array.isArray(object.palette) ? [...object.palette] : undefined,
+          metadata: object.metadata ?? {},
+          objectId: object.objectId ?? null
+        }
+      });
+
+      if (!canvas || canvas.width <= 0 || canvas.height <= 0) {
+        return;
+      }
+
+      const coverageWidth = object.size?.width ?? width;
+      const coverageHeight = object.size?.height ?? height;
+
+      const scaleX = ((tileWidth * coverageWidth) / canvas.width) * (appearance.scale?.x ?? 1);
+      const scaleY = ((tileHeight * coverageHeight) / canvas.height) * (appearance.scale?.y ?? 1);
+
+      this.objectSprites.set(object.id, {
+        canvas,
+        scaleX,
+        scaleY,
+        anchor: appearance.anchor ?? { x: 0.5, y: 1 },
+        offset: appearance.offset ?? { x: 0, y: 0 }
+      });
+    });
+  }
+
+  drawObjects(width, height) {
+    const objects = Array.isArray(this.scene?.objects) ? this.scene.objects : [];
+    if (!objects.length) {
+      return;
+    }
+
+    const tileWidth = this.tileConfig.tileWidth;
+    const tileHeight = this.tileConfig.tileHeight;
+    const camera = this.camera ?? { x: 0, y: 0 };
+    const originX = width / 2;
+    const originY = height / 2;
+
+    const sorted = [...objects].sort((a, b) => {
+      const aPos = a.position ?? { x: 0, y: 0 };
+      const bPos = b.position ?? { x: 0, y: 0 };
+      const aDepth = (aPos.y ?? 0) + (a.size?.height ?? 1);
+      const bDepth = (bPos.y ?? 0) + (b.size?.height ?? 1);
+      if (aDepth !== bDepth) {
+        return aDepth - bDepth;
+      }
+      return aPos.x - bPos.x;
+    });
+
+    sorted.forEach((object) => {
+      const sprite = this.objectSprites.get(object.id);
+      if (!sprite?.canvas) {
+        return;
+      }
+
+      const position = object.position ?? { x: 0, y: 0 };
+      const size = object.size ?? { width: 1, height: 1 };
+      const relX = position.x - camera.x;
+      const relY = position.y - camera.y;
+      const areaX = originX + relX * tileWidth - tileWidth / 2;
+      const areaY = originY + relY * tileHeight - tileHeight / 2;
+      const areaWidth = tileWidth * (size.width ?? 1);
+      const areaHeight = tileHeight * (size.height ?? 1);
+
+      const drawWidth = sprite.canvas.width * sprite.scaleX;
+      const drawHeight = sprite.canvas.height * sprite.scaleY;
+
+      const anchorX = sprite.anchor?.x ?? 0.5;
+      const anchorY = sprite.anchor?.y ?? 1;
+      const offsetX = sprite.offset?.x ?? 0;
+      const offsetY = sprite.offset?.y ?? 0;
+
+      const drawX = areaX + areaWidth * anchorX - drawWidth * anchorX + offsetX * tileWidth;
+      const drawY = areaY + areaHeight * anchorY - drawHeight * anchorY + offsetY * tileHeight;
+
+      this.ctx.drawImage(sprite.canvas, drawX, drawY, drawWidth, drawHeight);
+    });
   }
 
   drawPlayers(delta, width, height) {
