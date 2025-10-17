@@ -119,9 +119,13 @@ const parseDoorEntry = (value) => {
   let remainder = '';
 
   if (value.includes('->')) {
-    [coordinatePart, remainder] = value.split('->', 1);
+    const [rawCoordinate, rawRemainder = ''] = value.split('->', 2);
+    coordinatePart = rawCoordinate;
+    remainder = rawRemainder;
   } else if (value.includes(':')) {
-    [coordinatePart, remainder] = value.split(':', 1);
+    const [rawCoordinate, rawRemainder = ''] = value.split(':', 2);
+    coordinatePart = rawCoordinate;
+    remainder = rawRemainder;
   }
 
   const position = parseCoordinate(coordinatePart.trim());
@@ -129,13 +133,13 @@ const parseDoorEntry = (value) => {
     throw new Error(`Coordenada de puerta inválida: "${value}"`);
   }
 
-  remainder = remainder.trim();
+  remainder = (remainder ?? '').trim();
   if (!remainder) {
     return { position, targetMap: null, targetPosition: null };
   }
 
   if (remainder.includes('@')) {
-    const [mapPart, coordinateTarget] = remainder.split('@', 1);
+    const [mapPart = '', coordinateTarget = ''] = remainder.split('@', 2);
     const targetMap = mapPart.trim() || null;
     const targetPosition = parseCoordinate(coordinateTarget.trim());
     if (coordinateTarget.trim() && !targetPosition) {
