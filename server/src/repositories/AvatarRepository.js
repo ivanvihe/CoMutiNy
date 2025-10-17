@@ -17,7 +17,16 @@ class AvatarRepository {
   async findByUser (userId) {
     return Avatar.findAll({
       where: { userId },
-      include: [{ model: SpriteAsset, as: 'spriteAsset' }]
+      include: [{ model: SpriteAsset, as: 'spriteAsset' }],
+      order: [['createdAt', 'ASC']]
+    })
+  }
+
+  async findPrimaryByUser (userId) {
+    return Avatar.findOne({
+      where: { userId },
+      include: [{ model: SpriteAsset, as: 'spriteAsset' }],
+      order: [['createdAt', 'ASC']]
     })
   }
 
