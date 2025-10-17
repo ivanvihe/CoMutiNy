@@ -1,7 +1,8 @@
 import axios from 'axios';
+import resolveServerUrl from '../utils/resolveServerUrl.js';
 
 const httpClient = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000'
+  baseURL: resolveServerUrl()
 });
 
 export default httpClient;
