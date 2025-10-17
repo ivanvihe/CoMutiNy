@@ -50,7 +50,7 @@ const mapObjects = [
         }
       }
     ],
-    metadata: { reward: null },
+    metadata: { reward: null, objectId: 'welcome_terminal' },
     created_at: now,
     updated_at: now
   }

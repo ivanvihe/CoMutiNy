@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import mapRepository from '../repositories/mapRepository.js'
 import loadStaticMapDefinitions from '../utils/staticMapLoader.js'
+import { attachObjectDefinitions } from '../objects/objectRegistry.js'
 
 const slugify = (value) => {
   if (!value) {
@@ -158,7 +159,14 @@ const normalizeObject = (object, { width, height }) => {
   const sizeHeight = ensureDimension(sizeInput.height, { required: true })
 
   const palette = normalizePalette(object.palette)
-  const metadata = normalizeMetadata(object.metadata)
+  let metadata = normalizeMetadata(object.metadata)
+
+  const objectId =
+    typeof object.objectId === 'string' && object.objectId.trim() ? object.objectId.trim() : null
+
+  if (objectId) {
+    metadata = { ...(metadata ?? {}), objectId }
+  }
   const actions = normalizeActions(object.actions)
 
   if (positionX === null || positionY === null) {
@@ -333,7 +341,8 @@ const serializeObject = (objectModel) => {
     },
     palette: Array.isArray(plain.palette) ? plain.palette : [],
     actions: Array.isArray(plain.actions) ? plain.actions : [],
-    metadata: plain.metadata ?? null
+    metadata: plain.metadata ?? null,
+    objectId: typeof plain.metadata?.objectId === 'string' ? plain.metadata.objectId : null
   }
 }
 
@@ -365,16 +374,33 @@ const serializeMap = (mapModel) => {
   }
 }
 
+const enrichMapObjects = async (map) => {
+  if (!map) {
+    return null
+  }
+
+  const { map: enriched } = await attachObjectDefinitions(map)
+  return enriched ?? map
+}
+
 const mapService = {
   async listStaticMaps () {
-    return await loadStaticMapDefinitions()
+    const maps = await loadStaticMapDefinitions()
+    if (!Array.isArray(maps) || maps.length === 0) {
+      return []
+    }
+
+    const enriched = await Promise.all(maps.map((map) => enrichMapObjects(map)))
+    return enriched.filter(Boolean)
   },
 
   async listMaps ({ limit = 20, offset = 0 } = {}) {
     const { count, rows } = await mapRepository.list({ limit, offset })
+    const serialized = rows.map((map) => serializeMap(map)).filter(Boolean)
+    const enriched = await Promise.all(serialized.map((map) => enrichMapObjects(map)))
     return {
       count,
-      results: rows.map((map) => serializeMap(map))
+      results: enriched.filter(Boolean)
     }
   },
 
@@ -383,13 +409,13 @@ const mapService = {
     if (!map) {
       return null
     }
-    return serializeMap(map)
+    return await enrichMapObjects(serializeMap(map))
   },
 
   async createMap (payload) {
     const { mapAttributes, objects } = prepareMapPayload(payload, { partial: false })
     const created = await mapRepository.createMap(mapAttributes, objects)
-    return serializeMap(created)
+    return await enrichMapObjects(serializeMap(created))
   },
 
   async updateMap (mapId, payload) {
@@ -407,7 +433,7 @@ const mapService = {
     if (!updated) {
       return null
     }
-    return serializeMap(updated)
+    return await enrichMapObjects(serializeMap(updated))
   },
 
   async deleteMap (mapId) {
@@ -422,7 +448,9 @@ const mapService = {
 
     const normalized = normalizeObject(payload, { width: map.width, height: map.height })
     const created = await mapRepository.createObject(mapId, normalized)
-    return serializeObject(created)
+    const serialized = serializeObject(created)
+    const { map: enriched } = await attachObjectDefinitions({ id: mapId, objects: [serialized] })
+    return enriched?.objects?.[0] ?? serialized
   },
 
   async updateObject (mapId, objectId, payload) {
@@ -436,7 +464,9 @@ const mapService = {
     if (!updated) {
       return null
     }
-    return serializeObject(updated)
+    const serialized = serializeObject(updated)
+    const { map: enriched } = await attachObjectDefinitions({ id: mapId, objects: [serialized] })
+    return enriched?.objects?.[0] ?? serialized
   },
 
   async deleteObject (mapId, objectId) {

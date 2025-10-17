@@ -286,6 +286,141 @@ const cloneMapCollection = (collection) => {
   })
 }
 
+const sanitizeObjectInteraction = (interaction, { title, description }) => {
+  if (!interaction || typeof interaction !== 'object') {
+    return {
+      type: 'message',
+      title,
+      description,
+      message: description
+    }
+  }
+
+  const type = typeof interaction.type === 'string' && interaction.type.trim() ? interaction.type.trim() : 'message'
+  const resolvedTitle = sanitizeName(interaction.title, title)
+  const resolvedDescription = sanitizeName(interaction.description, description)
+  const message =
+    typeof interaction.message === 'string' && interaction.message.trim()
+      ? interaction.message.trim()
+      : resolvedDescription
+
+  const payload = {
+    type,
+    title: resolvedTitle,
+    description: resolvedDescription,
+    message
+  }
+
+  if (interaction.icon && typeof interaction.icon === 'string') {
+    payload.icon = interaction.icon.trim()
+  }
+
+  if (interaction.animation && typeof interaction.animation === 'string') {
+    payload.animation = interaction.animation.trim()
+  }
+
+  if (interaction.metadata && typeof interaction.metadata === 'object' && !Array.isArray(interaction.metadata)) {
+    payload.metadata = { ...interaction.metadata }
+  }
+
+  return payload
+}
+
+const sanitizeObjectDefinition = (object, runtime = null) => {
+  if (!object || typeof object !== 'object') {
+    return null
+  }
+
+  const id = typeof object.id === 'string' && object.id.trim() ? object.id.trim() : null
+  if (!id) {
+    return null
+  }
+
+  const name = sanitizeName(object.name, `Objeto ${id}`)
+  const description = sanitizeName(object.description, '')
+  const position = sanitizePosition(object.position, DEFAULT_POSITION)
+  const size = sanitizeSize(object.size, DEFAULT_SIZE)
+  const solid = Boolean(object.solid)
+  const palette = Array.isArray(object.palette) ? object.palette.filter((entry) => typeof entry === 'string').map((entry) => entry.trim()).filter(Boolean) : []
+
+  const metadata =
+    object.metadata && typeof object.metadata === 'object' && !Array.isArray(object.metadata)
+      ? { ...object.metadata }
+      : {}
+
+  const objectId =
+    typeof object.objectId === 'string' && object.objectId.trim()
+      ? object.objectId.trim()
+      : typeof metadata.objectId === 'string' && metadata.objectId.trim()
+        ? metadata.objectId.trim()
+        : null
+
+  if (objectId) {
+    metadata.objectId = objectId
+  }
+
+  const interaction = sanitizeObjectInteraction(object.interaction ?? runtime?.interaction, {
+    title: name,
+    description: description || runtime?.behaviour?.description || ''
+  })
+
+  const publicObject = {
+    id,
+    name,
+    description,
+    solid,
+    position: { x: position.x, y: position.y },
+    size: { width: size.width, height: size.height },
+    palette,
+    metadata,
+    objectId,
+    interaction
+  }
+
+  const runtimeData = runtime && typeof runtime === 'object' ? { ...runtime } : object.runtime && typeof object.runtime === 'object' ? { ...object.runtime } : {}
+
+  if (!runtimeData.definitionId && objectId) {
+    runtimeData.definitionId = objectId
+  }
+
+  return { publicObject, runtime: runtimeData }
+}
+
+const buildObjectIndexes = (objects, runtimeIndex = null) => {
+  const sanitizedObjects = []
+  const runtimeById = new Map()
+  const grid = new Map()
+
+  const lookup = runtimeIndex instanceof Map ? runtimeIndex : null
+
+  for (const object of Array.isArray(objects) ? objects : []) {
+    const runtimeCandidate = lookup?.get(object?.id) ?? null
+    const runtime = runtimeCandidate && typeof runtimeCandidate === 'object' ? runtimeCandidate.runtime ?? runtimeCandidate : null
+    const sanitized = sanitizeObjectDefinition(object, runtime)
+
+    if (!sanitized) {
+      continue
+    }
+
+    sanitizedObjects.push(sanitized.publicObject)
+    runtimeById.set(sanitized.publicObject.id, sanitized)
+
+    const width = sanitized.publicObject.size?.width ?? 1
+    const height = sanitized.publicObject.size?.height ?? 1
+    const baseX = Math.trunc(toNumber(sanitized.publicObject.position?.x, 0))
+    const baseY = Math.trunc(toNumber(sanitized.publicObject.position?.y, 0))
+
+    for (let dy = 0; dy < height; dy += 1) {
+      for (let dx = 0; dx < width; dx += 1) {
+        const key = `${baseX + dx},${baseY + dy}`
+        grid.set(key, sanitized.publicObject.id)
+      }
+    }
+  }
+
+  return { sanitizedObjects, runtimeById, grid }
+}
+
 const cloneTheme = (theme, fallback = DEFAULT_THEME) => {
   if (!theme || typeof theme !== 'object') {
     return { ...fallback }
@@ -324,13 +459,15 @@ class WorldState {
       sprites: [],
       lookup: {}
     }
+    this.objectRuntimeById = new Map()
+    this.objectGrid = new Map()
   }
 
   getWorld () {
     return cloneWorld(this.world)
   }
 
-  setWorld (world) {
+  setWorld (world, { runtimeIndex = null } = {}) {
     if (!world || typeof world !== 'object') {
       return
     }
@@ -351,7 +488,8 @@ class WorldState {
 
     const biome = typeof world.biome === 'string' ? world.biome : current.biome
     const blockedAreas = cloneMapCollection(Array.isArray(world.blockedAreas) ? world.blockedAreas : current.blockedAreas)
-    const objects = cloneMapCollection(Array.isArray(world.objects) ? world.objects : current.objects)
+    const incomingObjects = Array.isArray(world.objects) ? world.objects : current.objects
+    const { sanitizedObjects, runtimeById, grid } = buildObjectIndexes(incomingObjects, runtimeIndex)
     const portals = cloneMapCollection(Array.isArray(world.portals) ? world.portals : current.portals)
     const theme = cloneTheme(world.theme, current.theme)
     const sourcePath =
@@ -367,11 +505,67 @@ class WorldState {
       spawn,
       biome,
       blockedAreas,
-      objects,
+      objects: sanitizedObjects,
       portals,
       theme,
       sourcePath
     }
+    this.objectRuntimeById = runtimeById
+    this.objectGrid = grid
+  }
+
+  _getObjectRecord (objectId) {
+    if (typeof objectId !== 'string') {
+      return null
+    }
+
+    const trimmed = objectId.trim()
+    if (!trimmed) {
+      return null
+    }
+
+    const record = this.objectRuntimeById.get(trimmed)
+    if (!record) {
+      return null
+    }
+
+    const publicObject = record.publicObject
+      ? JSON.parse(JSON.stringify(record.publicObject))
+      : null
+    const runtime = record.runtime ? { ...record.runtime } : null
+
+    if (!publicObject) {
+      return null
+    }
+
+    return { publicObject, runtime }
+  }
+
+  getObjectById (objectId) {
+    const record = this._getObjectRecord(objectId)
+    return record ? record.publicObject : null
+  }
+
+  getObjectRuntime (objectId) {
+    const record = this._getObjectRecord(objectId)
+    return record ? record.runtime : null
+  }
+
+  getObjectAt (position) {
+    if (!position || typeof position !== 'object') {
+      return null
+    }
+
+    const key = `${Math.trunc(toNumber(position.x, 0))},${Math.trunc(toNumber(position.y, 0))}`
+    const objectId = this.objectGrid.get(key)
+
+    return objectId ? this.getObjectById(objectId) : null
+  }
+
+  listObjects () {
+    return Array.from(this.objectRuntimeById.values()).map((record) =>
+      JSON.parse(JSON.stringify(record.publicObject ?? {}))
+    )
   }
 
   getSpawnPosition () {

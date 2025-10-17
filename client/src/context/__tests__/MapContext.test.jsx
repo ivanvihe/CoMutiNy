@@ -31,7 +31,8 @@ jest.mock('../WorldContext.jsx', () => ({
     updateLocalPlayerState: jest.fn(),
     players: [],
     localPlayerId: 'local',
-    connectionStatus: 'connected'
+    connectionStatus: 'connected',
+    interactWithObject: jest.fn(() => Promise.resolve({ ok: true, event: null }))
   })
 }));
 
@@ -59,14 +60,14 @@ describe('MapContext', () => {
     expect(result.current.playerPosition).toEqual(result.current.currentMap.spawn);
   });
 
-  it('limpia eventos cuando no hay objetos interactuables', () => {
+  it('limpia eventos cuando no hay objetos interactuables', async () => {
     const { result } = renderHook(() => useMap(), { wrapper });
 
     expect(result.current.objectAtPlayerPosition).toBeUndefined();
 
     let event;
-    act(() => {
-      event = result.current.interact();
+    await act(async () => {
+      event = await result.current.interact();
     });
 
     expect(event).toBeNull();

@@ -3,6 +3,7 @@ import EventEmitter from 'node:events'
 import worldState from './worldState.js'
 import { getRedisClient, getRedisPubSub } from '../config/redis.js'
 import loadStaticMapDefinitions from '../utils/staticMapLoader.js'
+import { attachObjectDefinitions, createInteractionResult, ensureDefinitionsLoaded } from '../objects/objectRegistry.js'
 
 const SNAPSHOT_KEY = 'comutiny:world:snapshot'
 const EVENT_CHANNEL = 'comutiny:world:events'
@@ -12,7 +13,8 @@ const EVENT_TYPES = Object.freeze({
   PLAYER_REMOVE: 'player:remove',
   CHAT_MESSAGE: 'chat:message',
   SPRITE_ATLAS: 'sprites:atlas',
-  WORLD_SET: 'world:set'
+  WORLD_SET: 'world:set',
+  OBJECT_EVENT: 'object:event'
 })
 
 class SessionManager extends EventEmitter {
@@ -46,12 +48,16 @@ class SessionManager extends EventEmitter {
 
       try {
         await this.subscriber.subscribe(EVENT_CHANNEL)
-        this.subscriber.on('message', (channel, payload) => {
+        this.subscriber.on('message', async (channel, payload) => {
           if (channel !== EVENT_CHANNEL) {
             return
           }
 
-          this._handleRemoteMessage(payload)
+          try {
+            await this._handleRemoteMessage(payload)
+          } catch (error) {
+            console.error('[session] Failed to process remote event', error)
+          }
         })
       } catch (error) {
         console.error('[session] Failed to subscribe to redis channel', error)
@@ -71,6 +77,14 @@ class SessionManager extends EventEmitter {
         console.error('[session] Failed to hydrate snapshot', error)
       }
     }
+
+    try {
+      await ensureDefinitionsLoaded()
+    } catch (error) {
+      console.error('[objects] Failed to precache object definitions', error)
+    }
+
+    await this._rehydrateWorldObjects()
 
     await this._ensureDefaultWorld()
 
@@ -143,7 +157,7 @@ class SessionManager extends EventEmitter {
     return match ?? null
   }
 
-  _applyWorldDefinition (mapDefinition, { origin = 'system', socketId = null, persist = true, publish = true } = {}) {
+  async _applyWorldDefinition (mapDefinition, { origin = 'system', socketId = null, persist = true, publish = true } = {}) {
     if (!mapDefinition || typeof mapDefinition !== 'object') {
       return false
     }
@@ -168,7 +182,11 @@ class SessionManager extends EventEmitter {
       return false
     }
 
-    this.worldState.setWorld({ ...mapDefinition, spawn })
+    const payload = { ...mapDefinition, spawn }
+    const { map: enrichedMap, runtimeIndex } = await attachObjectDefinitions(payload)
+    const target = enrichedMap ?? payload
+
+    this.worldState.setWorld(target, { runtimeIndex })
     const world = this.worldState.getWorld()
 
     console.info(
@@ -177,7 +195,7 @@ class SessionManager extends EventEmitter {
     )
 
     if (publish) {
-      this._publish(EVENT_TYPES.WORLD_SET, { world })
+      this._publish(EVENT_TYPES.WORLD_SET, { world: target })
     }
 
     this.emit('world:changed', { world, origin, socketId })
@@ -200,7 +218,7 @@ class SessionManager extends EventEmitter {
       throw new Error('El mapa seleccionado no está disponible.')
     }
 
-    return this._applyWorldDefinition(mapDefinition, { origin, socketId })
+    return await this._applyWorldDefinition(mapDefinition, { origin, socketId })
   }
 
   getSnapshot () {
@@ -232,6 +250,80 @@ class SessionManager extends EventEmitter {
     this._queuePlayerUpdateBroadcast(player, socketId)
 
     return player
+  }
+
+  async interactWithObject (socketId, payload = {}) {
+    const objectId = typeof payload.objectId === 'string' ? payload.objectId.trim() : ''
+    if (!objectId) {
+      throw new Error('Debes indicar el objeto con el que deseas interactuar.')
+    }
+
+    const player = this.worldState.getPlayerBySocket(socketId)
+    if (!player) {
+      throw new Error('Jugador no registrado.')
+    }
+
+    const world = this.worldState.getWorld()
+    const mapId = typeof payload.mapId === 'string' ? payload.mapId.trim() : ''
+
+    if (mapId && mapId !== world.id) {
+      throw new Error('El objeto no pertenece al mapa actual.')
+    }
+
+    const publicObject = this.worldState.getObjectById(objectId)
+    const runtime = this.worldState.getObjectRuntime(objectId)
+
+    if (!publicObject) {
+      throw new Error('No hay ningún objeto interactuable en esa posición.')
+    }
+
+    const objectRecord = { publicObject, runtime }
+    const result = createInteractionResult({
+      objectRecord,
+      player,
+      action: typeof payload.action === 'string' ? payload.action.trim() || 'interact' : 'interact',
+      input: { mapId: world.id, ...(payload.input ?? {}) }
+    })
+
+    if (!result.ok) {
+      throw new Error(result.message ?? 'La interacción no produjo respuesta.')
+    }
+
+    const alias =
+      typeof player.metadata?.alias === 'string' && player.metadata.alias.trim()
+        ? player.metadata.alias.trim()
+        : typeof player.alias === 'string' && player.alias.trim()
+          ? player.alias.trim()
+          : player.name ?? player.id
+
+    const event = {
+      ...result.event,
+      mapId: world.id,
+      objectId,
+      actor: {
+        id: player.id,
+        alias,
+        name: player.name
+      },
+      timestamp: new Date().toISOString()
+    }
+
+    const response = {
+      ok: true,
+      event,
+      message: result.message ?? null,
+      effects: Array.isArray(result.effects) ? result.effects : []
+    }
+
+    const broadcast = Boolean(result.broadcast)
+
+    this.emit('object:event', { event, origin: 'local', socketId, broadcast })
+
+    if (broadcast) {
+      this._publish(EVENT_TYPES.OBJECT_EVENT, { event })
+    }
+
+    return response
   }
 
   removePlayer (socketId, reason = 'client:disconnect') {
@@ -327,7 +419,7 @@ class SessionManager extends EventEmitter {
         return
       }
 
-      const changed = this._applyWorldDefinition(initMap, {
+      const changed = await this._applyWorldDefinition(initMap, {
         origin: 'system:init',
         socketId: null,
         publish: false
@@ -338,6 +430,23 @@ class SessionManager extends EventEmitter {
       }
     } catch (error) {
       console.error('[session] Failed to ensure default world map', error)
+    }
+  }
+
+  async _rehydrateWorldObjects () {
+    const currentWorld = this.worldState.getWorld()
+
+    if (!currentWorld || typeof currentWorld !== 'object') {
+      return
+    }
+
+    try {
+      const { map: enrichedMap, runtimeIndex } = await attachObjectDefinitions(currentWorld)
+      if (enrichedMap) {
+        this.worldState.setWorld(enrichedMap, { runtimeIndex })
+      }
+    } catch (error) {
+      console.error('[objects] Failed to rebuild world object registry', error)
     }
   }
 
@@ -397,7 +506,7 @@ class SessionManager extends EventEmitter {
     })
   }
 
-  _handleRemoteMessage (message) {
+  async _handleRemoteMessage (message) {
     let event
 
     try {
@@ -458,10 +567,20 @@ class SessionManager extends EventEmitter {
           return
         }
 
-        this.worldState.setWorld(payload.world)
+        const { map: enrichedMap, runtimeIndex } = await attachObjectDefinitions(payload.world)
+        const target = enrichedMap ?? payload.world
+        this.worldState.setWorld(target, { runtimeIndex })
         const world = this.worldState.getWorld()
         this.emit('world:changed', { world, origin: 'remote', socketId: null })
         this._scheduleSnapshotPersist()
+        break
+      }
+      case EVENT_TYPES.OBJECT_EVENT: {
+        if (!payload?.event) {
+          return
+        }
+
+        this.emit('object:event', { event: payload.event, origin: 'remote', socketId: null, broadcast: true })
         break
       }
       default:
