@@ -15,7 +15,7 @@
    - Validar que aparece un evento con título y descripción del objeto.
 3. **Listado de tripulación**
    - Conectar un segundo cliente simulado o usar datos de prueba para fijar un jugador remoto en el mismo mapa.
-   - Confirmar que el listado "Tripulación en este sector" muestra nombre y rol del jugador.
+   - Confirmar que el listado "Tripulación en este sector" muestra el nombre del jugador.
 4. **Accesibilidad básica**
    - Navegar por los controles de mapa usando `Tab` y comprobar que los `Tooltip` y etiquetas aria describen la acción de cada botón.
 

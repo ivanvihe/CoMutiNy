@@ -6,7 +6,6 @@ import dotenv from 'dotenv'
 import { connectDatabase } from './config/database.js'
 import authRoutes from './routes/authRoutes.js'
 import avatarRoutes from './routes/avatarRoutes.js'
-import adminRoutes from './routes/adminRoutes.js'
 import assetRoutes from './routes/assetRoutes.js'
 import { cookies } from './middlewares/auth.js'
 import sessionManager from './services/sessionManager.js'
@@ -35,7 +34,6 @@ app.get('/health', (req, res) => {
 app.use('/auth', authRoutes)
 app.use('/avatars', avatarRoutes)
 app.use('/assets', assetRoutes)
-app.use('/admin', adminRoutes)
 
 app.use((err, req, res, next) => {
   console.error(err)

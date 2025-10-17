@@ -36,8 +36,7 @@ export const register = async (req, res, next) => {
     const user = await userRepository.create({
       username: trimmedUsername,
       email: normalizedEmail,
-      passwordHash,
-      role: 'user'
+      passwordHash
     })
 
     const token = signSessionToken(user.id)
@@ -71,7 +70,7 @@ export const login = async (req, res, next) => {
     }
 
     if (user.isBanned) {
-      return res.status(403).json({ message: 'Your account has been banned by an administrator' })
+      return res.status(403).json({ message: 'Your account has been banned by the moderation team' })
     }
 
     const now = new Date()

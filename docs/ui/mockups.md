@@ -34,15 +34,15 @@ Este documento resume los cambios visuales aplicados al HUD y navegación de map
 
 ## Tripulación visible en el mapa
 - Lista densa (`List` + `ListItemText`) que aparece tras un `Divider`.
-- Cada entrada muestra nombre y rol reportado en la metadata del jugador remoto.
+- Cada entrada muestra el nombre reportado en la metadata del jugador remoto.
 - Mensaje vacío comunica que aún no hay tripulación remota conectada.
 
 ```
 ┌──────────────────────────────┐
 │ Tripulación en este sector   │
 ├──────────────────────────────┤
-│ Vega        Rol: Científica  │
-│ Noor        Rol: Ingeniera   │
+│ Vega                       │
+│ Noor                       │
 └──────────────────────────────┘
 ```
 

@@ -2,7 +2,6 @@ import { Alert, CircularProgress, Tab, Tabs } from '@mui/material';
 import { useState } from 'react';
 import AuthForm from './components/AuthForm.jsx';
 import AvatarCustomizer from './components/AvatarCustomizer.jsx';
-import AdminDashboard from './components/AdminDashboard.jsx';
 import MapViewport from './components/MapViewport.jsx';
 import { useAuth } from './context/AuthContext.jsx';
 import { MapProvider } from './context/MapContext.jsx';
@@ -51,7 +50,9 @@ export default function App() {
               ) : user ? (
                 <div className="dock-section">
                   <h2 className="dock-heading">Hola, {user.username}</h2>
-                  <p className="dock-text">Tu rol actual es {user.role}.</p>
+                  <p className="dock-text">
+                    Ya puedes colaborar con la tripulación y seguir explorando la nave.
+                  </p>
                   {error && (
                     <Alert severity="warning" sx={{ mt: 2 }}>
                       No se pudo refrescar la sesión automáticamente. Continúa navegando o vuelve a
@@ -87,14 +88,6 @@ export default function App() {
               <AvatarCustomizer appearance={appearance} onChange={setAppearance} />
             </div>
           </aside>
-
-          {user?.role === 'admin' && (
-            <aside className="ui-dock ui-dock--right">
-              <div className="dock-card dock-card--scroll">
-                <AdminDashboard />
-              </div>
-            </aside>
-          )}
         </div>
       </MapProvider>
     </WorldProvider>
