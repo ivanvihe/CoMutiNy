@@ -1,0 +1,86 @@
+id: calle-creativa
+title: Calle creativa
+biome: Urbana
+description: Tramo de calle con escaparates, mobiliario temporal y vegetación modular.
+dimensions: 26x16
+starting_point: 13x12
+border colour: #212121
+door in: 2x12 -> comunidad-inicial
+door out: 1x12 -> comunidad-inicial@6x18
+
+[tiles]
+. = asfalto; name=Asfalto texturizado; color=#424242; transparent=true
+= = banqueta; name=Banqueta de concreto pulido; color=#bdbdbd; transparent=true
+~ = ciclovia; name=Carril ciclista; color=#00acc1; transparent=true
+# = fachada; name=Muro medianero; color=#263238; collides=true
+
+[layer asfalto]
+order: 0
+##########################
+#========================#
+#========================#
+#========================#
+#========================#
+#========================#
+#========================#
+#========================#
+#========================#
+#========================#
+#========================#
+#========================#
+#========================#
+#========================#
+#========================#
+##########################
+
+[layer vial]
+order: 1
+##########################
+#========================#
+#==~~~~~~~~~~~~~~~~~~~~==#
+#==~~~~~~~~~~~~~~~~~~~~==#
+#==~~~~~~~~~~~~~~~~~~~~==#
+#==~~~~~~~~~~~~~~~~~~~~==#
+#==~~~~~~~~~~~~~~~~~~~~==#
+#==~~~~~~~~~~~~~~~~~~~~==#
+#==~~~~~~~~~~~~~~~~~~~~==#
+#==~~~~~~~~~~~~~~~~~~~~==#
+#==~~~~~~~~~~~~~~~~~~~~==#
+#==~~~~~~~~~~~~~~~~~~~~==#
+#==~~~~~~~~~~~~~~~~~~~~==#
+#========================#
+#========================#
+##########################
+
+[layer detalles]
+order: 2
+##########################
+#========================#
+#==....................==#
+#==....................==#
+#==....................==#
+#==....................==#
+#==....................==#
+#==....................==#
+#==....................==#
+#==....................==#
+#==....................==#
+#==....................==#
+#==....................==#
+#========================#
+#========================#
+##########################
+
+[objects]
+!wall_modern_partition@6x6 | Muro modular de galería
+!wall_modern_partition@20x6 | Panel informativo urbano
+door_glass_arc@4x12 | Acceso a estudio
+door_glass_arc@22x12 | Acceso a makerspace
+
+[objects_calle]
+order: 5
+visible: true
+table_collaborative_island@13x9 | Mostrador de ideas
+table_collaborative_island@16x11 | Punto de registro
+plant_atrium_totem@9x8 | Jardinera norte
+plant_atrium_totem@18x8 | Jardinera sur

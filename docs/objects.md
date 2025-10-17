@@ -120,6 +120,17 @@ La sección `appearance` controla cómo debe dibujarse el objeto:
 - Mantén las opciones (`options`) libres de funciones u objetos no serializables; el cargador eliminará los valores que no puedan convertirse a JSON.
 - Si necesitas definir la apariencia mediante código, exporta una función desde el archivo `.obj`. El servidor ejecutará la función con un contexto Canvas simulado y enviará el nombre y el código fuente para que los clientes puedan inspeccionarlo.
 - Cuando existan archivos con el mismo `id`, las definiciones ubicadas en `/app/objects` prevalecen sobre las incluidas en el repositorio base.
+- Puedes revisar ejemplos de objetos con generadores Canvas en `app/objects/*.obj`. Las nuevas incorporaciones `wall_modern_partition`, `table_collaborative_island`, `plant_atrium_totem` y `door_glass_arc` muestran cómo emplear gradientes, transparencias y geometrías complejas sin depender de sprites pre-renderizados.
+
+## Relación con mapas estáticos
+
+Los mapas estáticos definidos en archivos `.map` referencian los objetos mediante su `id`. Al colocar una entrada como `!wall_modern_partition@6x6`, el motor buscará primero en `/app/objects` y, si no lo encuentra allí, continuará con los catálogos empacados en el servidor. Esto permite iterar sobre prototipos locales sin tocar el código fuente.
+
+1. Crea o actualiza la definición del objeto en `/app/objects`. Si necesitas lógica de dibujo personalizada, exporta una función que reciba `(ctx, { width, height, tileSize, pixelWidth, pixelHeight })`.
+2. Añade el objeto al mapa deseado en `/app/maps`, indicando su posición `x`/`y` y, opcionalmente, el prefijo `!` si debe considerarse sólido.
+3. Reinicia el servidor o ejecuta `npm run refresh:static-content` (si está disponible en tu entorno) para que el cargador reindexe tanto mapas como objetos.
+
+Los nuevos mapas `oficina-vanguardista`, `parque-urbano` y `calle-creativa` demuestran este flujo completo: cada uno reutiliza las definiciones anteriores para crear escenas coherentes en interiores, exteriores y calles urbanas.
 
 ## Funciones Canvas dinámicas
 

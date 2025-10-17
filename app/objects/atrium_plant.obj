@@ -1,0 +1,68 @@
+export default {
+  id: 'plant_atrium_totem',
+  name: 'Totem de follaje',
+  description: 'Composición vertical de plantas con maceta cerámica y luces cálidas.',
+  appearance: {
+    width: 1,
+    height: 2,
+    tileSize: 32,
+    anchor: { x: 0.5, y: 1 },
+    generator: function drawAtriumPlant(ctx, { tileSize, pixelWidth, pixelHeight }) {
+      ctx.save();
+      const potHeight = tileSize * 0.8;
+      const potWidth = tileSize * 0.9;
+      const potX = (pixelWidth - potWidth) / 2;
+      const potY = pixelHeight - potHeight;
+      const potGradient = ctx.createLinearGradient(0, potY, 0, pixelHeight);
+      potGradient.addColorStop(0, '#6D4C41');
+      potGradient.addColorStop(1, '#8D6E63');
+      ctx.fillStyle = potGradient;
+      ctx.beginPath();
+      ctx.moveTo(potX, potY + potHeight * 0.2);
+      ctx.lineTo(potX + potWidth, potY + potHeight * 0.2);
+      ctx.quadraticCurveTo(potX + potWidth * 1.05, potY + potHeight, potX + potWidth * 0.5, potY + potHeight);
+      ctx.quadraticCurveTo(potX - potWidth * 0.05, potY + potHeight, potX, potY + potHeight * 0.2);
+      ctx.closePath();
+      ctx.fill();
+
+      const stemX = pixelWidth / 2;
+      ctx.strokeStyle = '#4E342E';
+      ctx.lineWidth = tileSize * 0.12;
+      ctx.beginPath();
+      ctx.moveTo(stemX, potY + potHeight * 0.1);
+      ctx.lineTo(stemX, tileSize * 0.4);
+      ctx.stroke();
+
+      const drawLeaf = (x, y, scaleX, scaleY, rotation, color) => {
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.rotate(rotation);
+        ctx.scale(scaleX, scaleY);
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.moveTo(0, -tileSize * 0.8);
+        ctx.bezierCurveTo(tileSize * 0.6, -tileSize * 0.6, tileSize * 0.6, tileSize * 0.3, 0, tileSize * 0.5);
+        ctx.bezierCurveTo(-tileSize * 0.6, tileSize * 0.3, -tileSize * 0.6, -tileSize * 0.6, 0, -tileSize * 0.8);
+        ctx.fill();
+        ctx.restore();
+      };
+
+      const leafColors = ['#66BB6A', '#43A047', '#81C784'];
+      leafColors.forEach((color, index) => {
+        const angle = -0.5 + index * 0.5;
+        drawLeaf(stemX, tileSize * (0.6 + index * 0.25), 0.6 + index * 0.1, 0.6 + index * 0.08, angle, color);
+        drawLeaf(stemX, tileSize * (0.5 + index * 0.2), -0.6 - index * 0.08, 0.6 + index * 0.08, -angle, color);
+      });
+
+      ctx.fillStyle = 'rgba(255, 235, 59, 0.6)';
+      ctx.beginPath();
+      ctx.arc(stemX, tileSize * 0.35, tileSize * 0.3, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.restore();
+    }
+  },
+  metadata: {
+    tags: ['decorative', 'plant', 'atrium']
+  }
+};

@@ -1,0 +1,47 @@
+export default {
+  id: 'wall_modern_partition',
+  name: 'Pared modular moderna',
+  description: 'Panel modular con franjas de vidrio translúcido para delimitar espacios de trabajo.',
+  appearance: {
+    width: 1,
+    height: 1,
+    tileSize: 32,
+    anchor: { x: 0.5, y: 1 },
+    generator: function drawModernPartition(ctx, { width, height, tileSize, pixelWidth, pixelHeight }) {
+      const panelWidth = pixelWidth;
+      const panelHeight = pixelHeight;
+
+      ctx.fillStyle = '#37474F';
+      ctx.fillRect(0, panelHeight * 0.25, panelWidth, panelHeight * 0.75);
+
+      const stripeHeight = panelHeight * 0.18;
+      const stripeGap = panelHeight * 0.07;
+      ctx.fillStyle = '#90A4AE';
+      ctx.fillRect(0, stripeGap, panelWidth, stripeHeight);
+      ctx.fillRect(0, stripeGap * 2 + stripeHeight, panelWidth, stripeHeight);
+
+      const frameWidth = Math.max(3, tileSize * 0.15);
+      ctx.fillStyle = '#263238';
+      ctx.fillRect(0, 0, panelWidth, frameWidth);
+      ctx.fillRect(0, panelHeight - frameWidth, panelWidth, frameWidth);
+      ctx.fillRect(0, 0, frameWidth, panelHeight);
+      ctx.fillRect(panelWidth - frameWidth, 0, frameWidth, panelHeight);
+
+      const lightCount = Math.max(2, Math.round(width * 2));
+      for (let i = 0; i < lightCount; i += 1) {
+        const centerX = ((i + 0.5) / lightCount) * panelWidth;
+        const radius = tileSize * 0.12;
+        const gradient = ctx.createRadialGradient(centerX, frameWidth * 0.6, radius * 0.1, centerX, frameWidth * 0.6, radius);
+        gradient.addColorStop(0, 'rgba(255, 255, 255, 0.85)');
+        gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+        ctx.fillStyle = gradient;
+        ctx.beginPath();
+        ctx.arc(centerX, frameWidth * 0.6, radius, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+  },
+  metadata: {
+    tags: ['decorative', 'wall', 'office']
+  }
+};
