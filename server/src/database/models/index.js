@@ -4,12 +4,16 @@ import defineAvatar from './avatar.js'
 import defineMessage from './message.js'
 import defineSpriteAsset from './spriteAsset.js'
 import defineLandscapeAsset from './landscapeAsset.js'
+import defineGameMap from './gameMap.js'
+import defineMapObject from './mapObject.js'
 
 const User = defineUser(sequelize)
 const Avatar = defineAvatar(sequelize)
 const Message = defineMessage(sequelize)
 const SpriteAsset = defineSpriteAsset(sequelize)
 const LandscapeAsset = defineLandscapeAsset(sequelize)
+const GameMap = defineGameMap(sequelize)
+const MapObject = defineMapObject(sequelize)
 
 User.hasMany(Avatar, {
   as: 'avatars',
@@ -50,7 +54,17 @@ Message.belongsTo(Avatar, {
   foreignKey: 'avatarId'
 })
 
-export { sequelize, User, Avatar, Message, SpriteAsset, LandscapeAsset }
+GameMap.hasMany(MapObject, {
+  as: 'objects',
+  foreignKey: 'mapId',
+  onDelete: 'CASCADE'
+})
+MapObject.belongsTo(GameMap, {
+  as: 'map',
+  foreignKey: 'mapId'
+})
+
+export { sequelize, User, Avatar, Message, SpriteAsset, LandscapeAsset, GameMap, MapObject }
 
 export default {
   sequelize,
@@ -58,5 +72,7 @@ export default {
   Avatar,
   Message,
   SpriteAsset,
-  LandscapeAsset
+  LandscapeAsset,
+  GameMap,
+  MapObject
 }
