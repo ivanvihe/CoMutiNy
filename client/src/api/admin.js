@@ -29,6 +29,16 @@ export const createSpriteAsset = async (payload) => {
   return data;
 };
 
+export const fetchSpriteGenerators = async () => {
+  const { data } = await httpClient.get('/admin/assets/sprites/generators');
+  return data?.generators ?? [];
+};
+
+export const generateSpriteFromDescription = async (payload) => {
+  const { data } = await httpClient.post('/admin/assets/sprites/generate', payload);
+  return data;
+};
+
 export const updateSpriteAsset = async (id, payload) => {
   const { data } = await httpClient.patch(`/admin/assets/sprites/${id}`, payload);
   return data;

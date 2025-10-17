@@ -1,4 +1,5 @@
 import http from 'http'
+import path from 'node:path'
 import express from 'express'
 import { Server } from 'socket.io'
 import dotenv from 'dotenv'
@@ -11,6 +12,8 @@ import assetRoutes from './routes/assetRoutes.js'
 import { cookies } from './middlewares/auth.js'
 import worldState from './services/worldState.js'
 import avatarRepository from './repositories/AvatarRepository.js'
+import spriteGenerationService from './sprites/spriteGenerationService.js'
+import spriteEvents, { SPRITE_EVENTS } from './sprites/events.js'
 
 dotenv.config()
 
@@ -18,6 +21,13 @@ const app = express()
 
 app.use(express.json())
 app.use(cookies)
+app.use(
+  '/static',
+  express.static(path.resolve(process.cwd(), 'server', 'assets'), {
+    fallthrough: true,
+    maxAge: '1h'
+  })
+)
 app.get('/health', (req, res) => {
   res.status(200).json({ status: 'ok' })
 })
@@ -217,6 +227,9 @@ const PORT = Number(process.env.SERVER_PORT || 4000)
 const start = async () => {
   try {
     await connectDatabase()
+    const atlas = await spriteGenerationService.getAtlasSnapshot()
+    worldState.setSpriteAtlas(atlas)
+
     server.listen(PORT, '0.0.0.0', () => {
       console.log(`Server listening on port ${PORT}`)
     })
@@ -226,3 +239,8 @@ const start = async () => {
 }
 
 start()
+
+spriteEvents.on(SPRITE_EVENTS.ATLAS_UPDATED, (atlas) => {
+  worldState.setSpriteAtlas(atlas)
+  io.emit('sprites:atlasUpdated', atlas)
+})

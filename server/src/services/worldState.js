@@ -158,17 +158,51 @@ class WorldState {
         timestamp: new Date().toISOString()
       }
     ]
+    this.spriteAtlas = {
+      version: 1,
+      updatedAt: null,
+      sprites: [],
+      lookup: {}
+    }
   }
 
   getWorld () {
     return this.world
   }
 
+  getSpriteAtlas () {
+    return JSON.parse(JSON.stringify(this.spriteAtlas))
+  }
+
+  setSpriteAtlas (atlas) {
+    if (!atlas || typeof atlas !== 'object') {
+      return
+    }
+
+    const parsedVersion = Number(atlas.version)
+    const sprites = Array.isArray(atlas.sprites) ? atlas.sprites.map((sprite) => ({ ...sprite })) : []
+    const lookup = {}
+
+    for (const sprite of sprites) {
+      if (sprite?.id) {
+        lookup[sprite.id] = { ...sprite }
+      }
+    }
+
+    this.spriteAtlas = {
+      version: Number.isFinite(parsedVersion) ? parsedVersion : 1,
+      updatedAt: typeof atlas.updatedAt === 'string' ? atlas.updatedAt : new Date().toISOString(),
+      sprites,
+      lookup
+    }
+  }
+
   getSnapshot () {
     return {
       world: this.getWorld(),
       players: Array.from(this.playersBySocket.values()).map((player) => ({ ...player })),
-      chat: [...this.chat]
+      chat: [...this.chat],
+      spriteAtlas: this.getSpriteAtlas()
     }
   }
 

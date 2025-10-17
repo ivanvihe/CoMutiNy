@@ -1,5 +1,6 @@
 import spriteAssetRepository from '../repositories/SpriteAssetRepository.js'
 import landscapeAssetRepository from '../repositories/LandscapeAssetRepository.js'
+import spriteGenerationService from '../sprites/spriteGenerationService.js'
 
 const toPlain = (record) => {
   if (!record) {
@@ -155,6 +156,42 @@ export const listSpriteAssets = buildListHandler(spriteAssetRepository)
 export const createSpriteAsset = buildCreateHandler(spriteAssetRepository)
 export const updateSpriteAsset = buildUpdateHandler(spriteAssetRepository)
 export const deleteSpriteAsset = buildDeleteHandler(spriteAssetRepository)
+
+export const listSpriteGenerators = (req, res) => {
+  const generators = spriteGenerationService.listAvailableGenerators()
+  res.json({ generators })
+}
+
+export const generateSpriteAsset = async (req, res, next) => {
+  try {
+    const { description, generator, width, height, palette, frames, name, category, metadata, stylePreset } = req.body ?? {}
+
+    if (!description || typeof description !== 'string') {
+      return res.status(400).json({ message: 'description is required' })
+    }
+
+    const result = await spriteGenerationService.generateSprite({
+      description,
+      generator,
+      width,
+      height,
+      palette,
+      frames,
+      name,
+      category,
+      metadata,
+      stylePreset
+    })
+
+    res.status(201).json(result)
+  } catch (error) {
+    if (error?.message?.includes('description')) {
+      return res.status(400).json({ message: error.message })
+    }
+
+    next(error)
+  }
+}
 
 export const listLandscapeAssets = buildListHandler(landscapeAssetRepository)
 export const createLandscapeAsset = buildCreateHandler(landscapeAssetRepository)

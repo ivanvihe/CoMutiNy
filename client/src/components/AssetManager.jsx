@@ -6,8 +6,10 @@ import {
   Dialog,
   DialogActions,
   DialogContent,
+  DialogContentText,
   DialogTitle,
   Grid,
+  MenuItem,
   Stack,
   Table,
   TableBody,
@@ -30,6 +32,8 @@ import {
   deleteSpriteAsset,
   fetchLandscapeAssets,
   fetchSpriteAssets,
+  fetchSpriteGenerators,
+  generateSpriteFromDescription,
   updateLandscapeAsset,
   updateSpriteAsset
 } from '../api/admin.js';
@@ -74,6 +78,20 @@ export default function AssetManager({ kind }) {
   const [formError, setFormError] = useState('');
   const [feedback, setFeedback] = useState(null);
   const [spriteMetadata, setSpriteMetadata] = useState(null);
+  const [generationDialogOpen, setGenerationDialogOpen] = useState(false);
+  const [generationForm, setGenerationForm] = useState({
+    description: '',
+    generator: 'procedural',
+    width: 32,
+    height: 32,
+    palette: '',
+    frames: 1,
+    name: '',
+    category: 'generated',
+    stylePreset: 'pixel-art'
+  });
+  const [generationResult, setGenerationResult] = useState(null);
+  const [generationError, setGenerationError] = useState('');
 
   const queryKey = useMemo(
     () => [...config.queryKey, { page, limit: rowsPerPage }],
@@ -84,6 +102,12 @@ export default function AssetManager({ kind }) {
     queryKey,
     queryFn: () => config.fetcher({ limit: rowsPerPage, offset: page * rowsPerPage }),
     keepPreviousData: true
+  });
+
+  const generatorQuery = useQuery({
+    queryKey: ['admin', 'assets', 'sprites', 'generators'],
+    queryFn: fetchSpriteGenerators,
+    enabled: isSpriteKind
   });
 
   const createMutation = useMutation({
@@ -124,6 +148,19 @@ export default function AssetManager({ kind }) {
     }
   });
 
+  const generateMutation = useMutation({
+    mutationFn: (payload) => generateSpriteFromDescription(payload),
+    onSuccess: (result) => {
+      setGenerationResult(result);
+      setGenerationError('');
+      queryClient.invalidateQueries({ queryKey: config.queryKey });
+    },
+    onError: (mutationError) => {
+      const message = mutationError?.response?.data?.message ?? 'No se pudo generar el sprite.';
+      setGenerationError(message);
+    }
+  });
+
   const isSpriteKind = config === assetConfig.sprite;
 
   const openCreateDialog = () => {
@@ -153,6 +190,48 @@ export default function AssetManager({ kind }) {
     setDialogOpen(false);
     setFormError('');
     setSpriteMetadata(null);
+  };
+
+  const openGenerationDialog = () => {
+    setGenerationDialogOpen(true);
+    setGenerationResult(null);
+    setGenerationError('');
+  };
+
+  const closeGenerationDialog = () => {
+    setGenerationDialogOpen(false);
+    setGenerationError('');
+    setGenerationResult(null);
+  };
+
+  const handleGenerationChange = (event) => {
+    const { name: fieldName, value } = event.target;
+    setGenerationForm((prev) => ({ ...prev, [fieldName]: value }));
+  };
+
+  const handleSubmitGeneration = (event) => {
+    event.preventDefault();
+
+    const palette = generationForm.palette
+      .split(',')
+      .map((color) => color.trim())
+      .filter(Boolean);
+
+    const payload = {
+      description: generationForm.description,
+      generator: generationForm.generator,
+      width: Number(generationForm.width) || undefined,
+      height: Number(generationForm.height) || undefined,
+      frames: Number(generationForm.frames) || undefined,
+      palette: palette.length ? palette : undefined,
+      name: generationForm.name || undefined,
+      category: generationForm.category || undefined,
+      stylePreset: generationForm.stylePreset || undefined
+    };
+
+    setGenerationError('');
+    setGenerationResult(null);
+    generateMutation.mutate(payload);
   };
 
   const handleChange = (event) => {
@@ -237,6 +316,11 @@ export default function AssetManager({ kind }) {
         <Stack direction="row" spacing={1} alignItems="center">
           {(isFetching || createMutation.isPending || updateMutation.isPending || deleteMutation.isPending) && (
             <CircularProgress size={20} />
+          )}
+          {isSpriteKind && (
+            <Button variant="outlined" onClick={openGenerationDialog}>
+              Generar desde descripción
+            </Button>
           )}
           <Button variant="contained" onClick={openCreateDialog}>
             Añadir asset
@@ -436,6 +520,159 @@ export default function AssetManager({ kind }) {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {isSpriteKind && (
+        <Dialog
+          open={generationDialogOpen}
+          onClose={closeGenerationDialog}
+          fullWidth
+          maxWidth="sm"
+          component="form"
+          onSubmit={handleSubmitGeneration}
+        >
+          <DialogTitle>Generar sprite automáticamente</DialogTitle>
+          <DialogContent dividers>
+            <Stack spacing={2} sx={{ mt: 1 }}>
+              <TextField
+                label="Descripción"
+                name="description"
+                value={generationForm.description}
+                onChange={handleGenerationChange}
+                required
+                multiline
+                minRows={3}
+                helperText="Describe el sprite que quieres obtener."
+              />
+
+              <Grid container spacing={2}>
+                <Grid item xs={12} sm={6}>
+                  <TextField
+                    select
+                    label="Generador"
+                    name="generator"
+                    value={generationForm.generator}
+                    onChange={handleGenerationChange}
+                    disabled={generatorQuery.isLoading}
+                    helperText="Selecciona la estrategia disponible"
+                  >
+                    {(generatorQuery.data ?? []).map((generator) => (
+                      <MenuItem key={generator.id} value={generator.id} disabled={!generator.available}>
+                        {generator.name}
+                        {!generator.available ? ' (no disponible)' : ''}
+                      </MenuItem>
+                    ))}
+                  </TextField>
+                </Grid>
+                <Grid item xs={6} sm={3}>
+                  <TextField
+                    label="Ancho"
+                    name="width"
+                    type="number"
+                    value={generationForm.width}
+                    onChange={handleGenerationChange}
+                    inputProps={{ min: 8, max: 256 }}
+                  />
+                </Grid>
+                <Grid item xs={6} sm={3}>
+                  <TextField
+                    label="Alto"
+                    name="height"
+                    type="number"
+                    value={generationForm.height}
+                    onChange={handleGenerationChange}
+                    inputProps={{ min: 8, max: 256 }}
+                  />
+                </Grid>
+                <Grid item xs={6} sm={3}>
+                  <TextField
+                    label="Frames"
+                    name="frames"
+                    type="number"
+                    value={generationForm.frames}
+                    onChange={handleGenerationChange}
+                    helperText="Sprites por fila"
+                    inputProps={{ min: 1, max: 12 }}
+                  />
+                </Grid>
+                <Grid item xs={6} sm={3}>
+                  <TextField
+                    label="Paleta"
+                    name="palette"
+                    value={generationForm.palette}
+                    onChange={handleGenerationChange}
+                    placeholder="#ff00aa,#00ffaa"
+                    helperText="Colores hex separados por coma"
+                  />
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <TextField
+                    label="Nombre"
+                    name="name"
+                    value={generationForm.name}
+                    onChange={handleGenerationChange}
+                    helperText="Opcional"
+                  />
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <TextField
+                    label="Categoría"
+                    name="category"
+                    value={generationForm.category}
+                    onChange={handleGenerationChange}
+                  />
+                </Grid>
+                <Grid item xs={12}>
+                  <TextField
+                    label="Estilo"
+                    name="stylePreset"
+                    value={generationForm.stylePreset}
+                    onChange={handleGenerationChange}
+                    helperText="Preset para modelos externos"
+                  />
+                </Grid>
+              </Grid>
+
+              <DialogContentText>
+                La salida se normaliza a un PNG {`${generationForm.width}×${generationForm.height}`} compatible con el motor, con
+                paletas adaptadas automáticamente si es necesario.
+              </DialogContentText>
+
+              {generationError && (
+                <Alert severity="error" onClose={() => setGenerationError('')}>
+                  {generationError}
+                </Alert>
+              )}
+
+              {generationResult?.resources?.image && (
+                <Stack spacing={1} alignItems="center">
+                  <Typography variant="subtitle2">Sprite generado</Typography>
+                  <Box
+                    component="img"
+                    src={generationResult.resources.image}
+                    alt={generationResult.asset?.name ?? 'Sprite generado'}
+                    sx={{
+                      width: 96,
+                      height: 96,
+                      borderRadius: 2,
+                      border: '1px solid rgba(255,255,255,0.12)',
+                      imageRendering: 'pixelated'
+                    }}
+                  />
+                  <Typography variant="body2" color="text.secondary" align="center">
+                    {generationResult.asset?.name} disponible en {generationResult.asset?.imageUrl}
+                  </Typography>
+                </Stack>
+              )}
+            </Stack>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={closeGenerationDialog}>Cerrar</Button>
+            <Button type="submit" variant="contained" disabled={generateMutation.isPending}>
+              {generateMutation.isPending ? 'Generando…' : 'Generar'}
+            </Button>
+          </DialogActions>
+        </Dialog>
+      )}
     </Box>
   );
 }

@@ -9,6 +9,7 @@ const WorldContext = createContext({
   connectionStatus: 'idle',
   players: [],
   localPlayerId: null,
+  spriteAtlas: null,
   updateLocalPlayerState: () => {}
 });
 
@@ -66,6 +67,7 @@ export function WorldProvider({ children }) {
   const [connectionState, setConnectionState] = useState({ status: 'idle', error: null });
   const [players, setPlayers] = useState([]);
   const [localPlayerId, setLocalPlayerId] = useState(null);
+  const [spriteAtlas, setSpriteAtlas] = useState(null);
 
   const socketRef = useRef(null);
   const localPlayerIdRef = useRef(null);
@@ -135,6 +137,10 @@ export function WorldProvider({ children }) {
         activeIds.add(player.id);
         applyPlayerSnapshot(player, timestamp);
       });
+
+      if (snapshot.spriteAtlas) {
+        setSpriteAtlas(snapshot.spriteAtlas);
+      }
 
       for (const existingId of playersRef.current.keys()) {
         if (!activeIds.has(existingId)) {
@@ -294,6 +300,7 @@ export function WorldProvider({ children }) {
     socket.on('disconnect', handleDisconnect);
     socket.on('connect_error', handleConnectError);
     socket.on('world:state', applySnapshot);
+    socket.on('sprites:atlasUpdated', setSpriteAtlas);
     socket.on('player:joined', (player) => applyPlayerSnapshot(player));
     socket.on('player:updated', (player) => applyPlayerSnapshot(player));
     socket.on('player:left', ({ id }) => removePlayer(id));
@@ -303,6 +310,7 @@ export function WorldProvider({ children }) {
       socket.off('disconnect', handleDisconnect);
       socket.off('connect_error', handleConnectError);
       socket.off('world:state', applySnapshot);
+      socket.off('sprites:atlasUpdated', setSpriteAtlas);
       socket.off('player:joined', applyPlayerSnapshot);
       socket.off('player:updated', applyPlayerSnapshot);
       socket.off('player:left', removePlayer);
@@ -312,6 +320,7 @@ export function WorldProvider({ children }) {
       compensatorsRef.current.clear();
       localPlayerIdRef.current = null;
       setPlayers([]);
+      setSpriteAtlas(null);
     };
   }, [applyPlayerSnapshot, applySnapshot, removePlayer, sendJoinRequest]);
 
@@ -373,9 +382,17 @@ export function WorldProvider({ children }) {
       connectionStatus: connectionState.status,
       players,
       localPlayerId,
+      spriteAtlas,
       updateLocalPlayerState
     }),
-    [connectionState.error, connectionState.status, localPlayerId, players, updateLocalPlayerState]
+    [
+      connectionState.error,
+      connectionState.status,
+      localPlayerId,
+      players,
+      spriteAtlas,
+      updateLocalPlayerState
+    ]
   );
 
   return <WorldContext.Provider value={value}>{children}</WorldContext.Provider>;
