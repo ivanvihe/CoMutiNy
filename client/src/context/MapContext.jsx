@@ -41,6 +41,10 @@ const expandArea = ({ x, y, width = 1, height = 1 }) => {
 };
 
 const normaliseMap = (mapDefinition) => {
+  if (!mapDefinition || typeof mapDefinition !== 'object') {
+    return null;
+  }
+
   const blockedTiles = new Set();
   mapDefinition.blockedAreas?.forEach((area) => {
     expandArea(area).forEach((tile) => blockedTiles.add(tile));
@@ -52,24 +56,123 @@ const normaliseMap = (mapDefinition) => {
     }
   });
 
-  const objects = Array.isArray(mapDefinition.objects)
-    ? mapDefinition.objects.filter((object) => object && object.layerVisible !== false)
+  const objects = [];
+  const objectLookup = new Map();
+
+  const registerObject = (object) => {
+    if (!object || typeof object !== 'object') {
+      return null;
+    }
+
+    const identifier =
+      typeof object.id === 'string' && object.id.trim() ? object.id.trim() : null;
+
+    if (identifier) {
+      if (!objectLookup.has(identifier)) {
+        objectLookup.set(identifier, object);
+        objects.push(object);
+      }
+      return objectLookup.get(identifier);
+    }
+
+    objects.push(object);
+    return object;
+  };
+
+  if (Array.isArray(mapDefinition.objects)) {
+    mapDefinition.objects.forEach((object) => {
+      if (!object || object.layerVisible === false) {
+        return;
+      }
+      registerObject(object);
+    });
+  }
+
+  const resolveLayerObject = (entry) => {
+    if (!entry) {
+      return null;
+    }
+
+    if (typeof entry === 'string') {
+      const identifier = entry.trim();
+      if (!identifier) {
+        return null;
+      }
+      return objectLookup.get(identifier) ?? null;
+    }
+
+    if (typeof entry === 'object') {
+      if (entry.layerVisible === false) {
+        return null;
+      }
+      const identifier =
+        typeof entry.id === 'string' && entry.id.trim() ? entry.id.trim() : null;
+      if (identifier && objectLookup.has(identifier)) {
+        return objectLookup.get(identifier);
+      }
+      return registerObject(entry);
+    }
+
+    return null;
+  };
+
+  const objectLayers = Array.isArray(mapDefinition.objectLayers)
+    ? mapDefinition.objectLayers
+        .map((layer, index) => {
+          const layerId =
+            typeof layer?.id === 'string' && layer.id.trim() ? layer.id.trim() : `layer-${index + 1}`;
+          const order = Number.isFinite(layer?.order) ? layer.order : index;
+          const visible = layer?.visible !== false;
+          const name =
+            typeof layer?.name === 'string' && layer.name.trim() ? layer.name.trim() : layerId;
+          const layerObjects = Array.isArray(layer?.objects)
+            ? layer.objects
+                .map((entry) => resolveLayerObject(entry))
+                .filter((object) => object && object.layerVisible !== false)
+            : [];
+          return {
+            id: layerId,
+            name,
+            order,
+            visible,
+            objects: layerObjects
+          };
+        })
+        .sort((a, b) => (a.order === b.order ? a.id.localeCompare(b.id) : a.order - b.order))
     : [];
 
   objects.forEach((object) => {
-    if (object.solid) {
+    if (object?.solid) {
       expandArea({ ...object.position, ...object.size }).forEach((tile) => blockedTiles.add(tile));
     }
   });
 
+  const playerLayerOrderCandidates = [
+    mapDefinition.playerLayerOrder,
+    mapDefinition.playerLayer?.order,
+    mapDefinition.metadata?.playerLayerOrder,
+    mapDefinition.metadata?.playerLayer?.order
+  ];
+
+  let playerLayerOrder = null;
+  for (const candidate of playerLayerOrderCandidates) {
+    const numeric = Number.parseFloat(candidate);
+    if (Number.isFinite(numeric)) {
+      playerLayerOrder = numeric;
+      break;
+    }
+  }
+
   return {
     ...mapDefinition,
     objects,
-    blockedTiles
+    blockedTiles,
+    objectLayers,
+    ...(playerLayerOrder !== null ? { playerLayerOrder } : {})
   };
 };
 
-const INITIAL_MAPS = MAPS.map((map) => normaliseMap(map));
+const INITIAL_MAPS = MAPS.map((map) => normaliseMap(map)).filter(Boolean);
 const INITIAL_DEFAULT_MAP_ID = resolveDefaultMapId(MAPS);
 const INITIAL_DEFAULT_MAP =
   INITIAL_MAPS.find((map) => map.id === INITIAL_DEFAULT_MAP_ID) ?? INITIAL_MAPS[0] ?? null;
@@ -139,12 +242,27 @@ export function MapProvider({ children }) {
     const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
 
     fetchServerMaps({ signal: controller?.signal })
-      .then((remoteMaps) => {
-        if (cancelled || !remoteMaps.length) {
+      .then((result) => {
+        if (cancelled) {
           return;
         }
+
+        const remoteMaps = Array.isArray(result?.maps)
+          ? result.maps
+          : Array.isArray(result)
+            ? result
+            : [];
+
+        if (Array.isArray(result?.objectDefinitions) && result.objectDefinitions.length) {
+          setObjectDefinitions(listObjectDefinitions());
+        }
+
+        if (!remoteMaps.length) {
+          return;
+        }
+
         setMaps((existing) => {
-          const normalised = remoteMaps.map((map) => normaliseMap(map));
+          const normalised = remoteMaps.map((map) => normaliseMap(map)).filter(Boolean);
           return normalised.length ? normalised : existing;
         });
       })

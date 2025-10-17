@@ -23,7 +23,9 @@ jest.mock('../../game/maps.js', () => ({
   ],
   DEFAULT_MAP_ID: 'mapa-prueba',
   resolveDefaultMapId: jest.fn(() => 'mapa-prueba'),
-  fetchServerMaps: jest.fn(() => Promise.resolve([]))
+  fetchServerMaps: jest.fn(() =>
+    Promise.resolve({ maps: [], objectDefinitions: [], canvasDefinitions: [] })
+  )
 }));
 
 jest.mock('../../api/objects.js', () => ({

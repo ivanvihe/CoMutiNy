@@ -315,7 +315,11 @@ export class IsometricEngine {
         player: null,
         remotePlayers: [],
         chatBubbles: new Map(),
-        objects: []
+        objects: [],
+        objectLayers: [],
+        playerLayerOrder: null,
+        objectsBeforePlayers: [],
+        objectsAfterPlayers: []
       };
       this.objectSprites = new Map();
       return;
@@ -400,8 +404,24 @@ export class IsometricEngine {
           })
       : [];
 
+    const sortedObjects = [...renderableObjects].sort((a, b) => {
+      const aLayer = Number.isFinite(a.layerOrder) ? a.layerOrder : 0;
+      const bLayer = Number.isFinite(b.layerOrder) ? b.layerOrder : 0;
+      if (aLayer !== bLayer) {
+        return aLayer - bLayer;
+      }
+      const aPos = a.position ?? { x: 0, y: 0 };
+      const bPos = b.position ?? { x: 0, y: 0 };
+      const aDepth = (aPos.y ?? 0) + (a.size?.height ?? 1);
+      const bDepth = (bPos.y ?? 0) + (b.size?.height ?? 1);
+      if (aDepth !== bDepth) {
+        return aDepth - bDepth;
+      }
+      return aPos.x - bPos.x;
+    });
+
     const objectTiles = new Set();
-    renderableObjects.forEach((object) => {
+    sortedObjects.forEach((object) => {
       expandArea({ ...object.position, ...object.size }).forEach((tile) => objectTiles.add(tile));
     });
 
@@ -460,7 +480,7 @@ export class IsometricEngine {
           .sort((a, b) => (a.order === b.order ? a.id.localeCompare(b.id) : a.order - b.order))
       : [];
 
-    const renderableLookup = new Map(renderableObjects.map((object) => [object.id, object]));
+    const renderableLookup = new Map(sortedObjects.map((object) => [object.id, object]));
     const sceneObjectLayers = objectLayers.map((layer) => ({
       ...layer,
       objects: layer.objects
@@ -474,6 +494,38 @@ export class IsometricEngine {
         .filter(Boolean)
     }));
 
+    const playerLayerOrderCandidates = [
+      map.playerLayerOrder,
+      map.playerLayer?.order,
+      map.metadata?.playerLayerOrder,
+      map.metadata?.playerLayer?.order
+    ];
+
+    let playerLayerOrder = null;
+    for (const candidate of playerLayerOrderCandidates) {
+      const numeric = Number.parseFloat(candidate);
+      if (Number.isFinite(numeric)) {
+        playerLayerOrder = numeric;
+        break;
+      }
+    }
+
+    const threshold = Number.isFinite(playerLayerOrder)
+      ? playerLayerOrder
+      : Number.POSITIVE_INFINITY;
+
+    const objectsBeforePlayers = [];
+    const objectsAfterPlayers = [];
+
+    sortedObjects.forEach((object) => {
+      const order = Number.isFinite(object.layerOrder) ? object.layerOrder : 0;
+      if (order > threshold) {
+        objectsAfterPlayers.push(object);
+      } else {
+        objectsBeforePlayers.push(object);
+      }
+    });
+
     this.scene = {
       map,
       blockedTiles,
@@ -485,11 +537,14 @@ export class IsometricEngine {
       player: player ?? null,
       remotePlayers: Array.isArray(remotePlayers) ? remotePlayers : [],
       chatBubbles: bubbleMap,
-      objects: renderableObjects,
-      objectLayers: sceneObjectLayers
+      objects: sortedObjects,
+      objectLayers: sceneObjectLayers,
+      playerLayerOrder,
+      objectsBeforePlayers,
+      objectsAfterPlayers
     };
 
-    this.buildObjectSprites(renderableObjects);
+    this.buildObjectSprites(sortedObjects);
 
     if (player?.position) {
       this.camera = { ...player.position };
@@ -677,8 +732,9 @@ export class IsometricEngine {
       }
     }
 
-    this.drawObjects(width, height);
+    this.drawObjects(width, height, this.scene.objectsBeforePlayers);
     this.drawPlayers(delta, width, height);
+    this.drawObjects(width, height, this.scene.objectsAfterPlayers);
   }
 
   drawTile(tileIndex, x, y) {
@@ -810,9 +866,13 @@ export class IsometricEngine {
     });
   }
 
-  drawObjects(width, height) {
-    const objects = Array.isArray(this.scene?.objects) ? this.scene.objects : [];
-    if (!objects.length) {
+  drawObjects(width, height, objects) {
+    const list = Array.isArray(objects)
+      ? objects
+      : Array.isArray(this.scene?.objects)
+        ? this.scene.objects
+        : [];
+    if (!list.length) {
       return;
     }
 
@@ -821,24 +881,7 @@ export class IsometricEngine {
     const camera = this.camera ?? { x: 0, y: 0 };
     const originX = width / 2;
     const originY = height / 2;
-
-    const sorted = [...objects].sort((a, b) => {
-      const aLayer = Number.isFinite(a.layerOrder) ? a.layerOrder : 0;
-      const bLayer = Number.isFinite(b.layerOrder) ? b.layerOrder : 0;
-      if (aLayer !== bLayer) {
-        return aLayer - bLayer;
-      }
-      const aPos = a.position ?? { x: 0, y: 0 };
-      const bPos = b.position ?? { x: 0, y: 0 };
-      const aDepth = (aPos.y ?? 0) + (a.size?.height ?? 1);
-      const bDepth = (bPos.y ?? 0) + (b.size?.height ?? 1);
-      if (aDepth !== bDepth) {
-        return aDepth - bDepth;
-      }
-      return aPos.x - bPos.x;
-    });
-
-    sorted.forEach((object) => {
+    list.forEach((object) => {
       if (object.layerVisible === false) {
         return;
       }

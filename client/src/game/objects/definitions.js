@@ -1,4 +1,5 @@
 import normaliseAppearance from './appearance.js';
+import { registerSpriteGeneratorSource } from './spriteGenerators.js';
 
 const sanitizeString = (value, fallback = '') => {
   if (typeof value !== 'string') {
@@ -142,6 +143,24 @@ const OBJECT_DEFINITIONS = new Map();
 
 const registerDefinition = (rawDefinition, { sourcePath } = {}) => {
   const definition = normaliseDefinition(rawDefinition, { sourcePath });
+
+  const appearance = definition.appearance;
+  if (
+    appearance?.generator &&
+    appearance.generatorType === 'function' &&
+    typeof appearance.generatorSource === 'string' &&
+    appearance.generatorSource.trim()
+  ) {
+    try {
+      registerSpriteGeneratorSource(appearance.generator, appearance.generatorSource);
+    } catch (error) {
+      console.warn(
+        `[objects] No se pudo registrar el generador Canvas ${appearance.generator}`,
+        error.message
+      );
+    }
+  }
+
   OBJECT_DEFINITIONS.set(definition.id, definition);
   return definition;
 };

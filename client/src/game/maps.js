@@ -4,6 +4,7 @@ import parseMapDefinition, {
   parseDimensions as parseDimensionsString
 } from './map/parser.js';
 import { resolveObjectDefinition, registerObjectDefinitions } from './objects/definitions.js';
+import { registerSpriteGeneratorDefinitions } from './objects/spriteGenerators.js';
 import normaliseAppearance from './objects/appearance.js';
 
 const MAP_DIRECTORY = '../../../server/maps';
@@ -616,6 +617,13 @@ const normaliseServerMap = (definition) => {
         })
     : [];
 
+  const playerLayerOrderCandidate = Number.parseFloat(
+    definition.playerLayerOrder ?? definition.playerLayer?.order
+  );
+  const playerLayerOrder = Number.isFinite(playerLayerOrderCandidate)
+    ? playerLayerOrderCandidate
+    : null;
+
   return {
     id: definition.id ?? '',
     name: definition.name ?? definition.title ?? definition.id ?? 'map',
@@ -629,20 +637,21 @@ const normaliseServerMap = (definition) => {
     doors: normaliseDoorCollection(definition.doors),
     portals: Array.isArray(definition.portals) ? definition.portals : [],
     theme: normaliseTheme(definition.theme),
-    sourcePath: definition.sourcePath ?? null
+    sourcePath: definition.sourcePath ?? null,
+    ...(playerLayerOrder !== null ? { playerLayerOrder } : {})
   };
 };
 
 export const fetchServerMaps = async ({ signal } = {}) => {
   if (typeof fetch !== 'function') {
-    return [];
+    return { maps: [], objectDefinitions: [], canvasDefinitions: [] };
   }
 
   try {
     const endpoint = resolveStaticMapUrl();
     const response = await fetch(endpoint, { signal });
     if (!response.ok) {
-      return [];
+      return { maps: [], objectDefinitions: [], canvasDefinitions: [] };
     }
 
     const payload = await response.json();
@@ -659,6 +668,18 @@ export const fetchServerMaps = async ({ signal } = {}) => {
       }
     }
 
+    const canvasDefinitions = Array.isArray(payload?.canvasDefinitions)
+      ? payload.canvasDefinitions.filter((entry) => entry && typeof entry === 'object')
+      : [];
+
+    if (canvasDefinitions.length) {
+      try {
+        registerSpriteGeneratorDefinitions(canvasDefinitions);
+      } catch (error) {
+        console.warn('[maps] No se pudieron registrar las definiciones Canvas remotas', error);
+      }
+    }
+
     const items = Array.isArray(payload?.items)
       ? payload.items
       : Array.isArray(payload?.maps)
@@ -669,8 +690,12 @@ export const fetchServerMaps = async ({ signal } = {}) => {
       .map((definition) => normaliseServerMap(definition))
       .filter((map) => map && map.id);
 
-    return sortMaps(normalised);
+    return {
+      maps: sortMaps(normalised),
+      objectDefinitions: definitions,
+      canvasDefinitions
+    };
   } catch (error) {
-    return [];
+    return { maps: [], objectDefinitions: [], canvasDefinitions: [] };
   }
 };

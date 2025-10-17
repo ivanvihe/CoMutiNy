@@ -50,6 +50,19 @@ const normaliseScale = (raw) => {
   return { x: 1, y: 1 };
 };
 
+const normaliseGeneratorType = (value) => {
+  if (typeof value !== 'string') {
+    return 'reference';
+  }
+
+  const normalised = value.trim().toLowerCase();
+  if (['function', 'code', 'source'].includes(normalised)) {
+    return 'function';
+  }
+
+  return 'reference';
+};
+
 export const normaliseAppearance = (raw, { fallbackSize } = {}) => {
   if (!raw || typeof raw !== 'object') {
     return null;
@@ -96,6 +109,12 @@ export const normaliseAppearance = (raw, { fallbackSize } = {}) => {
       ? { ...raw.options }
       : {};
 
+  const generatorType = normaliseGeneratorType(raw.generatorType);
+  const generatorSource =
+    typeof raw.generatorSource === 'string' && raw.generatorSource.trim()
+      ? raw.generatorSource.trim()
+      : null;
+
   const variant =
     typeof raw.variant === 'string' && raw.variant.trim() ? raw.variant.trim() : null;
 
@@ -103,7 +122,7 @@ export const normaliseAppearance = (raw, { fallbackSize } = {}) => {
   const offset = normaliseOffset(raw.offset ?? raw.positionOffset);
   const scale = normaliseScale(raw.scale);
 
-  return {
+  const appearance = {
     generator,
     width,
     height,
@@ -112,8 +131,15 @@ export const normaliseAppearance = (raw, { fallbackSize } = {}) => {
     anchor,
     offset,
     scale,
+    generatorType,
     ...(variant ? { variant } : {})
   };
+
+  if (generatorSource) {
+    appearance.generatorSource = generatorSource;
+  }
+
+  return appearance;
 };
 
 export default normaliseAppearance;

@@ -1,11 +1,7 @@
-import { SPRITE_GENERATORS } from './spriteGenerators.js';
+import { resolveSpriteGenerator } from './spriteGenerators.js';
 
 export const getSpriteGenerator = (id) => {
-  if (!id) {
-    return null;
-  }
-  const key = `${id}`.trim();
-  return SPRITE_GENERATORS[key] ?? null;
+  return resolveSpriteGenerator(id);
 };
 
 export const createSpriteCanvas = ({ generator, width, height, tileSize, options }) => {
