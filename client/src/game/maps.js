@@ -1,4 +1,5 @@
-const MAP_FILE_PATTERN = '../../../maps/*.map';
+const MAP_DIRECTORY = '../../../maps';
+const MAP_FILE_EXTENSION = '.map';
 
 const toCamelCase = (rawKey) =>
   rawKey
@@ -38,7 +39,7 @@ const parseCoordinate = (value) => {
 
 const loadMapSources = () => {
   if (typeof import.meta !== 'undefined' && typeof import.meta.glob === 'function') {
-    return import.meta.glob(MAP_FILE_PATTERN, { as: 'raw', eager: true });
+    return import.meta.glob('../../../maps/*.map', { as: 'raw', eager: true });
   }
 
   if (typeof process !== 'undefined' && process.versions?.node && typeof require !== 'undefined') {
@@ -47,7 +48,7 @@ const loadMapSources = () => {
     // eslint-disable-next-line global-require
     const path = require('path');
 
-    const directory = path.resolve(__dirname, '../../../maps');
+    const directory = path.resolve(__dirname, MAP_DIRECTORY);
     let entries = [];
     try {
       entries = fs.readdirSync(directory, { withFileTypes: true });
@@ -56,13 +57,13 @@ const loadMapSources = () => {
     }
 
     return entries
-      .filter((entry) => entry.isFile() && entry.name.endsWith('.map'))
+      .filter((entry) => entry.isFile() && entry.name.endsWith(MAP_FILE_EXTENSION))
       .reduce((accumulator, entry) => {
         const filePath = path.join(directory, entry.name);
         const rawContents = fs.readFileSync(filePath, 'utf-8');
         return {
           ...accumulator,
-          [`../../../maps/${entry.name}`]: rawContents
+          [`${MAP_DIRECTORY}/${entry.name}`]: rawContents
         };
       }, {});
   }
