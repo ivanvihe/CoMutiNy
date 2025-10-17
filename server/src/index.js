@@ -217,7 +217,7 @@ const PORT = Number(process.env.SERVER_PORT || 4000)
 const start = async () => {
   try {
     await connectDatabase()
-    server.listen(PORT, () => {
+    server.listen(PORT, '0.0.0.0', () => {
       console.log(`Server listening on port ${PORT}`)
     })
   } catch (error) {
