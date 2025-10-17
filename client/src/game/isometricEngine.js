@@ -842,6 +842,7 @@ export class IsometricEngine {
       if (object.layerVisible === false) {
         return;
       }
+
       const sprite = this.objectSprites.get(object.id);
       if (!sprite?.canvas) {
         return;
@@ -851,10 +852,12 @@ export class IsometricEngine {
       const size = object.size ?? { width: 1, height: 1 };
       const relX = position.x - camera.x;
       const relY = position.y - camera.y;
-      const areaX = originX + relX * tileWidth - tileWidth / 2;
-      const areaY = originY + relY * tileHeight - tileHeight / 2;
-      const areaWidth = tileWidth * (size.width ?? 1);
-      const areaHeight = tileHeight * (size.height ?? 1);
+      const screen = gridToScreen(relX, relY, tileWidth, tileHeight);
+      const baseX = originX + screen.x;
+      const baseY = originY + screen.y;
+
+      const coverageWidth = tileWidth * (size.width ?? 1);
+      const coverageHeight = tileHeight * (size.height ?? 1);
 
       const drawWidth = sprite.canvas.width * sprite.scaleX;
       const drawHeight = sprite.canvas.height * sprite.scaleY;
@@ -864,8 +867,11 @@ export class IsometricEngine {
       const offsetX = sprite.offset?.x ?? 0;
       const offsetY = sprite.offset?.y ?? 0;
 
-      const drawX = areaX + areaWidth * anchorX - drawWidth * anchorX + offsetX * tileWidth;
-      const drawY = areaY + areaHeight * anchorY - drawHeight * anchorY + offsetY * tileHeight;
+      const anchorOffsetX = coverageWidth * anchorX - drawWidth * anchorX;
+      const anchorOffsetY = coverageHeight * anchorY - drawHeight * anchorY;
+
+      const drawX = baseX - tileWidth / 2 + anchorOffsetX + offsetX * tileWidth;
+      const drawY = baseY - tileHeight / 2 + anchorOffsetY + offsetY * tileHeight;
 
       this.ctx.drawImage(sprite.canvas, drawX, drawY, drawWidth, drawHeight);
     });
