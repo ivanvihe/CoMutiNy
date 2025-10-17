@@ -2,6 +2,7 @@ import EventEmitter from 'node:events'
 
 import worldState from './worldState.js'
 import { getRedisClient, getRedisPubSub } from '../config/redis.js'
+import loadStaticMapDefinitions from '../utils/staticMapLoader.js'
 
 const SNAPSHOT_KEY = 'comutiny:world:snapshot'
 const EVENT_CHANNEL = 'comutiny:world:events'
@@ -68,6 +69,8 @@ class SessionManager extends EventEmitter {
         console.error('[session] Failed to hydrate snapshot', error)
       }
     }
+
+    await this._ensureDefaultWorld()
 
     this.initialized = true
   }
@@ -168,6 +171,48 @@ class SessionManager extends EventEmitter {
     }
 
     return snapshot
+  }
+
+  async _ensureDefaultWorld () {
+    try {
+      const maps = await loadStaticMapDefinitions()
+
+      if (!Array.isArray(maps) || maps.length === 0) {
+        return
+      }
+
+      const initMap =
+        maps.find((map) => /(^|\/)init\.map$/i.test(map.sourcePath ?? '')) ?? maps[0]
+
+      if (!initMap) {
+        return
+      }
+
+      const current = this.worldState.getWorld()
+      const spawn = {
+        x: initMap.spawn?.x ?? current.spawn?.x ?? 0,
+        y: initMap.spawn?.y ?? current.spawn?.y ?? 0,
+        z: initMap.spawn?.z ?? current.spawn?.z ?? 0
+      }
+
+      const isSameWorld =
+        current?.sourcePath === initMap.sourcePath &&
+        current?.id === initMap.id &&
+        current?.size?.width === initMap.size?.width &&
+        current?.size?.height === initMap.size?.height &&
+        current?.spawn?.x === spawn.x &&
+        current?.spawn?.y === spawn.y &&
+        current?.spawn?.z === spawn.z
+
+      if (isSameWorld) {
+        return
+      }
+
+      this.worldState.setWorld({ ...initMap, spawn })
+      this._scheduleSnapshotPersist()
+    } catch (error) {
+      console.error('[session] Failed to ensure default world map', error)
+    }
   }
 
   _queuePlayerUpdateBroadcast (player, socketId) {
