@@ -18,6 +18,14 @@ class UserRepository {
     return User.findOne({ where: { email } })
   }
 
+  async findByUsername (username) {
+    return User.findOne({ where: { username } })
+  }
+
+  async findByIdBasic (id) {
+    return User.findByPk(id)
+  }
+
   async list ({ limit = 20, offset = 0 } = {}) {
     return User.findAndCountAll({
       limit,

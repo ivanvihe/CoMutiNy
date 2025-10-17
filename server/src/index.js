@@ -4,14 +4,33 @@ import { Server } from 'socket.io'
 import dotenv from 'dotenv'
 
 import { connectDatabase } from './config/database.js'
+import authRoutes from './routes/authRoutes.js'
+import avatarRoutes from './routes/avatarRoutes.js'
+import { cookies } from './middlewares/auth.js'
 
 dotenv.config()
 
 const app = express()
 
 app.use(express.json())
+app.use(cookies)
 app.get('/health', (req, res) => {
   res.status(200).json({ status: 'ok' })
+})
+
+app.use('/auth', authRoutes)
+app.use('/avatars', avatarRoutes)
+
+app.use((err, req, res, next) => {
+  console.error(err)
+
+  if (res.headersSent) {
+    return next(err)
+  }
+
+  res.status(err?.status ?? 500).json({
+    message: err?.message ?? 'Internal server error'
+  })
 })
 
 const server = http.createServer(app)
