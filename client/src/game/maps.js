@@ -63,12 +63,6 @@ const loadMapSources = () => {
   return {};
 };
 
-const mapSources = loadMapSources();
-
-const normalisedMaps = Object.entries(mapSources).map(([filePath, rawContents]) =>
-  parseMapDefinition(rawContents, { sourcePath: filePath })
-);
-
 const sortMaps = (maps) => {
   maps.sort((a, b) => {
     const aIsInit = /(^|\/)init\.map$/i.test(a.sourcePath ?? '');
@@ -84,7 +78,17 @@ const sortMaps = (maps) => {
   return maps;
 };
 
-sortMaps(normalisedMaps);
+const mapSources = loadMapSources();
+
+const normalisedMaps = sortMaps(
+  Object.entries(mapSources).map(([filePath, rawContents]) => {
+    const parsed = parseMapDefinition(rawContents, { sourcePath: filePath });
+    return {
+      ...parsed,
+      objects: normaliseServerObjects(parsed.objects)
+    };
+  })
+);
 
 export const MAPS = normalisedMaps;
 
@@ -245,7 +249,7 @@ const normaliseObjectSize = (value) => {
   return { width: 1, height: 1 };
 };
 
-const normaliseServerObject = (object, registry) => {
+function normaliseServerObject(object, registry) {
   if (!object || typeof object !== 'object') {
     return null;
   }
@@ -350,9 +354,9 @@ const normaliseServerObject = (object, registry) => {
   }
 
   return payload;
-};
+}
 
-const normaliseServerObjects = (objects) => {
+function normaliseServerObjects(objects) {
   if (!Array.isArray(objects)) {
     return [];
   }
@@ -361,7 +365,7 @@ const normaliseServerObjects = (objects) => {
   return objects
     .map((object) => normaliseServerObject(object, registry))
     .filter(Boolean);
-};
+}
 
 const normaliseDoorEntry = (door) => {
   if (!door || typeof door !== 'object') {
