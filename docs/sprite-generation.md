@@ -97,6 +97,19 @@ El endpoint público `GET /assets/sprites/atlas` devuelve la instantánea del at
 
 Esto permite a herramientas internas o scripts externos sincronizarse con el atlas vigente y descargar los recursos necesarios.
 
+## Sprites animados
+
+El mismo pipeline genera sprites animados siempre que el generador devuelva múltiples frames o que se indique `frames > 1` en la carga útil. El servicio construye un spritesheet horizontal con ayuda de `spriteSheetBuilder` (`server/src/sprites/spriteSheetBuilder.js`), asegurando que todos los frames tienen el mismo tamaño antes de unirlos.
+
+Para producir sprites animados:
+
+1. Establece el número de frames deseado en la petición (`frames`, por ejemplo `8`).
+2. Si el proveedor devuelve menos frames de los solicitados, el builder rellenará las columnas restantes reutilizando el último frame válido para mantener la longitud del ciclo.
+3. Define `frameWidth` y `frameHeight` en la carga cuando quieras forzar un tamaño específico; de lo contrario se utilizan las dimensiones del primer frame.
+4. Opcionalmente añade `metadata.animationSpeed` para controlar la velocidad sugerida por frame (en milisegundos). El cliente se sincroniza con estos valores al hidratar el atlas en `WorldContext`.
+
+Tras la generación, el manifest almacena `frames`, `frameWidth`, `frameHeight` y `animationSpeed`. El frontend detecta estos campos al renderizar sprites y hace avanzar la animación cuando el jugador está en estado `walk`. Para nuevos estados (por ejemplo `emote` o `attack`) debes añadir lógica a `SpriteAnimator` para recorrer los frames y enviar el nombre de animación correspondiente desde el cliente/servidor (consulta [docs/testing/multiplayer.md](testing/multiplayer.md)).
+
 ## Variables de entorno
 
 - `OPENAI_API_KEY`: habilita el generador `dall-e`.
