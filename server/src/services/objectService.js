@@ -1,6 +1,10 @@
 import path from 'node:path'
 
-import { ensureDefinitionsLoaded, getDefinition } from '../objects/objectRegistry.js'
+import { ensureDefinitionsLoaded, getDefinition as getRegistryDefinition } from '../objects/objectRegistry.js'
+import {
+  ensureObjectDefinitionsLoaded,
+  getObjectDefinition
+} from '../utils/objectDefinitionLoader.js'
 
 const normaliseDefinition = (definition) => {
   if (!definition) {
@@ -18,9 +22,28 @@ const normaliseDefinition = (definition) => {
 
 const objectService = {
   async listDefinitions (options = {}) {
-    const state = await ensureDefinitionsLoaded(options)
-    const entries = Array.from(state.definitions.values())
-    return entries.map((definition) => normaliseDefinition(definition)).filter(Boolean)
+    const [registryState, appState] = await Promise.all([
+      ensureDefinitionsLoaded(options),
+      ensureObjectDefinitionsLoaded(options)
+    ])
+
+    const entries = new Map()
+
+    for (const definition of registryState.definitions.values()) {
+      if (definition?.id) {
+        entries.set(definition.id, definition)
+      }
+    }
+
+    for (const definition of appState.definitions.values()) {
+      if (definition?.id) {
+        entries.set(definition.id, definition)
+      }
+    }
+
+    return Array.from(entries.values())
+      .map((definition) => normaliseDefinition(definition))
+      .filter(Boolean)
   },
 
   async getDefinition (objectId, options = {}) {
@@ -28,8 +51,15 @@ const objectService = {
       return null
     }
 
-    await ensureDefinitionsLoaded(options)
-    const definition = getDefinition(objectId)
+    const [registryDefinition, appDefinition] = await Promise.all([
+      (async () => {
+        await ensureDefinitionsLoaded(options)
+        return getRegistryDefinition(objectId)
+      })(),
+      getObjectDefinition(objectId, options)
+    ])
+
+    const definition = appDefinition ?? registryDefinition
     return normaliseDefinition(definition)
   }
 }
