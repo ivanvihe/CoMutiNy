@@ -4,6 +4,8 @@ import AuthForm from './components/AuthForm.jsx';
 import AvatarCustomizer from './components/AvatarCustomizer.jsx';
 import { useAuth } from './context/AuthContext.jsx';
 import AdminDashboard from './components/AdminDashboard.jsx';
+import MapViewport from './components/MapViewport.jsx';
+import { MapProvider } from './context/MapContext.jsx';
 
 const formTabs = [
   { value: 'login', label: 'Iniciar sesión' },
@@ -95,7 +97,12 @@ export default function App() {
             </Box>
 
             <Box flex={1}>
-              <AvatarCustomizer appearance={appearance} onChange={setAppearance} />
+              <Stack spacing={3}>
+                <AvatarCustomizer appearance={appearance} onChange={setAppearance} />
+                <MapProvider>
+                  <MapViewport />
+                </MapProvider>
+              </Stack>
             </Box>
           </Stack>
 
