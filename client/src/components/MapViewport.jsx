@@ -3,17 +3,32 @@ import {
   Button,
   Card,
   CardContent,
+  Chip,
+  Divider,
   FormControl,
   Grid,
+  IconButton,
   InputLabel,
+  List,
+  ListItem,
+  ListItemText,
   MenuItem,
   Select,
   Stack,
+  Tab,
+  Tabs,
+  Tooltip,
   Typography
 } from '@mui/material';
-import { useMemo } from 'react';
+import NavigateBeforeIcon from '@mui/icons-material/NavigateBefore';
+import NavigateNextIcon from '@mui/icons-material/NavigateNext';
+import GroupsIcon from '@mui/icons-material/Groups';
+import HistoryIcon from '@mui/icons-material/History';
+import TravelExploreIcon from '@mui/icons-material/TravelExplore';
+import { useMemo, useState } from 'react';
 import { useMap } from '../context/MapContext.jsx';
 import { useWorld } from '../context/WorldContext.jsx';
+import MissionStatusList from './MissionStatusList.jsx';
 
 const CELL_SIZE = 32;
 
@@ -94,6 +109,14 @@ const cellStyles = {
   }
 };
 
+const formatTimestamp = (timestamp) => {
+  try {
+    return new Date(timestamp).toLocaleTimeString();
+  } catch (error) {
+    return '';
+  }
+};
+
 export default function MapViewport() {
   const {
     maps = [],
@@ -105,9 +128,12 @@ export default function MapViewport() {
     activeEvent,
     clearEvent,
     objectAtPlayerPosition,
-    switchMap
+    switchMap,
+    missions,
+    missionLog
   } = useMap();
   const { players: remotePlayers, localPlayerId, connectionStatus } = useWorld();
+  const [activePanel, setActivePanel] = useState('info');
 
   const canInteract = Boolean(objectAtPlayerPosition?.interaction);
 
@@ -166,58 +192,218 @@ export default function MapViewport() {
     movePlayer(direction);
   };
 
+  const mapIndex = maps.findIndex((map) => map?.id === currentMapId);
+  const handleCycleMap = (step) => () => {
+    if (!maps.length) {
+      return;
+    }
+
+    const nextIndex = mapIndex >= 0 ? (mapIndex + step + maps.length) % maps.length : 0;
+    const nextMap = maps[nextIndex];
+    if (nextMap?.id) {
+      switchMap(nextMap.id);
+      setActivePanel('info');
+    }
+  };
+
+  const portalTargets = useMemo(() => {
+    if (!currentMap?.portals?.length) {
+      return [];
+    }
+
+    return currentMap.portals.map((portal) => {
+      const targetMap = maps.find((entry) => entry?.id === portal.targetMap);
+      return {
+        id: portal.id,
+        description: portal.description,
+        targetMapId: portal.targetMap,
+        targetName: targetMap?.name ?? portal.targetMap
+      };
+    });
+  }, [currentMap?.portals, maps]);
+
+  const handlePanelChange = (_, nextPanel) => {
+    setActivePanel(nextPanel);
+  };
+
+  const missionPanelLabel = missions.length ? `Misiones (${missions.length})` : 'Misiones';
+  const crewPanelLabel = `Tripulación (${remotePlayersInMap.length})`;
+  const logPanelLabel = missionLog.length ? `Registro (${missionLog.length})` : 'Registro';
+
+  const statusChipColor =
+    connectionStatus === 'connected'
+      ? 'success'
+      : connectionStatus === 'error'
+      ? 'error'
+      : 'default';
+
   return (
     <Card sx={{ background: 'rgba(18, 18, 18, 0.9)', border: '1px solid rgba(255, 255, 255, 0.06)' }}>
       <CardContent>
         <Stack spacing={2}>
-          <Box display="flex" justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={2}>
-            <Box>
-              <Typography variant="h6">{currentMap.name}</Typography>
-              <Typography variant="body2" color="text.secondary">
-                Posición: ({playerPosition.x}, {playerPosition.y})
-              </Typography>
-              <Typography variant="caption" color="text.secondary">
-                Estado de red: {connectionStatus}
-              </Typography>
-            </Box>
-            <FormControl size="small" sx={{ minWidth: 160 }}>
-              <InputLabel id="map-select-label">Mapa</InputLabel>
-              <Select
-                labelId="map-select-label"
-                value={currentMapId}
-                label="Mapa"
-                onChange={(event) => switchMap(event.target.value)}
+          <Stack spacing={1}>
+            <Box display="flex" justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={2}>
+              <Box>
+                <Stack direction="row" spacing={1} alignItems="center">
+                  <Typography variant="h6">{currentMap.name}</Typography>
+                  {currentMap.biome && <Chip size="small" color="info" label={currentMap.biome} />}
+                </Stack>
+                <Typography variant="body2" color="text.secondary">
+                  Posición: ({playerPosition.x}, {playerPosition.y})
+                </Typography>
+                <Chip
+                  size="small"
+                  label={`Estado de red: ${connectionStatus}`}
+                  color={statusChipColor}
+                  icon={<TravelExploreIcon fontSize="small" />}
+                />
+              </Box>
+              <Stack direction="row" spacing={1} alignItems="center">
+                <Tooltip title="Mapa anterior">
+                  <span>
+                    <IconButton aria-label="Mapa anterior" onClick={handleCycleMap(-1)} disabled={!maps.length}>
+                      <NavigateBeforeIcon />
+                    </IconButton>
+                  </span>
+                </Tooltip>
+                <FormControl size="small" sx={{ minWidth: 180 }}>
+                  <InputLabel id="map-select-label">Mapa</InputLabel>
+                  <Select
+                    labelId="map-select-label"
+                    value={currentMapId}
+                    label="Mapa"
+                    onChange={(event) => {
+                      switchMap(event.target.value);
+                      setActivePanel('info');
+                    }}
+                  >
+                    {maps.map((map, index) => (
+                      <MenuItem key={map?.id ?? `map-${index}`} value={map?.id}>
+                        {map?.name ?? map?.id}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+                <Tooltip title="Mapa siguiente">
+                  <span>
+                    <IconButton aria-label="Mapa siguiente" onClick={handleCycleMap(1)} disabled={!maps.length}>
+                      <NavigateNextIcon />
+                    </IconButton>
+                  </span>
+                </Tooltip>
+              </Stack>
+              <Button
+                variant="outlined"
+                size="small"
+                onClick={() => interact()}
+                disabled={!canInteract}
+                aria-label="Interactuar con objeto cercano"
               >
-                {maps.map((map, index) => (
-                  <MenuItem key={map?.id ?? `map-${index}`} value={map?.id}>
-                    {map?.name ?? map?.id}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-            <Button variant="outlined" size="small" onClick={() => interact()} disabled={!canInteract}>
-              Interactuar
-            </Button>
-          </Box>
-          {objectAtPlayerPosition ? (
-            <Typography variant="body2" color="secondary.main">
-              Objeto cercano: {objectAtPlayerPosition.name}
-            </Typography>
-          ) : (
+                Interactuar
+              </Button>
+            </Box>
             <Typography variant="body2" color="text.secondary">
-              Acércate a un objeto resaltado para interactuar.
+              {currentMap.description}
             </Typography>
+            {portalTargets.length > 0 && (
+              <Stack direction="row" spacing={1} flexWrap="wrap">
+                {portalTargets.map((portal) => (
+                  <Chip
+                    key={portal.id}
+                    icon={<TravelExploreIcon fontSize="small" />}
+                    label={`→ ${portal.targetName}`}
+                    variant="outlined"
+                    size="small"
+                    sx={{ borderColor: 'rgba(255,255,255,0.16)' }}
+                  />
+                ))}
+              </Stack>
+            )}
+          </Stack>
+
+          <Tabs value={activePanel} onChange={handlePanelChange} textColor="inherit" indicatorColor="primary">
+            <Tab value="info" label="Información" />
+            <Tab value="missions" label={missionPanelLabel} />
+            <Tab value="crew" label={crewPanelLabel} icon={<GroupsIcon fontSize="small" />} iconPosition="start" />
+            <Tab value="log" label={logPanelLabel} icon={<HistoryIcon fontSize="small" />} iconPosition="start" />
+          </Tabs>
+
+          {activePanel === 'info' && (
+            <Stack spacing={1}>
+              {objectAtPlayerPosition ? (
+                <Typography variant="body2" color="secondary.main">
+                  Objeto cercano: {objectAtPlayerPosition.name}
+                </Typography>
+              ) : (
+                <Typography variant="body2" color="text.secondary">
+                  Acércate a un objeto resaltado para interactuar.
+                </Typography>
+              )}
+              <Typography variant="body2" color="text.secondary">
+                Compañeros en este mapa: {remotePlayersInMap.length}
+              </Typography>
+            </Stack>
           )}
-          <Typography variant="body2" color="text.secondary">
-            Compañeros en este mapa: {remotePlayersInMap.length}
-          </Typography>
+
+          {activePanel === 'missions' && <MissionStatusList missions={missions} />}
+
+          {activePanel === 'crew' && (
+            <List dense>
+              {remotePlayersInMap.length === 0 && (
+                <ListItem>
+                  <ListItemText
+                    primary="No hay tripulación remota"
+                    secondary="Invita a tus compañeros para coordinar misiones en este sector."
+                  />
+                </ListItem>
+              )}
+              {remotePlayersInMap.map((player) => (
+                <ListItem key={player.id} divider>
+                  <ListItemText
+                    primary={player.name ?? player.id}
+                    secondary={`Rol: ${player.metadata?.role ?? 'Tripulante'}`}
+                  />
+                </ListItem>
+              ))}
+            </List>
+          )}
+
+          {activePanel === 'log' && (
+            <List dense>
+              {missionLog.length === 0 && (
+                <ListItem>
+                  <ListItemText
+                    primary="Sin eventos registrados"
+                    secondary="Completa misiones o interactúa con objetos para generar entradas."
+                  />
+                </ListItem>
+              )}
+              {missionLog.map((entry) => (
+                <ListItem key={entry.id} divider>
+                  <ListItemText
+                    primary={`${entry.missionTitle} → ${entry.status}`}
+                    secondary={`${formatTimestamp(entry.timestamp)} · ${entry.mapName}${
+                      entry.message ? ` · ${entry.message}` : ''
+                    }`}
+                  />
+                </ListItem>
+              ))}
+            </List>
+          )}
+
+          <Divider flexItem />
 
           <Box>
             <Grid container spacing={1} justifyContent="center">
               <Grid item>
                 <Stack direction="row" spacing={1}>
                   {DIRECTIONS.map((direction) => (
-                    <Button key={direction.value} variant="contained" onClick={handleMove(direction.value)}>
+                    <Button
+                      key={direction.value}
+                      variant="contained"
+                      onClick={handleMove(direction.value)}
+                      aria-label={`Mover ${direction.label.toLowerCase()}`}
+                    >
                       {direction.label}
                     </Button>
                   ))}
