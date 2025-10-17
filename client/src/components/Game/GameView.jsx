@@ -2,7 +2,6 @@ import { useCallback, useState } from 'react';
 import MapViewport from '../MapViewport.jsx';
 import ChatPanel from '../Chat/ChatPanel.jsx';
 import SettingsModal from '../SettingsModal.tsx';
-import Toolbar from '../../layout/Toolbar.tsx';
 import '../../styles/game.css';
 
 export default function GameView() {
@@ -19,8 +18,7 @@ export default function GameView() {
   return (
     <div className="game-view">
       <div className="game-view__map">
-        <MapViewport />
-        <Toolbar onOpenSettings={handleOpenSettings} />
+        <MapViewport onOpenSettings={handleOpenSettings} />
       </div>
       <aside className="game-view__chat">
         <ChatPanel />

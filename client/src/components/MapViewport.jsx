@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useMap } from '../context/MapContext.jsx';
 import { useWorld } from '../context/WorldContext.jsx';
 import IsometricEngine from '../game/isometricEngine.js';
-import MapToolbar from './MapToolbar.jsx';
+import Topbar from '../layout/Topbar.tsx';
 import {
   clampZoom,
   resolveZoomPreference,
@@ -25,7 +25,7 @@ const MAX_ZOOM = 2;
 const ZOOM_STEP = 0.1;
 const DEFAULT_ZOOM = 1;
 
-export default function MapViewport() {
+export default function MapViewport({ onOpenSettings } = {}) {
   const canvasRef = useRef(null);
   const engineRef = useRef(null);
   const [zoom, setZoom] = useState(() => resolveZoomPreference({ min: MIN_ZOOM, max: MAX_ZOOM }));
@@ -344,56 +344,40 @@ export default function MapViewport() {
   const totalCrew = remoteCount + (currentMap ? 1 : 0);
   const statusLabel = CONNECTION_LABELS[connectionStatus] ?? connectionStatus;
   const zoomPercentage = Math.round(zoom * 100);
+  const safeMapIndex = mapIndex >= 0 ? mapIndex : 0;
+  const mapCount = Math.max(maps.length, 1);
+  const canNavigateMaps = maps.length > 1;
+  const controlsHint = 'WASD o flechas · E para interactuar';
 
   return (
     <div className="map-viewport">
       <canvas ref={canvasRef} className="map-viewport__canvas" />
 
-      {currentMap && (
-        <div className="viewport-overlay viewport-overlay--top-left">
-          <div className="hud-card">
-            <div className="hud-card__title">{currentMap.name}</div>
-            <p className="hud-card__subtitle">{currentMap.description}</p>
-            <div className="hud-meta">
-              <span>Bioma: {currentMap.biome}</span>
-              <span>Usuarios: {totalCrew}</span>
-            </div>
-          </div>
-        </div>
-      )}
-
-      <div className="viewport-overlay viewport-overlay--top-right">
-        <div className={`hud-chip hud-chip--${connectionStatus}`}>{statusLabel}</div>
-        <MapToolbar
-          zoom={zoom}
-          minZoom={MIN_ZOOM}
-          maxZoom={MAX_ZOOM}
-          step={ZOOM_STEP}
-          onZoomChange={handleZoomSlider}
-          onZoomIn={handleZoomIn}
-          onZoomOut={handleZoomOut}
-          onZoomReset={handleZoomReset}
-          zoomPercentage={zoomPercentage}
-        />
-      </div>
-
-      <div className="viewport-overlay viewport-overlay--bottom-left">
-        <div className="hud-card">
-          <div className="hud-card__title">Controles</div>
-          <p className="hud-card__subtitle">WASD / flechas para moverte · E para interactuar</p>
-          <div className="hud-actions">
-            <button type="button" className="hud-button" onClick={handlePrevMap}>
-              ◀
-            </button>
-            <span className="hud-actions__label">
-              Mapa {mapIndex >= 0 ? mapIndex + 1 : 1} de {maps.length || 1}
-            </span>
-            <button type="button" className="hud-button" onClick={handleNextMap}>
-              ▶
-            </button>
-          </div>
-        </div>
-      </div>
+      <Topbar
+        alias={profile?.alias ?? null}
+        connectionStatus={connectionStatus}
+        connectionLabel={statusLabel}
+        mapName={currentMap?.name ?? null}
+        mapDescription={currentMap?.description ?? null}
+        biome={currentMap?.biome ?? null}
+        totalCrew={totalCrew}
+        mapIndex={safeMapIndex}
+        mapCount={mapCount}
+        canNavigateMaps={canNavigateMaps}
+        onPrevMap={handlePrevMap}
+        onNextMap={handleNextMap}
+        onOpenSettings={onOpenSettings}
+        controlsHint={controlsHint}
+        zoom={zoom}
+        minZoom={MIN_ZOOM}
+        maxZoom={MAX_ZOOM}
+        step={ZOOM_STEP}
+        onZoomChange={handleZoomSlider}
+        onZoomIn={handleZoomIn}
+        onZoomOut={handleZoomOut}
+        onZoomReset={handleZoomReset}
+        zoomPercentage={zoomPercentage}
+      />
 
       {objectAtPlayerPosition?.interaction && (
         <div className="viewport-overlay viewport-overlay--bottom-right">
