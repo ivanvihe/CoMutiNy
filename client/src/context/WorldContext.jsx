@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { io } from 'socket.io-client';
 import LagCompensator from '../utils/lagCompensation.js';
 import resolveServerUrl from '../utils/resolveServerUrl.js';
+import { buildInteractionRequest, normaliseInteractionEvent } from '../game/interaction/index.js';
 
 const DEFAULT_APPEARANCE = {
   hair: 'Corto',
@@ -25,7 +26,9 @@ const WorldContext = createContext({
   sendChatMessage: () => Promise.resolve(null),
   appearance: DEFAULT_APPEARANCE,
   setAppearance: () => {},
-  updateLocalPlayerState: () => {}
+  updateLocalPlayerState: () => {},
+  interactWithObject: () => Promise.resolve({ ok: false }),
+  lastObjectEvent: null
 });
 
 const sanitizePosition = (position) => {
@@ -101,6 +104,7 @@ export function WorldProvider({ children }) {
   const [profile, setProfile] = useState(null);
   const [joinState, setJoinState] = useState({ status: 'idle', error: null });
   const [appearanceState, setAppearanceState] = useState(DEFAULT_APPEARANCE);
+  const [lastObjectEvent, setLastObjectEvent] = useState(null);
 
   const socketRef = useRef(null);
   const localPlayerIdRef = useRef(null);
@@ -109,6 +113,7 @@ export function WorldProvider({ children }) {
   const playersRef = useRef(new Map());
   const compensatorsRef = useRef(new Map());
   const chatRef = useRef([]);
+  const objectEventRef = useRef(null);
   const localStateRef = useRef({
     position: { x: 0, y: 0, z: 0 },
     animation: DEFAULT_ANIMATION,
@@ -704,7 +709,18 @@ export function WorldProvider({ children }) {
     socket.on('player:updated', applyPlayerSnapshot);
     socket.on('player:left', handlePlayerLeft);
     socket.on('chat:message', appendChatMessage);
+    const handleObjectEvent = (payload) => {
+      if (!payload) {
+        return;
+      }
+
+      const event = normaliseInteractionEvent(payload);
+      objectEventRef.current = event;
+      setLastObjectEvent(event);
+    };
+
     socket.on('session:terminated', handleSessionTerminated);
+    socket.on('object:event', handleObjectEvent);
 
     return () => {
       socket.off('connect', handleConnect);
@@ -717,6 +733,7 @@ export function WorldProvider({ children }) {
       socket.off('player:left', handlePlayerLeft);
       socket.off('chat:message', appendChatMessage);
       socket.off('session:terminated', handleSessionTerminated);
+      socket.off('object:event', handleObjectEvent);
       socket.disconnect();
       socketRef.current = null;
       playersRef.current.clear();
@@ -851,8 +868,50 @@ export function WorldProvider({ children }) {
             } else {
               reject(new Error(ack?.message ?? 'Failed to send chat message'));
             }
+    }
+  );
+
+  const interactWithObject = useCallback(
+    (payload = {}) => {
+      const socket = socketRef.current;
+      if (!socket || socket.disconnected) {
+        return Promise.reject(new Error('No hay conexión activa con el servidor.'));
+      }
+
+      const request = buildInteractionRequest({
+        objectId: payload.objectId,
+        mapId: payload.mapId ?? profileRef.current?.mapId,
+        action: payload.action
+      });
+
+      if (!request.objectId) {
+        return Promise.reject(new Error('No se encontró el objeto solicitado.'));
+      }
+
+      return new Promise((resolve, reject) => {
+        socket.emit('object:interact', request, (ack) => {
+          if (!ack?.ok) {
+            reject(new Error(ack?.message ?? 'No se pudo interactuar con el objeto.'));
+            return;
           }
-        );
+
+          const event = ack.event ? normaliseInteractionEvent(ack.event) : null;
+          if (event) {
+            objectEventRef.current = event;
+            setLastObjectEvent(event);
+          }
+
+          resolve({
+            ...ack,
+            event,
+            message: ack.message ?? null,
+            effects: Array.isArray(ack.effects) ? ack.effects : []
+          });
+        });
+      });
+    },
+    []
+  );
       });
     },
     [appendChatMessage, ensureLocalPlayerId, localPlayerId]
@@ -894,7 +953,9 @@ export function WorldProvider({ children }) {
       sendChatMessage,
       appearance: appearanceState,
       setAppearance,
-      updateLocalPlayerState
+      updateLocalPlayerState,
+      interactWithObject,
+      lastObjectEvent
     }),
     [
       connectionState.error,
@@ -910,7 +971,9 @@ export function WorldProvider({ children }) {
       appearanceState,
       setAppearance,
       updateLocalPlayerState,
-      joinWorld
+      joinWorld,
+      interactWithObject,
+      lastObjectEvent
     ]
   );
 

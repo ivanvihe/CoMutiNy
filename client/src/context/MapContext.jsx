@@ -14,6 +14,7 @@ import {
   resolveDefaultMapId
 } from '../game/maps.js';
 import { useWorld } from './WorldContext.jsx';
+import { createErrorEvent, normaliseInteractionEvent } from '../game/interaction/index.js';
 
 const MapContext = createContext(undefined);
 
@@ -71,7 +72,7 @@ export function MapProvider({ children }) {
   const [playerDirection, setPlayerDirection] = useState(DEFAULT_DIRECTION);
   const [playerIsMoving, setPlayerIsMoving] = useState(false);
   const [activeEvent, setActiveEvent] = useState(null);
-  const { updateLocalPlayerState } = useWorld();
+  const { updateLocalPlayerState, interactWithObject: sendInteractionRequest } = useWorld();
 
   const movementRef = useRef(null);
   const animationFrameRef = useRef(null);
@@ -414,23 +415,45 @@ export function MapProvider({ children }) {
     ]
   );
 
-  const interact = useCallback(() => {
+  const interact = useCallback(async () => {
     const object = findObjectAt(playerPosition);
     if (!object?.interaction) {
       setActiveEvent(null);
       return null;
     }
 
-    const event = {
-      ...object.interaction,
-      objectId: object.id,
-      objectName: object.name,
-      mapId: currentMapId
-    };
+    try {
+      const response = await sendInteractionRequest({
+        objectId: object.id,
+        mapId: currentMapId,
+        action: 'interact'
+      });
 
-    setActiveEvent(event);
-    return event;
-  }, [currentMapId, findObjectAt, playerPosition]);
+      const event = response?.event
+        ? normaliseInteractionEvent(response.event, {
+            fallbackTitle: object.name ?? 'Interacción',
+            fallbackDescription:
+              object.interaction?.description ?? object.description ?? 'No se registró ninguna descripción.'
+          })
+        : {
+            ...object.interaction,
+            objectId: object.id,
+            objectName: object.name,
+            mapId: currentMapId
+          };
+
+      setActiveEvent(event);
+      return event;
+    } catch (error) {
+      const fallback = createErrorEvent(error.message, {
+        title: object.name ?? 'Interacción',
+        description:
+          object.interaction?.description ?? 'No se pudo completar la interacción con este objeto.'
+      });
+      setActiveEvent(fallback);
+      return fallback;
+    }
+  }, [currentMapId, findObjectAt, playerPosition, sendInteractionRequest]);
 
   const clearEvent = useCallback(() => setActiveEvent(null), []);
 

@@ -125,7 +125,7 @@ const normaliseMapDefinition = (filePath, rawContents) => {
       position: doorPosition,
       size: { width: 1, height: 1 },
       solid: false,
-      metadata: { type: 'door' }
+      metadata: { type: 'door', objectId: 'community_door' }
     })
   }
 

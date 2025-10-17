@@ -203,6 +203,25 @@ const attachSessionListeners = (io) => {
       socket.disconnect(true)
     }
   })
+
+  sessionManager.on('object:event', ({ event, origin, socketId, broadcast }) => {
+    if (!event) {
+      return
+    }
+
+    if (broadcast) {
+      io.emit('object:event', event)
+      return
+    }
+
+    if (origin === 'local' && socketId) {
+      const socket = io.sockets.sockets.get(socketId)
+      socket?.emit('object:event', event)
+      return
+    }
+
+    io.emit('object:event', event)
+  })
 }
 
 const createSocketServer = (httpServer, { corsOrigin, enrichJoinPayload }) => {
@@ -267,6 +286,16 @@ const createSocketServer = (httpServer, { corsOrigin, enrichJoinPayload }) => {
         safeAck(ack, { ok: true, message })
       } catch (error) {
         console.error('chat:message failed', error)
+        safeAck(ack, { ok: false, message: error.message })
+      }
+    })
+
+    socket.on('object:interact', async (payload, ack) => {
+      try {
+        const result = await sessionManager.interactWithObject(socket.id, payload)
+        safeAck(ack, { ok: true, ...result })
+      } catch (error) {
+        console.error('object:interact failed', error)
         safeAck(ack, { ok: false, message: error.message })
       }
     })

@@ -1,0 +1,24 @@
+{
+  "id": "welcome_terminal",
+  "type": "message",
+  "name": "Panel de bienvenida",
+  "description": "Activa un mensaje de bienvenida para quienes llegan por primera vez.",
+  "interaction": {
+    "type": "message",
+    "title": "Panel de bienvenida",
+    "description": "Bienvenido a CoMutiNy. Explora y conoce a la comunidad."
+  },
+  "behavior": {
+    "type": "message",
+    "title": "Mensaje de bienvenida",
+    "description": "Bienvenido a CoMutiNy. Explora y conoce a la comunidad.",
+    "message": "¡Hola {player}! Bienvenido a CoMutiNy.",
+    "broadcast": false,
+    "metadata": {
+      "category": "terminal"
+    }
+  },
+  "metadata": {
+    "tags": ["welcome", "guide"]
+  }
+}
