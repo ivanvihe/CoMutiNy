@@ -7,6 +7,7 @@ import { connectDatabase } from './config/database.js'
 import authRoutes from './routes/authRoutes.js'
 import avatarRoutes from './routes/avatarRoutes.js'
 import adminRoutes from './routes/adminRoutes.js'
+import assetRoutes from './routes/assetRoutes.js'
 import { cookies } from './middlewares/auth.js'
 import worldState from './services/worldState.js'
 import avatarRepository from './repositories/AvatarRepository.js'
@@ -23,6 +24,7 @@ app.get('/health', (req, res) => {
 
 app.use('/auth', authRoutes)
 app.use('/avatars', avatarRoutes)
+app.use('/assets', assetRoutes)
 app.use('/admin', adminRoutes)
 
 app.use((err, req, res, next) => {
@@ -72,7 +74,7 @@ const enrichJoinPayloadWithAvatar = async (payload = {}) => {
     return enriched
   }
 
-  const avatar = await avatarRepository.findByIdBasic(avatarId)
+  const avatar = await avatarRepository.findByIdWithSprite(avatarId)
 
   if (!avatar) {
     if (Object.keys(metadata).length > 0) {
@@ -93,6 +95,16 @@ const enrichJoinPayloadWithAvatar = async (payload = {}) => {
     shoes: plain.layerShoes ?? null
   }
 
+  const spriteAsset = plain.spriteAsset
+    ? {
+        id: plain.spriteAsset.id,
+        name: plain.spriteAsset.name,
+        category: plain.spriteAsset.category,
+        imageUrl: plain.spriteAsset.imageUrl,
+        metadata: plain.spriteAsset.metadata ?? null
+      }
+    : null
+
   const payloadAppearance = metadata.appearance && typeof metadata.appearance === 'object'
     ? metadata.appearance
     : {}
@@ -109,7 +121,17 @@ const enrichJoinPayloadWithAvatar = async (payload = {}) => {
   enriched.metadata = {
     ...metadata,
     avatarId: plain.id,
-    appearance: mergedAppearance
+    appearance: mergedAppearance,
+    ...(spriteAsset
+      ? {
+          sprite: spriteAsset,
+          spriteAssetId: spriteAsset.id
+        }
+      : {})
+  }
+
+  if (!spriteAsset && metadata.sprite) {
+    enriched.metadata.sprite = metadata.sprite
   }
 
   delete enriched.avatarId
