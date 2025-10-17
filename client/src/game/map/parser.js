@@ -507,6 +507,60 @@ const parseLayerSections = (sections, { tileTypes, symbolMap }) => {
   return layers;
 };
 
+const parseObjectLayerSections = (sections, { registry }) => {
+  const layers = [];
+
+  sections.forEach((lines, key) => {
+    if (!key.startsWith('objects')) {
+      return;
+    }
+
+    const properties = parseKeyValueLines(lines.filter((line) => line.includes(':')));
+    const rawEntries = lines.filter((line) => !line.includes(':'));
+
+    const parsed = parseObjects(rawEntries, { registry });
+
+    if (!parsed.length && !properties.size) {
+      return;
+    }
+
+    let layerId;
+    if (key === 'objects') {
+      layerId = properties.get('id') ?? properties.get('name') ?? 'objects';
+    } else if (key.startsWith('objects_')) {
+      layerId = properties.get('id') ?? key.slice('objects_'.length);
+    } else {
+      const fallbackId = key.replace(/^objects_?/, '') || key;
+      layerId = properties.get('id') ?? fallbackId;
+    }
+    layerId = layerId || `objects_${layers.length + 1}`;
+
+    const name = properties.get('name') ?? properties.get('label') ?? layerId;
+    let order = Number.parseInt(properties.get('order') ?? `${layers.length}`, 10);
+    if (!Number.isFinite(order)) {
+      order = layers.length;
+    }
+    const visible = parseBoolean(properties.get('visible'), true);
+
+    layers.push({
+      id: layerId,
+      name,
+      order,
+      visible,
+      objects: parsed
+    });
+  });
+
+  layers.sort((a, b) => {
+    if (a.order === b.order) {
+      return a.id.localeCompare(b.id);
+    }
+    return a.order - b.order;
+  });
+
+  return layers;
+};
+
 const buildBlockedAreas = (size) => {
   const width = size?.width ?? 0;
   const height = size?.height ?? 0;
@@ -634,8 +688,35 @@ export const parseMapDefinition = (rawContents, { sourcePath = null } = {}) => {
     doors.push(...parsed);
   }
 
-  const parsedObjects = parseObjects(sections.get('objects') ?? [], { registry });
-  objects.push(...parsedObjects);
+  const parsedLayers = parseObjectLayerSections(sections, { registry });
+
+  const objectLayers = parsedLayers.map((layer, index) => {
+    const layerOrder = Number.isFinite(layer.order) ? layer.order : index;
+    const layerVisible = layer.visible !== false;
+
+    const decoratedObjects = layer.objects.map((object) => ({
+      ...object,
+      layerId: layer.id,
+      layerOrder,
+      layerVisible,
+      layer: {
+        id: layer.id,
+        name: layer.name,
+        order: layerOrder,
+        visible: layerVisible
+      }
+    }));
+
+    objects.push(...decoratedObjects);
+
+    return {
+      id: layer.id,
+      name: layer.name,
+      order: layerOrder,
+      visible: layerVisible,
+      objects: decoratedObjects
+    };
+  });
 
   const collidableLookup = new Map();
   layers.forEach((layer) => {
@@ -689,6 +770,7 @@ export const parseMapDefinition = (rawContents, { sourcePath = null } = {}) => {
     spawn,
     blockedAreas: buildBlockedAreas(size),
     objects,
+    objectLayers,
     doors,
     portals: [],
     theme: { borderColour: metadata.borderColour ?? null },

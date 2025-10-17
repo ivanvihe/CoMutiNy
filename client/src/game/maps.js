@@ -83,9 +83,37 @@ const mapSources = loadMapSources();
 const normalisedMaps = sortMaps(
   Object.entries(mapSources).map(([filePath, rawContents]) => {
     const parsed = parseMapDefinition(rawContents, { sourcePath: filePath });
+    const registry = new Map();
+    const objects = normaliseServerObjects(parsed.objects, { registry });
+    const objectLookup = new Map(objects.map((object) => [object.id, object]));
+
+    const objectLayers = Array.isArray(parsed.objectLayers)
+      ? parsed.objectLayers.map((layer, index) => {
+          const layerId = typeof layer.id === 'string' && layer.id.trim()
+            ? layer.id.trim()
+            : `layer-${index + 1}`;
+          const order = Number.isFinite(layer.order) ? layer.order : index;
+          const visible = layer.visible !== false;
+          const name = typeof layer.name === 'string' && layer.name.trim() ? layer.name.trim() : layerId;
+          const normalised = normaliseServerObjects(layer.objects, {
+            registry,
+            layer: { id: layerId, name, order, visible }
+          });
+          const layerObjects = normalised.map((object) => objectLookup.get(object.id) ?? object);
+          return {
+            id: layerId,
+            name,
+            order,
+            visible,
+            objects: layerObjects
+          };
+        })
+      : [];
+
     return {
       ...parsed,
-      objects: normaliseServerObjects(parsed.objects)
+      objects,
+      objectLayers
     };
   })
 );
@@ -249,7 +277,34 @@ const normaliseObjectSize = (value) => {
   return { width: 1, height: 1 };
 };
 
-function normaliseServerObject(object, registry) {
+const resolveNumeric = (value) => {
+  const numeric = Number.parseInt(value, 10);
+  return Number.isFinite(numeric) ? numeric : null;
+};
+
+const resolveBoolean = (value, fallback = true) => {
+  if (value === undefined || value === null) {
+    return fallback;
+  }
+
+  if (typeof value === 'boolean') {
+    return value;
+  }
+
+  if (typeof value === 'string') {
+    const normalised = value.trim().toLowerCase();
+    if (['true', '1', 'yes', 'y', 'on'].includes(normalised)) {
+      return true;
+    }
+    if (['false', '0', 'no', 'n', 'off'].includes(normalised)) {
+      return false;
+    }
+  }
+
+  return Boolean(value);
+};
+
+function normaliseServerObject(object, registry, options = {}) {
   if (!object || typeof object !== 'object') {
     return null;
   }
@@ -353,17 +408,93 @@ function normaliseServerObject(object, registry) {
     delete mergedMetadata.appearance;
   }
 
+  const layerContext =
+    options.layer && typeof options.layer === 'object' && !Array.isArray(options.layer)
+      ? options.layer
+      : null;
+
+  const candidateLayerIds = [
+    typeof object.layerId === 'string' ? object.layerId.trim() : '',
+    typeof object.layer?.id === 'string' ? object.layer.id.trim() : '',
+    typeof layerContext?.id === 'string' ? layerContext.id : ''
+  ];
+  const layerId = candidateLayerIds.find((value) => value) || null;
+
+  const candidateOrders = [
+    resolveNumeric(object.layerOrder),
+    resolveNumeric(object.layer?.order),
+    resolveNumeric(layerContext?.order)
+  ];
+  const layerOrder = candidateOrders.find((value) => value !== null) ?? null;
+
+  let layerVisible;
+  const visibilityCandidates = [
+    object.layerVisible,
+    object.layer?.visible,
+    layerContext?.visible
+  ];
+  for (const candidate of visibilityCandidates) {
+    if (candidate !== undefined && candidate !== null) {
+      layerVisible = resolveBoolean(candidate, true);
+      break;
+    }
+  }
+  if (layerVisible === undefined) {
+    layerVisible = true;
+  }
+
+  const candidateNames = [
+    typeof object.layer?.name === 'string' ? object.layer.name.trim() : '',
+    typeof layerContext?.name === 'string' ? layerContext.name : '',
+    layerId ?? ''
+  ];
+  const layerName = candidateNames.find((value) => value) || null;
+
+  if (layerId) {
+    payload.layerId = layerId;
+  }
+
+  if (layerOrder !== null) {
+    payload.layerOrder = layerOrder;
+  }
+
+  if (layerVisible !== undefined) {
+    payload.layerVisible = layerVisible;
+  }
+
+  if (layerId || layerName || layerOrder !== null || layerVisible !== true) {
+    payload.layer = {
+      ...(layerId ? { id: layerId } : {}),
+      ...(layerName ? { name: layerName } : {}),
+      ...(layerOrder !== null ? { order: layerOrder } : {}),
+      visible: layerVisible
+    };
+  }
+
   return payload;
 }
 
-function normaliseServerObjects(objects) {
+function normaliseServerObjects(objects, { registry = new Map(), layer = null } = {}) {
   if (!Array.isArray(objects)) {
     return [];
   }
 
-  const registry = new Map();
+  let layerContext = null;
+  if (layer && typeof layer === 'object' && !Array.isArray(layer)) {
+    const id = typeof layer.id === 'string' && layer.id.trim() ? layer.id.trim() : null;
+    const name = typeof layer.name === 'string' && layer.name.trim() ? layer.name.trim() : null;
+    const order = resolveNumeric(layer.order);
+    const visible = resolveBoolean(layer.visible, true);
+    layerContext = {
+      ...(id ? { id } : {}),
+      ...(name ? { name } : {}),
+      ...(order !== null ? { order } : {}),
+      visible
+    };
+  }
+
   return objects
-    .map((object) => normaliseServerObject(object, registry))
+    .map((object) => normaliseServerObject(object, registry, { layer: layerContext }))
     .filter(Boolean);
 }
 
@@ -457,6 +588,34 @@ const normaliseServerMap = (definition) => {
     normaliseCoordinateInput(definition.startingPoint, null) ??
     { x: Math.floor(size.width / 2) || 0, y: Math.floor(size.height / 2) || 0 };
 
+  const registry = new Map();
+  const objects = normaliseServerObjects(definition.objects, { registry });
+  const objectLookup = new Map(objects.map((object) => [object.id, object]));
+
+  const objectLayers = Array.isArray(definition.objectLayers)
+    ? definition.objectLayers
+        .map((layer, index) => {
+          const layerId = typeof layer.id === 'string' && layer.id.trim()
+            ? layer.id.trim()
+            : `layer-${index + 1}`;
+          const order = Number.isFinite(layer.order) ? layer.order : index;
+          const visible = layer.visible !== false;
+          const name = typeof layer.name === 'string' && layer.name.trim() ? layer.name.trim() : layerId;
+          const normalised = normaliseServerObjects(layer.objects, {
+            registry,
+            layer: { id: layerId, name, order, visible }
+          });
+          const layerObjects = normalised.map((object) => objectLookup.get(object.id) ?? object);
+          return {
+            id: layerId,
+            name,
+            order,
+            visible,
+            objects: layerObjects
+          };
+        })
+    : [];
+
   return {
     id: definition.id ?? '',
     name: definition.name ?? definition.title ?? definition.id ?? 'map',
@@ -465,7 +624,8 @@ const normaliseServerMap = (definition) => {
     size,
     spawn,
     blockedAreas: buildBlockedAreasFromServer(definition.blockedAreas),
-    objects: normaliseServerObjects(definition.objects),
+    objects,
+    objectLayers,
     doors: normaliseDoorCollection(definition.doors),
     portals: Array.isArray(definition.portals) ? definition.portals : [],
     theme: normaliseTheme(definition.theme),

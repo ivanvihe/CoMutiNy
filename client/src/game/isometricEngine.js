@@ -322,25 +322,88 @@ export class IsometricEngine {
     }
 
     const blockedTiles = map.blockedTiles ?? new Set();
-    const objectTiles = new Set();
-    map.objects?.forEach((object) => {
-      expandArea({ ...object.position, ...object.size }).forEach((tile) => objectTiles.add(tile));
+
+    const rawObjectLayers = Array.isArray(map.objectLayers) ? map.objectLayers : [];
+    const objectLayers = rawObjectLayers
+      .map((layer, index) => {
+        const layerId =
+          typeof layer?.id === 'string' && layer.id.trim() ? layer.id.trim() : `layer-${index + 1}`;
+        const order = Number.isFinite(layer?.order) ? layer.order : index;
+        const visible = layer?.visible !== false;
+        const name =
+          typeof layer?.name === 'string' && layer.name.trim() ? layer.name.trim() : layerId;
+        const objects = Array.isArray(layer?.objects) ? layer.objects.filter(Boolean) : [];
+        return { id: layerId, name, order, visible, objects };
+      })
+      .sort((a, b) => (a.order === b.order ? a.id.localeCompare(b.id) : a.order - b.order));
+
+    const layerLookup = new Map();
+    objectLayers.forEach((layer) => {
+      if (layer.id) {
+        layerLookup.set(layer.id, { order: layer.order, visible: layer.visible });
+      }
     });
 
     const renderableObjects = Array.isArray(map.objects)
-      ? map.objects.map((object) => ({
-          ...object,
-          appearance: object.appearance
-            ? {
-                ...object.appearance,
-                options:
-                  object.appearance.options && typeof object.appearance.options === 'object'
-                    ? { ...object.appearance.options }
-                    : {}
-              }
-            : null
-        }))
+      ? map.objects
+          .filter((object) => {
+            if (!object) {
+              return false;
+            }
+            if (object.layerVisible === false) {
+              return false;
+            }
+            const layerId =
+              typeof object.layerId === 'string' && object.layerId.trim()
+                ? object.layerId.trim()
+                : typeof object.layer?.id === 'string' && object.layer.id.trim()
+                  ? object.layer.id.trim()
+                  : null;
+            if (!layerId) {
+              return true;
+            }
+            const layer = layerLookup.get(layerId);
+            if (layer && layer.visible === false) {
+              return false;
+            }
+            return true;
+          })
+          .map((object) => {
+            const layerId =
+              typeof object.layerId === 'string' && object.layerId.trim()
+                ? object.layerId.trim()
+                : typeof object.layer?.id === 'string' && object.layer.id.trim()
+                  ? object.layer.id.trim()
+                  : null;
+            const layer = layerId ? layerLookup.get(layerId) : null;
+            const resolvedOrder = Number.isFinite(object.layerOrder)
+              ? object.layerOrder
+              : layer?.order ?? 0;
+            const isLayerVisible =
+              object.layerVisible !== false && (layer ? layer.visible !== false : true);
+
+            return {
+              ...object,
+              layerId,
+              layerOrder: resolvedOrder,
+              layerVisible: isLayerVisible,
+              appearance: object.appearance
+                ? {
+                    ...object.appearance,
+                    options:
+                      object.appearance.options && typeof object.appearance.options === 'object'
+                        ? { ...object.appearance.options }
+                        : {}
+                  }
+                : null
+            };
+          })
       : [];
+
+    const objectTiles = new Set();
+    renderableObjects.forEach((object) => {
+      expandArea({ ...object.position, ...object.size }).forEach((tile) => objectTiles.add(tile));
+    });
 
     const portalTiles = new Set();
     map.portals?.forEach((portal) => {
@@ -397,6 +460,20 @@ export class IsometricEngine {
           .sort((a, b) => (a.order === b.order ? a.id.localeCompare(b.id) : a.order - b.order))
       : [];
 
+    const renderableLookup = new Map(renderableObjects.map((object) => [object.id, object]));
+    const sceneObjectLayers = objectLayers.map((layer) => ({
+      ...layer,
+      objects: layer.objects
+        .map((object) => {
+          const identifier = typeof object?.id === 'string' ? object.id.trim() : null;
+          if (!identifier) {
+            return null;
+          }
+          return renderableLookup.get(identifier) ?? null;
+        })
+        .filter(Boolean)
+    }));
+
     this.scene = {
       map,
       blockedTiles,
@@ -408,7 +485,8 @@ export class IsometricEngine {
       player: player ?? null,
       remotePlayers: Array.isArray(remotePlayers) ? remotePlayers : [],
       chatBubbles: bubbleMap,
-      objects: renderableObjects
+      objects: renderableObjects,
+      objectLayers: sceneObjectLayers
     };
 
     this.buildObjectSprites(renderableObjects);
@@ -745,6 +823,11 @@ export class IsometricEngine {
     const originY = height / 2;
 
     const sorted = [...objects].sort((a, b) => {
+      const aLayer = Number.isFinite(a.layerOrder) ? a.layerOrder : 0;
+      const bLayer = Number.isFinite(b.layerOrder) ? b.layerOrder : 0;
+      if (aLayer !== bLayer) {
+        return aLayer - bLayer;
+      }
       const aPos = a.position ?? { x: 0, y: 0 };
       const bPos = b.position ?? { x: 0, y: 0 };
       const aDepth = (aPos.y ?? 0) + (a.size?.height ?? 1);
@@ -756,6 +839,9 @@ export class IsometricEngine {
     });
 
     sorted.forEach((object) => {
+      if (object.layerVisible === false) {
+        return;
+      }
       const sprite = this.objectSprites.get(object.id);
       if (!sprite?.canvas) {
         return;

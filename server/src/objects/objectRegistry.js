@@ -198,6 +198,33 @@ const sanitizeSize = (raw, fallback = { width: 1, height: 1 }) => ({
   height: Math.max(1, Math.trunc(toNumber(raw?.height, fallback.height ?? 1)))
 })
 
+const sanitizeLayerOrder = (raw, fallback = null) => {
+  const numeric = Number.parseInt(raw, 10)
+  return Number.isFinite(numeric) ? numeric : fallback
+}
+
+const sanitizeLayerVisibility = (raw, fallback = true) => {
+  if (raw === undefined || raw === null) {
+    return fallback
+  }
+
+  if (typeof raw === 'boolean') {
+    return raw
+  }
+
+  if (typeof raw === 'string') {
+    const normalised = raw.trim().toLowerCase()
+    if (['false', '0', 'no', 'n', 'off', 'hidden'].includes(normalised)) {
+      return false
+    }
+    if (['true', '1', 'yes', 'y', 'on', 'visible'].includes(normalised)) {
+      return true
+    }
+  }
+
+  return Boolean(raw)
+}
+
 const loadObjectFile = async (filePath) => {
   const contents = await fs.readFile(filePath, 'utf-8')
   const definition = JSON.parse(contents)
@@ -366,6 +393,19 @@ const mergeObjectWithDefinition = (objectDefinition) => {
 
   const appearance = explicitAppearance ?? metadataAppearance ?? baseAppearance
 
+  const rawLayer =
+    objectDefinition.layer && typeof objectDefinition.layer === 'object' && !Array.isArray(objectDefinition.layer)
+      ? objectDefinition.layer
+      : null
+  const layerId = sanitizeString(objectDefinition.layerId ?? rawLayer?.id)
+  const layerName = sanitizeString(rawLayer?.name ?? objectDefinition.layerName)
+  const layerOrder = sanitizeLayerOrder(
+    objectDefinition.layerOrder,
+    sanitizeLayerOrder(rawLayer?.order, null)
+  )
+  const baseVisibility = sanitizeLayerVisibility(objectDefinition.layerVisible, true)
+  const layerVisible = sanitizeLayerVisibility(rawLayer?.visible, baseVisibility)
+
   const publicObject = {
     id,
     name,
@@ -382,6 +422,24 @@ const mergeObjectWithDefinition = (objectDefinition) => {
     objectId: referencedId || definition?.id || null,
     interaction,
     ...(appearance ? { appearance } : {})
+  }
+
+  if (layerId) {
+    publicObject.layerId = layerId
+  }
+  if (layerOrder !== null) {
+    publicObject.layerOrder = layerOrder
+  }
+  if (layerVisible !== undefined) {
+    publicObject.layerVisible = layerVisible
+  }
+  if (layerId || layerName || layerOrder !== null || layerVisible === false) {
+    publicObject.layer = {
+      ...(layerId ? { id: layerId } : {}),
+      ...(layerName ? { name: layerName } : {}),
+      ...(layerOrder !== null ? { order: layerOrder } : {}),
+      visible: layerVisible
+    }
   }
 
   const runtime = {
@@ -414,9 +472,32 @@ const attachObjectDefinitions = async (mapDefinition, options = {}) => {
     runtimeIndex.set(publicObject.id, { publicObject, runtime })
   }
 
+  const objectLayers = Array.isArray(mapDefinition.objectLayers)
+    ? mapDefinition.objectLayers.map((layer, index) => {
+        const layerId = sanitizeString(layer?.id) || `layer-${index + 1}`
+        const name = sanitizeString(layer?.name, layerId)
+        const order = sanitizeLayerOrder(layer?.order, index)
+        const visible = sanitizeLayerVisibility(layer?.visible, true)
+        const objectsInLayer = Array.isArray(layer?.objects)
+          ? layer.objects
+              .map((object) => {
+                const identifier = sanitizeString(object?.id)
+                if (!identifier) {
+                  return null
+                }
+                const record = runtimeIndex.get(identifier)
+                return record?.publicObject ?? null
+              })
+              .filter(Boolean)
+          : []
+        return { id: layerId, name, order, visible, objects: objectsInLayer }
+      })
+    : []
+
   const map = {
     ...mapDefinition,
-    objects: enriched
+    objects: enriched,
+    objectLayers
   }
 
   return { map, runtimeIndex, state }

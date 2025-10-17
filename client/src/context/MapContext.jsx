@@ -52,7 +52,11 @@ const normaliseMap = (mapDefinition) => {
     }
   });
 
-  mapDefinition.objects?.forEach((object) => {
+  const objects = Array.isArray(mapDefinition.objects)
+    ? mapDefinition.objects.filter((object) => object && object.layerVisible !== false)
+    : [];
+
+  objects.forEach((object) => {
     if (object.solid) {
       expandArea({ ...object.position, ...object.size }).forEach((tile) => blockedTiles.add(tile));
     }
@@ -60,6 +64,7 @@ const normaliseMap = (mapDefinition) => {
 
   return {
     ...mapDefinition,
+    objects,
     blockedTiles
   };
 };
