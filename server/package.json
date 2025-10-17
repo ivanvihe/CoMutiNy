@@ -9,7 +9,7 @@
     "start": "node src/index.js",
     "migrate": "node src/database/migrate.js",
     "seed": "node src/database/seed.js",
-    "test": "echo \"No tests configured\"",
+    "test": "node --test",
     "load:test": "node scripts/loadTest.js"
   },
   "keywords": [],

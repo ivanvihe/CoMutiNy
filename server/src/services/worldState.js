@@ -9,6 +9,7 @@ const DEFAULT_POSITION = Object.freeze({
 const DEFAULT_ANIMATION = 'idle'
 const MAX_CHAT_HISTORY = 50
 const APPEARANCE_KEYS = Object.freeze(['hair', 'face', 'outfit', 'shoes'])
+const VALID_DIRECTIONS = new Set(['up', 'down', 'left', 'right'])
 
 const HELLO_WORLD = Object.freeze({
   id: 'hello-world',
@@ -40,6 +41,34 @@ const sanitizeAnimation = (animation) => {
   }
 
   return animation.trim()
+}
+
+const sanitizeDirection = (direction, fallback = 'down') => {
+  if (typeof direction !== 'string') {
+    return fallback
+  }
+
+  const trimmed = direction.trim().toLowerCase()
+
+  if (VALID_DIRECTIONS.has(trimmed)) {
+    return trimmed
+  }
+
+  return fallback
+}
+
+const sanitizeSpriteId = (sprite) => {
+  if (typeof sprite !== 'string') {
+    return null
+  }
+
+  const trimmed = sprite.trim()
+
+  if (!trimmed) {
+    return null
+  }
+
+  return trimmed.slice(0, 100)
 }
 
 const sanitizeName = (name, fallback) => {
@@ -94,6 +123,18 @@ const sanitizeMetadata = (metadata) => {
 
   const sanitized = {}
 
+  if (metadata.alias !== undefined) {
+    const alias = sanitizeName(metadata.alias, null)
+
+    if (alias) {
+      sanitized.alias = alias
+    }
+  }
+
+  if (metadata.heading !== undefined) {
+    sanitized.heading = sanitizeDirection(metadata.heading, sanitized.heading ?? 'down')
+  }
+
   if (metadata.avatarId !== undefined) {
     if (typeof metadata.avatarId === 'string') {
       const trimmed = metadata.avatarId.trim()
@@ -110,7 +151,7 @@ const sanitizeMetadata = (metadata) => {
   }
 
   for (const [key, value] of Object.entries(metadata)) {
-    if (key === 'appearance' || key === 'avatarId') {
+    if (key === 'appearance' || key === 'avatarId' || key === 'mapId') {
       continue
     }
 
@@ -303,12 +344,32 @@ class WorldState {
       ...(payload.avatar && typeof payload.avatar === 'object' ? { avatar: payload.avatar } : {})
     })
 
+    const spriteId = sanitizeSpriteId(
+      payload.sprite ?? payload.avatar?.sprite ?? metadata.avatar?.sprite
+    )
+
+    if (spriteId) {
+      const avatar = metadata.avatar && typeof metadata.avatar === 'object' ? { ...metadata.avatar } : {}
+      avatar.sprite = spriteId
+      metadata.avatar = avatar
+    }
+
+    const direction = sanitizeDirection(
+      payload.direction ?? metadata.heading ?? 'down',
+      'down'
+    )
+
+    metadata.heading = direction
+
     const player = {
       id: playerId,
       name,
       position,
       animation,
-      metadata
+      metadata,
+      direction,
+      alias,
+      sprite: metadata.avatar?.sprite ?? null
     }
 
     this.playersById.set(playerId, player)
@@ -357,6 +418,21 @@ class WorldState {
       player.name = sanitizeName(payload.name, player.name)
     }
 
+    const spriteId = sanitizeSpriteId(
+      payload.sprite ?? payload.avatar?.sprite ?? metadata.avatar?.sprite
+    )
+
+    if (spriteId) {
+      const avatar = metadata.avatar && typeof metadata.avatar === 'object' ? { ...metadata.avatar } : {}
+      avatar.sprite = spriteId
+      metadata.avatar = avatar
+    }
+
+    const directionInput =
+      payload.direction ?? payload.metadata?.heading ?? metadata.heading ?? player.direction
+    const direction = sanitizeDirection(directionInput, player.direction ?? 'down')
+    metadata.heading = direction
+
     const aliasFromMetadata =
       typeof metadata?.alias === 'string' && metadata.alias.trim()
         ? sanitizeName(metadata.alias, player.name)
@@ -368,6 +444,9 @@ class WorldState {
     }
 
     player.metadata = metadata
+    player.direction = direction
+    player.alias = metadata.alias ?? player.name
+    player.sprite = metadata.avatar?.sprite ?? player.sprite ?? null
 
     this.playersById.set(player.id, player)
 
@@ -448,12 +527,32 @@ class WorldState {
       ...(payload.avatar && typeof payload.avatar === 'object' ? { avatar: payload.avatar } : {})
     })
 
+    const spriteId = sanitizeSpriteId(
+      payload.sprite ?? payload.avatar?.sprite ?? metadata.avatar?.sprite
+    )
+
+    if (spriteId) {
+      const avatar = metadata.avatar && typeof metadata.avatar === 'object' ? { ...metadata.avatar } : {}
+      avatar.sprite = spriteId
+      metadata.avatar = avatar
+    }
+
+    const direction = sanitizeDirection(
+      payload.direction ?? metadata.heading ?? 'down',
+      'down'
+    )
+
+    metadata.heading = direction
+
     const player = {
       id: payload.id,
       name,
       position,
       animation,
-      metadata
+      metadata,
+      direction,
+      alias,
+      sprite: metadata.avatar?.sprite ?? null
     }
 
     this.playersById.set(player.id, player)

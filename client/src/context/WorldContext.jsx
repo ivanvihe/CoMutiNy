@@ -152,14 +152,62 @@ export function WorldProvider({ children }) {
 
     const existing = playersRef.current.get(player.id) ?? {};
     const position = sanitizePosition(player.position ?? existing.position);
-    const metadata = mergeMetadata(existing.metadata, player.metadata);
+    let metadata = mergeMetadata(existing.metadata, player.metadata);
+
+    if (player.avatar && typeof player.avatar === 'object') {
+      metadata = mergeMetadata(metadata, { avatar: player.avatar });
+    }
+
+    if (player.sprite) {
+      metadata = mergeMetadata(metadata, { avatar: { sprite: player.sprite } });
+    }
+
+    const alias =
+      typeof player.alias === 'string' && player.alias.trim()
+        ? player.alias.trim()
+        : metadata.alias ?? existing.metadata?.alias ?? existing.name ?? null;
+
+    if (alias) {
+      metadata = mergeMetadata(metadata, { alias });
+    }
+
+    const sprite =
+      typeof player.sprite === 'string' && player.sprite.trim()
+        ? player.sprite.trim()
+        : metadata.avatar?.sprite ?? existing.sprite ?? null;
+
+    const direction = (() => {
+      if (typeof player.direction === 'string' && player.direction.trim()) {
+        return player.direction.trim();
+      }
+      if (typeof metadata.heading === 'string' && metadata.heading.trim()) {
+        return metadata.heading.trim();
+      }
+      if (typeof existing.direction === 'string' && existing.direction.trim()) {
+        return existing.direction.trim();
+      }
+      if (typeof existing.metadata?.heading === 'string' && existing.metadata.heading.trim()) {
+        return existing.metadata.heading.trim();
+      }
+      return 'down';
+    })();
+
+    metadata = mergeMetadata(metadata, { heading: direction });
+
+    const animation = player.animation ?? existing.animation ?? DEFAULT_ANIMATION;
+    const displayName = alias ?? player.name ?? existing.name ?? `Tripulante ${player.id.slice(-4)}`;
 
     const enriched = {
       ...existing,
       ...player,
+      id: player.id,
+      name: displayName,
+      alias: alias ?? null,
       position,
       metadata,
-      animation: player.animation ?? existing.animation ?? DEFAULT_ANIMATION
+      animation,
+      direction,
+      sprite
     };
 
     playersRef.current.set(player.id, enriched);
@@ -276,7 +324,9 @@ export function WorldProvider({ children }) {
           const dx = Math.abs((currentPos?.x ?? 0) - (nextPos?.x ?? 0));
           const dy = Math.abs((currentPos?.y ?? 0) - (nextPos?.y ?? 0));
           const dz = Math.abs((currentPos?.z ?? 0) - (nextPos?.z ?? 0));
-          return dx < 0.005 && dy < 0.005 && dz < 0.005;
+          const sameDirection = currentPlayer.direction === nextPlayer.direction;
+          const sameAnimation = currentPlayer.animation === nextPlayer.animation;
+          return dx < 0.005 && dy < 0.005 && dz < 0.005 && sameDirection && sameAnimation;
         });
 
         if (isSame) {
@@ -365,6 +415,15 @@ export function WorldProvider({ children }) {
       localStateRef.current = nextState;
 
       return new Promise((resolve, reject) => {
+        const direction =
+          typeof nextState.metadata?.heading === 'string'
+            ? nextState.metadata.heading
+            : 'down';
+        const sprite =
+          typeof metadata?.avatar?.sprite === 'string'
+            ? metadata.avatar.sprite
+            : avatar?.sprite ?? null;
+
         socket.emit(
           'player:join',
           {
@@ -374,7 +433,9 @@ export function WorldProvider({ children }) {
             avatar,
             position: nextState.position,
             animation: nextState.animation,
-            metadata
+            metadata,
+            direction,
+            sprite
           },
           (ack) => {
             if (!ack?.ok) {
@@ -553,6 +614,10 @@ export function WorldProvider({ children }) {
       setJoinState((previous) =>
         previous.status === 'ready' ? { status: 'disconnected', error: null } : previous
       );
+
+      playersRef.current.clear();
+      compensatorsRef.current.clear();
+      setPlayers([]);
     };
 
     const handleConnectError = (error) => {
@@ -577,14 +642,20 @@ export function WorldProvider({ children }) {
       setChatMessages([]);
     };
 
+    const handlePlayerLeft = (payload) => {
+      if (payload?.id) {
+        removePlayer(payload.id);
+      }
+    };
+
     socket.on('connect', handleConnect);
     socket.on('disconnect', handleDisconnect);
     socket.on('connect_error', handleConnectError);
     socket.on('world:state', applySnapshot);
     socket.on('sprites:atlasUpdated', setSpriteAtlas);
-    socket.on('player:joined', (player) => applyPlayerSnapshot(player));
-    socket.on('player:updated', (player) => applyPlayerSnapshot(player));
-    socket.on('player:left', ({ id }) => removePlayer(id));
+    socket.on('player:joined', applyPlayerSnapshot);
+    socket.on('player:updated', applyPlayerSnapshot);
+    socket.on('player:left', handlePlayerLeft);
     socket.on('chat:message', appendChatMessage);
     socket.on('session:terminated', handleSessionTerminated);
 
@@ -596,7 +667,7 @@ export function WorldProvider({ children }) {
       socket.off('sprites:atlasUpdated', setSpriteAtlas);
       socket.off('player:joined', applyPlayerSnapshot);
       socket.off('player:updated', applyPlayerSnapshot);
-      socket.off('player:left', removePlayer);
+      socket.off('player:left', handlePlayerLeft);
       socket.off('chat:message', appendChatMessage);
       socket.off('session:terminated', handleSessionTerminated);
       socket.disconnect();
@@ -663,13 +734,27 @@ export function WorldProvider({ children }) {
       const displayName = alias ?? existing.name ?? `Tripulante ${playerId.slice(-4)}`;
       const combinedMetadata = mergeMetadata(existing.metadata, metadata);
 
+      const direction =
+        typeof combinedMetadata.heading === 'string'
+          ? combinedMetadata.heading
+          : typeof partial.metadata?.heading === 'string'
+            ? partial.metadata.heading
+            : 'down';
+
+      const sprite =
+        typeof combinedMetadata.avatar?.sprite === 'string'
+          ? combinedMetadata.avatar.sprite
+          : profileRef.current?.avatar?.sprite ?? null;
+
       const updatedPlayer = {
         ...existing,
         id: playerId,
         name: displayName,
         position: nextState.position,
         animation: nextState.animation,
-        metadata: combinedMetadata
+        metadata: combinedMetadata,
+        direction,
+        sprite
       };
 
       playersRef.current.set(playerId, updatedPlayer);
@@ -681,7 +766,11 @@ export function WorldProvider({ children }) {
           position: nextState.position,
           animation: nextState.animation,
           metadata: combinedMetadata,
-          name: displayName
+          name: displayName,
+          alias: displayName,
+          direction,
+          sprite,
+          avatar: combinedMetadata.avatar ?? null
         });
       }
     },

@@ -22,7 +22,7 @@ describe('MapContext', () => {
     expect(result.current.currentMap.blockedTiles.size).toBeGreaterThan(0);
   });
 
-  it('permite cambiar de mapa y restablecer la posición de aparición', () => {
+  it('mantiene al jugador en el mapa compartido incluso al solicitar otro', () => {
     const { result } = renderHook(() => useMap(), { wrapper });
 
     const initialMapId = result.current.currentMapId;
@@ -31,9 +31,8 @@ describe('MapContext', () => {
       result.current.switchMap('hydroponics');
     });
 
-    expect(result.current.currentMapId).toBe('hydroponics');
+    expect(result.current.currentMapId).toBe(initialMapId);
     expect(result.current.playerPosition).toEqual(result.current.currentMap.spawn);
-    expect(result.current.currentMapId).not.toBe(initialMapId);
   });
 
   it('crea un evento al interactuar con un objeto cercano', () => {
