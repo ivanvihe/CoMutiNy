@@ -3,7 +3,7 @@ import parseMapDefinition, {
   parseCoordinate as parseCoordinateString,
   parseDimensions as parseDimensionsString
 } from './map/parser.js';
-import { resolveObjectDefinition } from './objects/definitions.js';
+import { resolveObjectDefinition, registerObjectDefinitions } from './objects/definitions.js';
 import normaliseAppearance from './objects/appearance.js';
 
 const MAP_DIRECTORY = '../../../server/maps';
@@ -482,6 +482,19 @@ export const fetchServerMaps = async ({ signal } = {}) => {
     }
 
     const payload = await response.json();
+
+    const definitions = Array.isArray(payload?.objectDefinitions)
+      ? payload.objectDefinitions.filter((entry) => entry && typeof entry === 'object')
+      : [];
+
+    if (definitions.length) {
+      try {
+        registerObjectDefinitions(definitions);
+      } catch (error) {
+        console.warn('[maps] No se pudieron registrar las definiciones remotas de objetos', error);
+      }
+    }
+
     const items = Array.isArray(payload?.items)
       ? payload.items
       : Array.isArray(payload?.maps)

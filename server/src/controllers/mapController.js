@@ -9,8 +9,8 @@ const parsePagination = (query) => {
 const mapController = {
   async listStaticMaps (req, res, next) {
     try {
-      const maps = await mapService.listStaticMaps()
-      res.json({ items: maps, total: maps.length })
+      const { maps, objectDefinitions } = await mapService.listStaticMaps()
+      res.json({ items: maps, total: maps.length, objectDefinitions })
     } catch (error) {
       next(error)
     }
