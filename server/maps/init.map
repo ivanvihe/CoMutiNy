@@ -5,3 +5,7 @@ starting_point: 24x24
 
 [objects]
 welcome_terminal@24x22 | Terminal de bienvenida
+wall_01@10x10 | Pared de ladrillos
+wall_01@10x11 | Pared de ladrillos
+wall_01@10x12 | Pared de ladrillos
+plant_01@10x15 | Planta monstera
