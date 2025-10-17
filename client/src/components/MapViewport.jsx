@@ -61,16 +61,17 @@ export default function MapViewport() {
 
   const remotePlayers = useMemo(() => {
     return worldPlayers
-      .filter((player) => player.id !== localPlayerId)
-      .filter((player) => player.metadata?.mapId === currentMapId)
+      .filter((player) => player.id && player.id !== localPlayerId)
       .map((player) => ({
         id: player.id,
-        name: player.metadata?.alias ?? player.name ?? 'Tripulante',
+        name: player.alias ?? player.metadata?.alias ?? player.name ?? 'Tripulante',
         position: player.renderPosition ?? player.position ?? { x: 0, y: 0 },
-        direction: player.metadata?.heading ?? player.direction ?? 'down',
-        animation: player.animation ?? 'idle'
+        direction: player.direction ?? player.metadata?.heading ?? 'down',
+        animation: player.animation ?? 'idle',
+        avatar: player.metadata?.avatar ?? null,
+        sprite: player.sprite ?? player.metadata?.avatar?.sprite ?? null
       }));
-  }, [currentMapId, localPlayerId, worldPlayers]);
+  }, [localPlayerId, worldPlayers]);
 
   useEffect(() => {
     const engine = engineRef.current;

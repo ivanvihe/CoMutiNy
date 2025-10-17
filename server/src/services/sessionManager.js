@@ -14,7 +14,7 @@ const EVENT_TYPES = Object.freeze({
 })
 
 class SessionManager extends EventEmitter {
-  constructor (state) {
+  constructor (state, options = {}) {
     super()
     this.worldState = state
     this.redis = null
@@ -22,6 +22,11 @@ class SessionManager extends EventEmitter {
     this.subscriber = null
     this.initialized = false
     this.instanceId = `${process.pid}-${Math.random().toString(36).slice(2, 8)}`
+    this.updateDebounceMs = Math.max(10, Number(options.updateDebounceMs ?? 50))
+    this.snapshotDebounceMs = Math.max(10, Number(options.snapshotDebounceMs ?? 100))
+    this.pendingUpdateBroadcasts = new Map()
+    this.updateTimer = null
+    this.snapshotTimer = null
   }
 
   async initialize () {
@@ -76,7 +81,7 @@ class SessionManager extends EventEmitter {
 
     this.emit('player:joined', { player, socketId, origin: 'local' })
     this._publish(EVENT_TYPES.PLAYER_UPSERT, { player })
-    this._persistSnapshot()
+    this._scheduleSnapshotPersist()
 
     return player
   }
@@ -84,9 +89,7 @@ class SessionManager extends EventEmitter {
   updatePlayer (socketId, payload) {
     const player = this.worldState.updatePlayer(socketId, payload)
 
-    this.emit('player:updated', { player, socketId, origin: 'local' })
-    this._publish(EVENT_TYPES.PLAYER_UPSERT, { player })
-    this._persistSnapshot()
+    this._queuePlayerUpdateBroadcast(player, socketId)
 
     return player
   }
@@ -98,9 +101,10 @@ class SessionManager extends EventEmitter {
       return null
     }
 
+    this.pendingUpdateBroadcasts.delete(player.id)
     this.emit('player:left', { player, socketId, origin: 'local', reason })
     this._publish(EVENT_TYPES.PLAYER_REMOVE, { playerId: player.id, reason })
-    this._persistSnapshot()
+    this._scheduleSnapshotPersist()
 
     return player
   }
@@ -117,12 +121,14 @@ class SessionManager extends EventEmitter {
       return null
     }
 
+    this.pendingUpdateBroadcasts.delete(playerId)
     this.emit('player:left', { player: removed, socketId, origin: 'remote', reason })
 
     if (socketId) {
       this.emit('session:disconnect', { socketId, reason })
     }
 
+    this._scheduleSnapshotPersist()
     return removed
   }
 
@@ -131,7 +137,7 @@ class SessionManager extends EventEmitter {
 
     this.emit('chat:message', { message, origin: 'local' })
     this._publish(EVENT_TYPES.CHAT_MESSAGE, { message })
-    this._persistSnapshot()
+    this._scheduleSnapshotPersist()
 
     return message
   }
@@ -158,10 +164,49 @@ class SessionManager extends EventEmitter {
 
     if (origin === 'local') {
       this._publish(EVENT_TYPES.SPRITE_ATLAS, { atlas: snapshot })
-      this._persistSnapshot()
+      this._scheduleSnapshotPersist()
     }
 
     return snapshot
+  }
+
+  _queuePlayerUpdateBroadcast (player, socketId) {
+    if (!player?.id) {
+      return
+    }
+
+    this.pendingUpdateBroadcasts.set(player.id, { player, socketId })
+
+    if (this.updateTimer) {
+      return
+    }
+
+    this.updateTimer = setTimeout(() => {
+      this.updateTimer = null
+      this._flushQueuedPlayerUpdates()
+    }, this.updateDebounceMs)
+  }
+
+  _flushQueuedPlayerUpdates () {
+    if (this.pendingUpdateBroadcasts.size === 0) {
+      return
+    }
+
+    const entries = Array.from(this.pendingUpdateBroadcasts.values())
+    this.pendingUpdateBroadcasts.clear()
+
+    for (const entry of entries) {
+      const { player, socketId } = entry
+
+      if (!player?.id) {
+        continue
+      }
+
+      this.emit('player:updated', { player, socketId, origin: 'local' })
+      this._publish(EVENT_TYPES.PLAYER_UPSERT, { player })
+    }
+
+    this._scheduleSnapshotPersist()
   }
 
   _publish (type, payload) {
@@ -210,6 +255,7 @@ class SessionManager extends EventEmitter {
           socketId: null,
           origin: 'remote'
         })
+        this._scheduleSnapshotPersist()
         break
       }
       case EVENT_TYPES.PLAYER_REMOVE: {
@@ -241,7 +287,22 @@ class SessionManager extends EventEmitter {
     }
   }
 
-  _persistSnapshot () {
+  _scheduleSnapshotPersist () {
+    if (!this.redis) {
+      return
+    }
+
+    if (this.snapshotTimer) {
+      return
+    }
+
+    this.snapshotTimer = setTimeout(() => {
+      this.snapshotTimer = null
+      this._persistSnapshotNow()
+    }, this.snapshotDebounceMs)
+  }
+
+  _persistSnapshotNow () {
     if (!this.redis) {
       return
     }
@@ -256,5 +317,5 @@ class SessionManager extends EventEmitter {
 
 const sessionManager = new SessionManager(worldState)
 
-export { EVENT_TYPES }
+export { EVENT_TYPES, SessionManager }
 export default sessionManager

@@ -73,7 +73,10 @@ export function MapProvider({ children }) {
   const animationFrameRef = useRef(null);
   const playerRenderPositionRef = useRef(playerRenderPosition);
 
-  const availableMaps = useMemo(() => MAPS.map((map) => MAP_LOOKUP.get(map.id)), []);
+  const availableMaps = useMemo(() => {
+    const primary = MAP_LOOKUP.get(DEFAULT_MAP_ID);
+    return primary ? [primary] : [];
+  }, []);
   const currentMap = useMemo(() => MAP_LOOKUP.get(currentMapId), [currentMapId]);
 
   useEffect(() => {
@@ -171,7 +174,7 @@ export function MapProvider({ children }) {
 
   const switchMap = useCallback(
     (mapId, { position, event } = {}) => {
-      const targetMap = MAP_LOOKUP.get(mapId);
+      const targetMap = MAP_LOOKUP.get(DEFAULT_MAP_ID);
       if (!targetMap) {
         return false;
       }
@@ -182,8 +185,8 @@ export function MapProvider({ children }) {
       }
       animationFrameRef.current = null;
 
-      setCurrentMapId(mapId);
       const nextPosition = position ?? targetMap.spawn ?? { x: 0, y: 0 };
+      setCurrentMapId(DEFAULT_MAP_ID);
       setPlayerPosition(nextPosition);
       setPlayerRenderPosition(nextPosition);
       playerRenderPositionRef.current = nextPosition;
@@ -191,7 +194,7 @@ export function MapProvider({ children }) {
       setPlayerIsMoving(false);
       updateLocalPlayerState({
         position: { ...nextPosition, z: 0 },
-        metadata: { mapId, heading: DEFAULT_DIRECTION },
+        metadata: { heading: DEFAULT_DIRECTION },
         animation: 'idle'
       });
       if (event) {
@@ -233,7 +236,7 @@ export function MapProvider({ children }) {
         updateLocalPlayerState({
           position: { ...movement.to, z: 0 },
           animation: 'idle',
-          metadata: { mapId: currentMapId, heading: movement.direction }
+          metadata: { heading: movement.direction }
         });
         return;
       }
@@ -279,7 +282,7 @@ export function MapProvider({ children }) {
             position: portal.targetPosition,
             event: travelEvent
           });
-          return { moved: true, reason: 'map-changed', mapId: portal.targetMap };
+          return { moved: true, reason: 'map-changed' };
         }
       }
 
@@ -304,7 +307,7 @@ export function MapProvider({ children }) {
 
       updateLocalPlayerState({
         position: { ...nextPosition, z: 0 },
-        metadata: { mapId: currentMapId, heading: direction },
+        metadata: { heading: direction },
         animation: 'walk'
       });
 
@@ -315,14 +318,14 @@ export function MapProvider({ children }) {
         setPlayerIsMoving(false);
         updateLocalPlayerState({
           position: { ...nextPosition, z: 0 },
-          metadata: { mapId: currentMapId, heading: direction },
+          metadata: { heading: direction },
           animation: 'idle'
         });
       } else if (!animationFrameRef.current) {
         animationFrameRef.current = window.requestAnimationFrame(runMovementFrame);
       }
 
-      return { moved: true, reason: 'moved', mapId: currentMapId };
+      return { moved: true, reason: 'moved' };
     },
     [
       canMoveTo,
@@ -393,7 +396,7 @@ export function MapProvider({ children }) {
   useEffect(() => {
     updateLocalPlayerState({
       position: { ...playerPosition, z: 0 },
-      metadata: { mapId: currentMapId, heading: playerDirection }
+      metadata: { heading: playerDirection }
     });
   }, [currentMapId, playerDirection, playerPosition, updateLocalPlayerState]);
 
