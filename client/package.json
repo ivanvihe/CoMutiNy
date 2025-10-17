@@ -1,9 +1,32 @@
 {
-  "name": "client",
+  "name": "comutiny-client",
   "private": true,
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "start": "npx serve ."
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@emotion/react": "^11.11.4",
+    "@emotion/styled": "^11.11.5",
+    "@mui/icons-material": "^5.15.20",
+    "@mui/material": "^5.15.20",
+    "@tanstack/react-query": "^5.44.0",
+    "@hookform/resolvers": "^3.9.0",
+    "axios": "^1.6.8",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-hook-form": "^7.51.3",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.1",
+    "@types/react-dom": "^18.3.0",
+    "@vitejs/plugin-react": "^4.3.1",
+    "eslint": "^9.4.0",
+    "eslint-plugin-react": "^7.34.2",
+    "vite": "^5.2.11"
   }
 }
