@@ -1,4 +1,4 @@
-const MAP_DIRECTORY = '../../../maps';
+const MAP_DIRECTORY = '../../../server/maps';
 const MAP_FILE_EXTENSION = '.map';
 
 const toCamelCase = (rawKey) =>
@@ -39,7 +39,7 @@ const parseCoordinate = (value) => {
 
 const loadMapSources = () => {
   if (typeof import.meta !== 'undefined' && typeof import.meta.glob === 'function') {
-    return import.meta.glob('../../../maps/*.map', { as: 'raw', eager: true });
+    return import.meta.glob('../../../server/maps/*.map', { as: 'raw', eager: true });
   }
 
   if (typeof process !== 'undefined' && process.versions?.node && typeof require !== 'undefined') {
@@ -140,27 +140,47 @@ const normaliseMapDefinition = (filePath, rawContents) => {
     portals: [],
     theme: {
       borderColour: definition.borderColour ?? null
-    }
+    },
+    sourcePath: filePath
   };
 };
 
 const mapSources = loadMapSources();
 
-export const MAPS = Object.entries(mapSources).map(([filePath, rawContents]) =>
+const normalisedMaps = Object.entries(mapSources).map(([filePath, rawContents]) =>
   normaliseMapDefinition(filePath, rawContents)
 );
+
+normalisedMaps.sort((a, b) => {
+  const aIsInit = /(^|\/)init\.map$/i.test(a.sourcePath ?? '');
+  const bIsInit = /(^|\/)init\.map$/i.test(b.sourcePath ?? '');
+  if (aIsInit && !bIsInit) {
+    return -1;
+  }
+  if (bIsInit && !aIsInit) {
+    return 1;
+  }
+  return a.name.localeCompare(b.name);
+});
+
+export const MAPS = normalisedMaps;
 
 if (!MAPS.length) {
   MAPS.push({
     id: 'empty-map',
     name: 'Espacio sin definir',
     biome: 'Comunidad',
-    description: 'Añade archivos de mapa en ./maps para poblar el mundo.',
+    description: 'Añade archivos de mapa en ./server/maps para poblar el mundo.',
     size: { width: 1, height: 1 },
     spawn: { x: 0, y: 0 },
     blockedAreas: [],
     objects: [],
     portals: [],
-    theme: { borderColour: null }
+    theme: { borderColour: null },
+    sourcePath: null
   });
 }
+
+const defaultMap = MAPS.find((map) => /(^|\/)init\.map$/i.test(map.sourcePath ?? '')) ?? MAPS[0];
+
+export const DEFAULT_MAP_ID = defaultMap?.id ?? 'empty-map';

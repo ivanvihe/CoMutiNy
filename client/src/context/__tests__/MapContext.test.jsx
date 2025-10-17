@@ -20,7 +20,8 @@ jest.mock('../../game/maps.js', () => ({
       objects: [],
       portals: []
     }
-  ]
+  ],
+  DEFAULT_MAP_ID: 'mapa-prueba'
 }));
 
 jest.mock('../WorldContext.jsx', () => ({
