@@ -1,4 +1,7 @@
-import { resolveSpriteGenerator } from './spriteGenerators.js';
+import {
+  resolveSpriteGenerator,
+  registerSpriteGeneratorDefinitions
+} from './spriteGenerators.js';
 
 export const getSpriteGenerator = (id) => {
   return resolveSpriteGenerator(id);
@@ -28,6 +31,10 @@ export const createSpriteCanvas = ({ generator, width, height, tileSize, options
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   generatorFn(ctx, { width, height, tileSize, options: options ?? {} });
   return canvas;
+};
+
+export const registerCanvasSpriteDefinitions = (definitions) => {
+  return registerSpriteGeneratorDefinitions(definitions);
 };
 
 export default createSpriteCanvas;
