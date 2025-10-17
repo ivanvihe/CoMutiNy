@@ -3,13 +3,13 @@ import { io } from 'socket.io-client';
 import LagCompensator from '../utils/lagCompensation.js';
 import resolveServerUrl from '../utils/resolveServerUrl.js';
 import { buildInteractionRequest, normaliseInteractionEvent } from '../game/interaction/index.js';
+import {
+  DEFAULT_APPEARANCE as STORED_DEFAULT_APPEARANCE,
+  getUserPreferences as getStoredPreferences,
+  updateUserPreferences as persistUserPreferences
+} from '../state/userPreferences.js';
 
-const DEFAULT_APPEARANCE = {
-  hair: 'Corto',
-  face: 'Clásica',
-  outfit: 'Aventurero',
-  shoes: 'Botas'
-};
+const DEFAULT_APPEARANCE = { ...STORED_DEFAULT_APPEARANCE };
 
 const WorldContext = createContext({
   connected: false,
@@ -103,7 +103,10 @@ export function WorldProvider({ children }) {
   const [chatMessages, setChatMessages] = useState([]);
   const [profile, setProfile] = useState(null);
   const [joinState, setJoinState] = useState({ status: 'idle', error: null });
-  const [appearanceState, setAppearanceState] = useState(DEFAULT_APPEARANCE);
+  const [appearanceState, setAppearanceState] = useState(() => {
+    const stored = getStoredPreferences();
+    return { ...DEFAULT_APPEARANCE, ...(stored.appearance ?? {}) };
+  });
   const [lastObjectEvent, setLastObjectEvent] = useState(null);
 
   const socketRef = useRef(null);
@@ -936,6 +939,13 @@ export function WorldProvider({ children }) {
     }
     updateLocalPlayerState({ metadata: { appearance: appearanceState } });
   }, [appearanceState, updateLocalPlayerState]);
+
+  useEffect(() => {
+    if (!appearanceState) {
+      return;
+    }
+    persistUserPreferences({ appearance: appearanceState });
+  }, [appearanceState]);
 
   const value = useMemo(
     () => ({
