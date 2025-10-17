@@ -51,6 +51,10 @@ const DEFAULT_CAMERA_CONFIG = {
   lerpSpeed: 8
 };
 
+const MIN_ZOOM = 0.5;
+const MAX_ZOOM = 2;
+const DEFAULT_ZOOM = 1;
+
 const KEY_SEPARATOR = ',';
 
 const directionFallback = (direction) => {
@@ -78,6 +82,14 @@ const expandArea = ({ x = 0, y = 0, width = 1, height = 1 }) => {
 };
 
 const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
+
+const clampZoomValue = (value) => {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) {
+    return DEFAULT_ZOOM;
+  }
+  return clamp(numeric, MIN_ZOOM, MAX_ZOOM);
+};
 
 const normaliseHexColor = (value) => {
   if (typeof value !== 'string') {
@@ -222,6 +234,7 @@ export class IsometricEngine {
     this.tileConfig = { ...DEFAULT_TILESET_CONFIG, ...options.tileset };
     this.spriteConfig = { ...DEFAULT_SPRITE_CONFIG, ...options.sprites };
     this.cameraConfig = { ...DEFAULT_CAMERA_CONFIG, ...options.camera };
+    this.zoom = clampZoomValue(options.zoom ?? DEFAULT_ZOOM);
 
     this.scene = {
       map: null,
@@ -258,6 +271,35 @@ export class IsometricEngine {
     }
 
     this.handleResize();
+  }
+
+  getBaseTileWidth() {
+    return this.tileConfig.tileWidth ?? DEFAULT_TILESET_CONFIG.tileWidth;
+  }
+
+  getBaseTileHeight() {
+    return this.tileConfig.tileHeight ?? DEFAULT_TILESET_CONFIG.tileHeight;
+  }
+
+  getTileWidth() {
+    return this.getBaseTileWidth() * this.zoom;
+  }
+
+  getTileHeight() {
+    return this.getBaseTileHeight() * this.zoom;
+  }
+
+  getZoom() {
+    return this.zoom;
+  }
+
+  setZoom(value) {
+    const nextZoom = clampZoomValue(value);
+    if (Math.abs(nextZoom - this.zoom) < 0.0001) {
+      return;
+    }
+    this.zoom = nextZoom;
+    this.buildObjectSprites(this.scene?.objects ?? []);
   }
 
   setScene({ map, player, remotePlayers = [], chatBubbles = [] } = {}) {
@@ -497,7 +539,8 @@ export class IsometricEngine {
     const height = this.canvas.height / this.dpr;
     this.ctx.clearRect(0, 0, width, height);
 
-    const { tileWidth, tileHeight } = this.tileConfig;
+    const tileWidth = this.getTileWidth();
+    const tileHeight = this.getTileHeight();
     const originX = width / 2;
     const originY = height / 2;
     const camera = this.camera ?? { x: 0, y: 0 };
@@ -566,7 +609,8 @@ export class IsometricEngine {
   }
 
   drawStyledTile(palette, x, y, alpha = 1) {
-    const { tileWidth, tileHeight } = this.tileConfig;
+    const tileWidth = this.getTileWidth();
+    const tileHeight = this.getTileHeight();
     const top = palette?.top ?? DEFAULT_TILE_PALETTE.top;
     const bottom = palette?.bottom ?? DEFAULT_TILE_PALETTE.bottom;
     const stroke = palette?.stroke ?? DEFAULT_TILE_PALETTE.stroke;
@@ -594,7 +638,8 @@ export class IsometricEngine {
   }
 
   drawCollisionOverlay(x, y) {
-    const { tileWidth, tileHeight } = this.tileConfig;
+    const tileWidth = this.getTileWidth();
+    const tileHeight = this.getTileHeight();
     this.ctx.save();
     this.ctx.fillStyle = 'rgba(244, 67, 54, 0.18)';
     this.ctx.fillRect(x, y, tileWidth, tileHeight);
@@ -611,7 +656,8 @@ export class IsometricEngine {
   }
 
   drawHighlightOverlay(x, y, color) {
-    const { tileWidth, tileHeight } = this.tileConfig;
+    const tileWidth = this.getTileWidth();
+    const tileHeight = this.getTileHeight();
     this.ctx.save();
     this.ctx.fillStyle = color;
     this.ctx.fillRect(x, y, tileWidth, tileHeight);
@@ -619,7 +665,7 @@ export class IsometricEngine {
   }
 
   drawPortalMarker(x, y) {
-    const radius = 6;
+    const radius = 6 * this.zoom;
     const gradient = this.ctx.createRadialGradient(x, y, 0, x, y, radius * 2);
     gradient.addColorStop(0, 'rgba(129, 199, 132, 0.9)');
     gradient.addColorStop(1, 'rgba(129, 199, 132, 0)');
@@ -627,7 +673,7 @@ export class IsometricEngine {
     this.ctx.save();
     this.ctx.fillStyle = gradient;
     this.ctx.beginPath();
-    this.ctx.arc(x, y - 4, radius * 1.2, 0, Math.PI * 2);
+    this.ctx.arc(x, y - 4 * this.zoom, radius * 1.2, 0, Math.PI * 2);
     this.ctx.fill();
     this.ctx.restore();
   }
@@ -639,8 +685,8 @@ export class IsometricEngine {
       return;
     }
 
-    const tileWidth = this.tileConfig.tileWidth;
-    const tileHeight = this.tileConfig.tileHeight;
+    const tileWidth = this.getTileWidth();
+    const tileHeight = this.getTileHeight();
 
     objects.forEach((object) => {
       const appearance = object?.appearance;
@@ -692,8 +738,8 @@ export class IsometricEngine {
       return;
     }
 
-    const tileWidth = this.tileConfig.tileWidth;
-    const tileHeight = this.tileConfig.tileHeight;
+    const tileWidth = this.getTileWidth();
+    const tileHeight = this.getTileHeight();
     const camera = this.camera ?? { x: 0, y: 0 };
     const originX = width / 2;
     const originY = height / 2;
@@ -767,7 +813,8 @@ export class IsometricEngine {
       return aPos.x - bPos.x;
     });
 
-    const { tileWidth, tileHeight } = this.tileConfig;
+    const tileWidth = this.getTileWidth();
+    const tileHeight = this.getTileHeight();
     const camera = this.camera ?? { x: 0, y: 0 };
     const originX = width / 2;
     const originY = height / 2;
@@ -834,7 +881,7 @@ export class IsometricEngine {
     this.ctx.textAlign = 'center';
     this.ctx.textBaseline = 'top';
 
-    const maxLineWidth = this.tileConfig.tileWidth * 2.2;
+    const maxLineWidth = this.getTileWidth() * 2.2;
     const lineHeight = 16;
     const paddingX = 10;
     const paddingY = 6;
@@ -913,7 +960,7 @@ export class IsometricEngine {
   }
 
   computeNameplateY(screenY, animation, time) {
-    const { tileHeight } = this.tileConfig;
+    const tileHeight = this.getTileHeight();
     const bob = this.resolveBobOffset(animation, time);
     return screenY - tileHeight * 1.4 - bob;
   }
@@ -929,7 +976,8 @@ export class IsometricEngine {
 
   drawPlayerAvatar(entity, screenX, screenY, time) {
     const palette = entity.local ? PLAYER_COLORS.local : PLAYER_COLORS.remote;
-    const { tileWidth, tileHeight } = this.tileConfig;
+    const tileWidth = this.getTileWidth();
+    const tileHeight = this.getTileHeight();
     const bob = this.resolveBobOffset(entity.animation, time);
 
     this.ctx.save();

@@ -1,7 +1,14 @@
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useMap } from '../context/MapContext.jsx';
 import { useWorld } from '../context/WorldContext.jsx';
 import IsometricEngine from '../game/isometricEngine.js';
+import MapToolbar from './MapToolbar.jsx';
+import {
+  clampZoom,
+  resolveZoomPreference,
+  subscribeToUserPreferences,
+  updateUserPreferences
+} from '../state/userPreferences.js';
 
 const CONNECTION_LABELS = {
   idle: 'Desconectado',
@@ -13,10 +20,15 @@ const CONNECTION_LABELS = {
 };
 
 const KEY_BLOCKLIST = new Set(['INPUT', 'TEXTAREA', 'SELECT']);
+const MIN_ZOOM = 0.5;
+const MAX_ZOOM = 2;
+const ZOOM_STEP = 0.1;
+const DEFAULT_ZOOM = 1;
 
 export default function MapViewport() {
   const canvasRef = useRef(null);
   const engineRef = useRef(null);
+  const [zoom, setZoom] = useState(() => resolveZoomPreference({ min: MIN_ZOOM, max: MAX_ZOOM }));
 
   const {
     maps = [],
@@ -54,7 +66,8 @@ export default function MapViewport() {
         framesPerDirection: 4,
         directions: { down: 0, left: 1, right: 2, up: 3 },
         animationSpeed: 120
-      }
+      },
+      zoom
     });
     engineRef.current = engine;
     engine.start();
@@ -62,6 +75,35 @@ export default function MapViewport() {
     return () => {
       engine.destroy();
       engineRef.current = null;
+    };
+  }, []);
+
+  useEffect(() => {
+    const engine = engineRef.current;
+    if (engine) {
+      engine.setZoom(zoom);
+    }
+  }, [zoom]);
+
+  useEffect(() => {
+    updateUserPreferences({ mapZoom: zoom });
+  }, [zoom]);
+
+  useEffect(() => {
+    const unsubscribe = subscribeToUserPreferences((preferences) => {
+      const nextZoom = clampZoom(preferences?.mapZoom ?? DEFAULT_ZOOM, { min: MIN_ZOOM, max: MAX_ZOOM });
+      setZoom((current) => {
+        if (Math.abs(current - nextZoom) < 0.0001) {
+          return current;
+        }
+        return nextZoom;
+      });
+    });
+
+    return () => {
+      if (typeof unsubscribe === 'function') {
+        unsubscribe();
+      }
     };
   }, []);
 
@@ -167,9 +209,56 @@ export default function MapViewport() {
   const handlePrevMap = useCallback(() => cycleMap(-1), [cycleMap]);
   const handleNextMap = useCallback(() => cycleMap(1), [cycleMap]);
 
+  const normaliseZoom = useCallback((value) => {
+    const clamped = clampZoom(value, { min: MIN_ZOOM, max: MAX_ZOOM });
+    return Math.round(clamped * 100) / 100;
+  }, []);
+
+  const setZoomValue = useCallback(
+    (value) => {
+      setZoom((current) => {
+        const next = normaliseZoom(value);
+        if (Math.abs(current - next) < 0.0001) {
+          return current;
+        }
+        return next;
+      });
+    },
+    [normaliseZoom]
+  );
+
+  const adjustZoom = useCallback(
+    (delta) => {
+      setZoom((current) => {
+        const next = normaliseZoom(current + delta);
+        if (Math.abs(current - next) < 0.0001) {
+          return current;
+        }
+        return next;
+      });
+    },
+    [normaliseZoom]
+  );
+
+  const handleZoomIn = useCallback(() => adjustZoom(ZOOM_STEP), [adjustZoom]);
+  const handleZoomOut = useCallback(() => adjustZoom(-ZOOM_STEP), [adjustZoom]);
+  const handleZoomReset = useCallback(() => setZoomValue(DEFAULT_ZOOM), [setZoomValue]);
+  const handleZoomSlider = useCallback(
+    (event) => {
+      const value = Number.parseFloat(event?.target?.value);
+      if (Number.isFinite(value)) {
+        setZoomValue(value);
+      }
+    },
+    [setZoomValue]
+  );
+
   useEffect(() => {
     const handleKeyDown = (event) => {
       if (event.defaultPrevented) {
+        return;
+      }
+      if (event.ctrlKey || event.metaKey) {
         return;
       }
       const target = event.target;
@@ -211,12 +300,21 @@ export default function MapViewport() {
       } else if (key === 'r') {
         prevent();
         handleNextMap();
+      } else if (key === '+' || key === '=' || key === 'add') {
+        prevent();
+        handleZoomIn();
+      } else if (key === '-' || key === '_') {
+        prevent();
+        handleZoomOut();
+      } else if (key === '0') {
+        prevent();
+        handleZoomReset();
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleNextMap, handlePrevMap, interact, movePlayer]);
+  }, [handleNextMap, handlePrevMap, handleZoomIn, handleZoomOut, handleZoomReset, interact, movePlayer]);
 
   const mapIndex = useMemo(
     () => maps.findIndex((map) => map?.id === currentMapId),
@@ -230,6 +328,7 @@ export default function MapViewport() {
   const remoteCount = remotePlayers.length;
   const totalCrew = remoteCount + (currentMap ? 1 : 0);
   const statusLabel = CONNECTION_LABELS[connectionStatus] ?? connectionStatus;
+  const zoomPercentage = Math.round(zoom * 100);
 
   return (
     <div className="map-viewport">
@@ -250,6 +349,17 @@ export default function MapViewport() {
 
       <div className="viewport-overlay viewport-overlay--top-right">
         <div className={`hud-chip hud-chip--${connectionStatus}`}>{statusLabel}</div>
+        <MapToolbar
+          zoom={zoom}
+          minZoom={MIN_ZOOM}
+          maxZoom={MAX_ZOOM}
+          step={ZOOM_STEP}
+          onZoomChange={handleZoomSlider}
+          onZoomIn={handleZoomIn}
+          onZoomOut={handleZoomOut}
+          onZoomReset={handleZoomReset}
+          zoomPercentage={zoomPercentage}
+        />
       </div>
 
       <div className="viewport-overlay viewport-overlay--bottom-left">
