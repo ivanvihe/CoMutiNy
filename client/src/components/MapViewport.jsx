@@ -32,7 +32,13 @@ export default function MapViewport() {
     objectAtPlayerPosition,
     switchMap
   } = useMap();
-  const { players: worldPlayers, localPlayerId, connectionStatus, profile } = useWorld();
+  const {
+    players: worldPlayers,
+    localPlayerId,
+    connectionStatus,
+    profile,
+    chatMessages
+  } = useWorld();
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -73,6 +79,40 @@ export default function MapViewport() {
       }));
   }, [localPlayerId, worldPlayers]);
 
+  const chatBubbles = useMemo(() => {
+    if (!Array.isArray(chatMessages)) {
+      return [];
+    }
+
+    const latestByPlayer = new Map();
+
+    chatMessages.forEach((message) => {
+      const playerId = typeof message?.playerId === 'string' ? message.playerId.trim() : '';
+      const content = typeof message?.content === 'string' ? message.content.trim() : '';
+      if (!playerId || !content) {
+        return;
+      }
+
+      const receivedAt =
+        typeof message?.receivedAt === 'number' && Number.isFinite(message.receivedAt)
+          ? message.receivedAt
+          : typeof message?.occurredAt === 'number' && Number.isFinite(message.occurredAt)
+            ? message.occurredAt
+            : null;
+
+      if (receivedAt === null) {
+        return;
+      }
+
+      const existing = latestByPlayer.get(playerId);
+      if (!existing || receivedAt > existing.receivedAt) {
+        latestByPlayer.set(playerId, { playerId, content, receivedAt });
+      }
+    });
+
+    return Array.from(latestByPlayer.values());
+  }, [chatMessages]);
+
   useEffect(() => {
     const engine = engineRef.current;
     if (!engine) {
@@ -95,7 +135,8 @@ export default function MapViewport() {
     engine.setScene({
       map: currentMap,
       player: localPlayer,
-      remotePlayers
+      remotePlayers,
+      chatBubbles
     });
   }, [
     currentMap,
@@ -104,7 +145,8 @@ export default function MapViewport() {
     playerIsMoving,
     playerRenderPosition,
     remotePlayers,
-    profile?.alias
+    profile?.alias,
+    chatBubbles
   ]);
 
   const cycleMap = useCallback(

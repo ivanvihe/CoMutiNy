@@ -159,7 +159,8 @@ export class IsometricEngine {
       objectTiles: new Set(),
       portalTiles: new Set(),
       player: null,
-      remotePlayers: []
+      remotePlayers: [],
+      chatBubbles: new Map()
     };
 
     this.animator = new SpriteAnimator(this.spriteConfig);
@@ -184,7 +185,7 @@ export class IsometricEngine {
     this.handleResize();
   }
 
-  setScene({ map, player, remotePlayers = [] } = {}) {
+  setScene({ map, player, remotePlayers = [], chatBubbles = [] } = {}) {
     if (!map) {
       this.scene = {
         map: null,
@@ -192,7 +193,8 @@ export class IsometricEngine {
         objectTiles: new Set(),
         portalTiles: new Set(),
         player: null,
-        remotePlayers: []
+        remotePlayers: [],
+        chatBubbles: new Map()
       };
       return;
     }
@@ -208,13 +210,30 @@ export class IsometricEngine {
       expandArea({ ...portal.from }).forEach((tile) => portalTiles.add(tile));
     });
 
+    const bubbleMap = new Map();
+    if (Array.isArray(chatBubbles)) {
+      chatBubbles.forEach((bubble) => {
+        const playerId = typeof bubble?.playerId === 'string' ? bubble.playerId.trim() : null;
+        const content = typeof bubble?.content === 'string' ? bubble.content.trim() : '';
+        if (!playerId || !content) {
+          return;
+        }
+        const receivedAt =
+          typeof bubble.receivedAt === 'number' && Number.isFinite(bubble.receivedAt)
+            ? bubble.receivedAt
+            : Date.now();
+        bubbleMap.set(playerId, { content, receivedAt });
+      });
+    }
+
     this.scene = {
       map,
       blockedTiles,
       objectTiles,
       portalTiles,
       player: player ?? null,
-      remotePlayers: Array.isArray(remotePlayers) ? remotePlayers : []
+      remotePlayers: Array.isArray(remotePlayers) ? remotePlayers : [],
+      chatBubbles: bubbleMap
     };
 
     if (player?.position) {
@@ -255,7 +274,8 @@ export class IsometricEngine {
       objectTiles: new Set(),
       portalTiles: new Set(),
       player: null,
-      remotePlayers: []
+      remotePlayers: [],
+      chatBubbles: new Map()
     };
   }
 
@@ -394,7 +414,7 @@ export class IsometricEngine {
   }
 
   drawPlayers(delta, width, height) {
-    const { player, remotePlayers = [] } = this.scene;
+    const { player, remotePlayers = [], chatBubbles = new Map() } = this.scene;
     const allPlayers = [];
 
     if (player) {
@@ -440,11 +460,127 @@ export class IsometricEngine {
 
       this.drawPlayerAvatar(entity, screenX, screenY, time);
 
+      const nameY = this.computeNameplateY(screenY, entity.animation, time);
+
+      if (entity.id) {
+        const bubble = chatBubbles.get(entity.id);
+        if (bubble) {
+          const bubbleBottomY = nameY - 28;
+          this.drawChatBubble(bubble.content, screenX, bubbleBottomY, bubble.receivedAt);
+        }
+      }
+
       if (entity.name) {
-        const nameY = this.computeNameplateY(screenY, entity.animation, time);
         this.drawNameplate(entity.name, screenX, nameY, entity.local);
       }
     });
+  }
+
+  drawChatBubble(content, centerX, bottomY, receivedAt) {
+    if (!content) {
+      return;
+    }
+
+    const now = Date.now();
+    if (!Number.isFinite(receivedAt) || now - receivedAt >= 2000) {
+      return;
+    }
+
+    const fadeDuration = 500;
+    const lifetime = 2000;
+    const elapsed = now - receivedAt;
+    const fadeStart = lifetime - fadeDuration;
+    const alpha =
+      elapsed <= fadeStart
+        ? 1
+        : Math.max(0, 1 - (elapsed - fadeStart) / Math.max(fadeDuration, 1));
+
+    const sanitized = content.replace(/\s+/g, ' ').trim();
+    if (!sanitized) {
+      return;
+    }
+
+    this.ctx.save();
+    this.ctx.font = '12px "Inter", sans-serif';
+    this.ctx.textAlign = 'center';
+    this.ctx.textBaseline = 'top';
+
+    const maxLineWidth = this.tileConfig.tileWidth * 2.2;
+    const lineHeight = 16;
+    const paddingX = 10;
+    const paddingY = 6;
+
+    const words = sanitized.split(' ');
+    const lines = [];
+    let currentLine = '';
+
+    words.forEach((word) => {
+      const candidate = currentLine ? `${currentLine} ${word}` : word;
+      const width = this.ctx.measureText(candidate).width;
+      if (width <= maxLineWidth || !currentLine) {
+        currentLine = candidate;
+      } else {
+        lines.push(currentLine);
+        currentLine = word;
+      }
+    });
+
+    if (currentLine) {
+      lines.push(currentLine);
+    }
+
+    if (!lines.length) {
+      this.ctx.restore();
+      return;
+    }
+
+    if (lines.length > 3) {
+      const truncated = lines.slice(0, 3);
+      truncated[2] = `${truncated[2]}…`;
+      lines.length = 0;
+      truncated.forEach((line) => lines.push(line));
+    }
+
+    let textWidth = 0;
+    lines.forEach((line) => {
+      textWidth = Math.max(textWidth, this.ctx.measureText(line).width);
+    });
+
+    const bubbleWidth = textWidth + paddingX * 2;
+    const bubbleHeight = lines.length * lineHeight + paddingY * 2;
+    const rectX = centerX - bubbleWidth / 2;
+    const rectY = bottomY - bubbleHeight;
+
+    const backgroundAlpha = 0.85 * alpha;
+    const strokeAlpha = 0.6 * alpha;
+
+    this.ctx.fillStyle = `rgba(21, 101, 192, ${backgroundAlpha.toFixed(3)})`;
+    this.ctx.strokeStyle = `rgba(144, 202, 249, ${strokeAlpha.toFixed(3)})`;
+    this.ctx.lineWidth = 1.2;
+    this.ctx.beginPath();
+    this.ctx.roundRect(rectX, rectY, bubbleWidth, bubbleHeight, 10);
+    this.ctx.fill();
+    this.ctx.stroke();
+
+    const tailWidth = 10;
+    const tailHeight = 6;
+    const tailX = centerX;
+    const tailY = bottomY - 1;
+    this.ctx.beginPath();
+    this.ctx.moveTo(tailX, tailY);
+    this.ctx.lineTo(tailX - tailWidth / 2, tailY - tailHeight);
+    this.ctx.lineTo(tailX + tailWidth / 2, tailY - tailHeight);
+    this.ctx.closePath();
+    this.ctx.fill();
+
+    this.ctx.fillStyle = `rgba(240, 248, 255, ${alpha.toFixed(3)})`;
+    let textY = rectY + paddingY;
+    lines.forEach((line) => {
+      this.ctx.fillText(line, centerX, textY);
+      textY += lineHeight;
+    });
+
+    this.ctx.restore();
   }
 
   computeNameplateY(screenY, animation, time) {

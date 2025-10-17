@@ -227,23 +227,40 @@ export function WorldProvider({ children }) {
       return;
     }
 
+    const now = Date.now();
+    const timestampValue =
+      typeof message.timestamp === 'string' || message.timestamp instanceof Date
+        ? new Date(message.timestamp).getTime()
+        : Number.isFinite(message.timestamp)
+          ? Number(message.timestamp)
+          : null;
+    const resolvedTimestamp = Number.isFinite(timestampValue) ? timestampValue : now;
+
     chatRef.current = (() => {
       const existingIndex = chatRef.current.findIndex((entry) => entry.id === message.id);
+      const existing = existingIndex >= 0 ? chatRef.current[existingIndex] : null;
       const payload = {
         id: message.id,
         playerId: message.playerId ?? null,
         author: message.author ?? 'Tripulante',
         content: message.content ?? '',
-        timestamp: message.timestamp ?? new Date().toISOString()
+        timestamp: message.timestamp ?? new Date().toISOString(),
+        receivedAt: existing?.receivedAt ?? now,
+        occurredAt: resolvedTimestamp
       };
 
       if (existingIndex >= 0) {
         const next = [...chatRef.current];
-        next[existingIndex] = { ...next[existingIndex], ...payload };
+        const previous = next[existingIndex];
+        next[existingIndex] = {
+          ...previous,
+          ...payload,
+          receivedAt: payload.receivedAt ?? previous.receivedAt ?? now
+        };
         return next;
       }
 
-      const next = [...chatRef.current, payload];
+      const next = [...chatRef.current, { ...payload, receivedAt: now }];
 
       if (next.length > 200) {
         return next.slice(next.length - 200);
@@ -281,7 +298,14 @@ export function WorldProvider({ children }) {
             playerId: entry.playerId ?? null,
             author: entry.author ?? 'Tripulante',
             content: entry.content ?? '',
-            timestamp: entry.timestamp ?? new Date().toISOString()
+            timestamp: entry.timestamp ?? new Date().toISOString(),
+            receivedAt: Date.now() - 4000,
+            occurredAt:
+              typeof entry.timestamp === 'string' || entry.timestamp instanceof Date
+                ? new Date(entry.timestamp).getTime()
+                : Number.isFinite(entry.timestamp)
+                  ? Number(entry.timestamp)
+                  : null
           }));
 
         chatRef.current = nextChat.slice(-200);

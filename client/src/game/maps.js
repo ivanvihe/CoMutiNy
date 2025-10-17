@@ -87,14 +87,22 @@ const normaliseMapDefinition = (filePath, rawContents) => {
     });
 
   const size = parseDimensions(definition.dimensions ?? '');
-  const spawn = parseCoordinate(definition.spawn ?? '') ??
+  const spawn =
+    parseCoordinate(definition.startingPoint ?? '') ??
+    parseCoordinate(definition.spawn ?? '') ??
     (size
       ? { x: Math.floor(size.width / 2), y: Math.floor(size.height / 2) }
       : { x: 0, y: 0 });
   const doorPosition = parseCoordinate(definition.doorPosition ?? '');
 
   const fileName = filePath.split('/').pop() ?? 'map';
-  const id = fileName.replace(/\.map$/i, '');
+  const rawId = typeof definition.id === 'string' ? definition.id.trim() : '';
+  const id = rawId || fileName.replace(/\.map$/i, '');
+
+  const title =
+    (typeof definition.title === 'string' && definition.title.trim()) ||
+    (typeof definition.name === 'string' && definition.name.trim()) ||
+    id;
 
   const width = size?.width ?? 0;
   const height = size?.height ?? 0;
@@ -122,7 +130,7 @@ const normaliseMapDefinition = (filePath, rawContents) => {
 
   return {
     id,
-    name: definition.name ?? id,
+    name: title,
     biome: definition.biome ?? 'Comunidad',
     description: definition.description ?? '',
     size: size ?? { width: 0, height: 0 },
