@@ -1,7 +1,13 @@
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 
-const MAP_DIRECTORY = path.resolve(process.cwd(), 'server', 'maps')
+const moduleDir = path.dirname(fileURLToPath(import.meta.url))
+const DEFAULT_MAP_DIRECTORIES = [
+  path.resolve(moduleDir, '..', 'maps'),
+  path.resolve(process.cwd(), 'server', 'maps'),
+  path.resolve(process.cwd(), 'maps')
+]
 const MAP_FILE_EXTENSION = '.map'
 
 const toCamelCase = (rawKey = '') =>
@@ -120,23 +126,43 @@ const normaliseMapDefinition = (filePath, rawContents) => {
   }
 }
 
-export const loadStaticMapDefinitions = async (
-  directory = MAP_DIRECTORY
-) => {
-  let entries = []
-  try {
-    entries = await fs.readdir(directory, { withFileTypes: true })
-  } catch (error) {
+const findReadableDirectory = async (directory) => {
+  const candidates = directory ? [directory] : DEFAULT_MAP_DIRECTORIES
+
+  for (const candidate of candidates) {
+    try {
+      const entries = await fs.readdir(candidate, { withFileTypes: true })
+      return { directory: candidate, entries }
+    } catch (error) {
+      // Continue trying other candidates
+    }
+  }
+
+  return { directory: null, entries: [] }
+}
+
+export const loadStaticMapDefinitions = async (directory) => {
+  const { directory: resolvedDirectory, entries } = await findReadableDirectory(directory)
+
+  if (!resolvedDirectory || entries.length === 0) {
+    console.warn('[maps] No static map definitions found')
     return []
   }
+
+  console.info(`[maps] Loading static maps from ${resolvedDirectory}`)
 
   const definitions = await Promise.all(
     entries
       .filter((entry) => entry.isFile() && entry.name.endsWith(MAP_FILE_EXTENSION))
       .map(async (entry) => {
-        const filePath = path.join(directory, entry.name)
+        const filePath = path.join(resolvedDirectory, entry.name)
         const rawContents = await fs.readFile(filePath, 'utf-8')
-        return normaliseMapDefinition(filePath, rawContents)
+        const definition = normaliseMapDefinition(filePath, rawContents)
+        console.info(
+          `[maps] Parsed map "${definition.name}" (${definition.sourcePath}) ` +
+            `with size ${definition.size.width}x${definition.size.height}`
+        )
+        return definition
       })
   )
 

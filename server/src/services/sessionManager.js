@@ -178,6 +178,7 @@ class SessionManager extends EventEmitter {
       const maps = await loadStaticMapDefinitions()
 
       if (!Array.isArray(maps) || maps.length === 0) {
+        console.warn('[session] No static maps available to initialize the world')
         return
       }
 
@@ -185,6 +186,7 @@ class SessionManager extends EventEmitter {
         maps.find((map) => /(^|\/)init\.map$/i.test(map.sourcePath ?? '')) ?? maps[0]
 
       if (!initMap) {
+        console.warn('[session] Could not locate init.map definition')
         return
       }
 
@@ -205,10 +207,15 @@ class SessionManager extends EventEmitter {
         current?.spawn?.z === spawn.z
 
       if (isSameWorld) {
+        console.info('[session] init.map already loaded as the active world')
         return
       }
 
       this.worldState.setWorld({ ...initMap, spawn })
+      console.info(
+        `[session] Default world set to ${initMap.name} (${initMap.sourcePath}) ` +
+          `with size ${initMap.size?.width ?? 0}x${initMap.size?.height ?? 0}`
+      )
       this._scheduleSnapshotPersist()
     } catch (error) {
       console.error('[session] Failed to ensure default world map', error)
