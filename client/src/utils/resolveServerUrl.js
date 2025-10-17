@@ -61,13 +61,65 @@ const shouldNormaliseHostname = (hostname) => {
   return !trimmed.includes('.');
 };
 
+const normaliseProtocol = (protocol, fallbackProtocol = 'http:') => {
+  if (!protocol || protocol === 'file:') {
+    return fallbackProtocol;
+  }
+
+  if (protocol === 'ws:') {
+    return 'http:';
+  }
+
+  if (protocol === 'wss:') {
+    return 'https:';
+  }
+
+  return protocol;
+};
+
+const normaliseUrlString = (rawUrl, { fallbackProtocol } = {}) => {
+  if (!rawUrl) {
+    return null;
+  }
+
+  const protocolFallback = normaliseProtocol(fallbackProtocol ?? 'http:');
+
+  if (/^wss?:\/\//i.test(rawUrl)) {
+    return rawUrl.replace(/^ws/i, 'http');
+  }
+
+  if (!/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(rawUrl)) {
+    return rawUrl;
+  }
+
+  try {
+    const parsed = new URL(rawUrl);
+    const normalisedProtocol = normaliseProtocol(parsed.protocol, protocolFallback);
+    if (normalisedProtocol === parsed.protocol) {
+      return rawUrl;
+    }
+    parsed.protocol = normalisedProtocol;
+    return parsed.toString();
+  } catch {
+    return rawUrl;
+  }
+};
+
 const resolveServerUrl = () => {
   if (typeof window === 'undefined') {
-    return process?.env?.VITE_SOCKET_URL || process?.env?.VITE_API_BASE_URL || `http://localhost:${DEFAULT_PORT}`;
+    const envUrl =
+      process?.env?.VITE_SOCKET_URL ||
+      process?.env?.VITE_API_BASE_URL ||
+      `http://localhost:${DEFAULT_PORT}`;
+
+    return normaliseUrlString(envUrl, { fallbackProtocol: 'http:' });
   }
 
   const { protocol: currentProtocol, hostname: currentHostname } = window.location;
-  const fallbackProtocol = currentProtocol === 'https:' ? 'https:' : 'http:';
+  const fallbackProtocol = normaliseProtocol(
+    currentProtocol === 'https:' ? 'https:' : 'http:',
+    'http:'
+  );
   const fallbackHostname = currentHostname || 'localhost';
 
   const fallbackPort =
@@ -75,11 +127,13 @@ const resolveServerUrl = () => {
     parsePort(import.meta?.env?.VITE_API_PORT) ??
     DEFAULT_PORT;
 
-  const rawUrl =
+  const rawUrl = normaliseUrlString(
     window.__COMUTINY_SOCKET_URL__ ??
-    import.meta?.env?.VITE_SOCKET_URL ??
-    import.meta?.env?.VITE_API_BASE_URL ??
-    null;
+      import.meta?.env?.VITE_SOCKET_URL ??
+      import.meta?.env?.VITE_API_BASE_URL ??
+      null,
+    { fallbackProtocol }
+  );
 
   if (rawUrl) {
     try {
@@ -93,9 +147,7 @@ const resolveServerUrl = () => {
         candidate.port = String(fallbackPort);
       }
 
-      if (!candidate.protocol || candidate.protocol === 'file:') {
-        candidate.protocol = fallbackProtocol;
-      }
+      candidate.protocol = normaliseProtocol(candidate.protocol, fallbackProtocol);
 
       return candidate.toString();
     } catch (error) {
