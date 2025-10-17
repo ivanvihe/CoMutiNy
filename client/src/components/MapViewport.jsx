@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react';
-import { useAuth } from '../context/AuthContext.jsx';
 import { useMap } from '../context/MapContext.jsx';
 import { useWorld } from '../context/WorldContext.jsx';
 import IsometricEngine from '../game/isometricEngine.js';
@@ -33,8 +32,7 @@ export default function MapViewport() {
     objectAtPlayerPosition,
     switchMap
   } = useMap();
-  const { players: worldPlayers, localPlayerId, connectionStatus } = useWorld();
-  const { user } = useAuth();
+  const { players: worldPlayers, localPlayerId, connectionStatus, profile } = useWorld();
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -67,7 +65,7 @@ export default function MapViewport() {
       .filter((player) => player.metadata?.mapId === currentMapId)
       .map((player) => ({
         id: player.id,
-        name: player.name ?? player.metadata?.alias ?? 'Tripulante',
+        name: player.metadata?.alias ?? player.name ?? 'Tripulante',
         position: player.renderPosition ?? player.position ?? { x: 0, y: 0 },
         direction: player.metadata?.heading ?? player.direction ?? 'down',
         animation: player.animation ?? 'idle'
@@ -87,7 +85,7 @@ export default function MapViewport() {
 
     const localPlayer = {
       id: localPlayerId ?? 'local-player',
-      name: user?.username ?? 'Tú',
+      name: profile?.alias ?? 'Tú',
       position: playerRenderPosition ?? currentMap.spawn ?? { x: 0, y: 0 },
       direction: playerDirection ?? 'down',
       animation: playerIsMoving ? 'walk' : 'idle'
@@ -105,7 +103,7 @@ export default function MapViewport() {
     playerIsMoving,
     playerRenderPosition,
     remotePlayers,
-    user?.username
+    profile?.alias
   ]);
 
   const cycleMap = useCallback(

@@ -4,10 +4,7 @@ import express from 'express'
 import dotenv from 'dotenv'
 
 import { connectDatabase } from './config/database.js'
-import authRoutes from './routes/authRoutes.js'
-import avatarRoutes from './routes/avatarRoutes.js'
 import assetRoutes from './routes/assetRoutes.js'
-import { cookies } from './middlewares/auth.js'
 import sessionManager from './services/sessionManager.js'
 import avatarRepository from './repositories/AvatarRepository.js'
 import spriteGenerationService from './sprites/spriteGenerationService.js'
@@ -19,7 +16,6 @@ dotenv.config()
 const app = express()
 
 app.use(express.json())
-app.use(cookies)
 app.use(
   '/static',
   express.static(path.resolve(process.cwd(), 'server', 'assets'), {
@@ -31,8 +27,6 @@ app.get('/health', (req, res) => {
   res.status(200).json({ status: 'ok' })
 })
 
-app.use('/auth', authRoutes)
-app.use('/avatars', avatarRoutes)
 app.use('/assets', assetRoutes)
 
 app.use((err, req, res, next) => {
@@ -56,6 +50,22 @@ const enrichJoinPayloadWithAvatar = async (payload = {}) => {
     ? { ...payload.metadata }
     : {}
 
+  if (payload?.avatar && typeof payload.avatar === 'object') {
+    metadata.avatar = { ...payload.avatar }
+  }
+
+  const alias =
+    typeof enriched.alias === 'string' && enriched.alias.trim()
+      ? enriched.alias.trim()
+      : typeof enriched.name === 'string' && enriched.name.trim()
+        ? enriched.name.trim()
+        : null
+
+  if (alias) {
+    enriched.name = alias
+    metadata.alias = alias
+  }
+
   const avatarId =
     (typeof enriched.avatarId === 'string' && enriched.avatarId.trim()) ||
     (typeof metadata.avatarId === 'string' && metadata.avatarId.trim()) ||
@@ -64,6 +74,8 @@ const enrichJoinPayloadWithAvatar = async (payload = {}) => {
   if (!avatarId) {
     if (Object.keys(metadata).length > 0) {
       enriched.metadata = metadata
+    } else {
+      delete enriched.metadata
     }
 
     delete enriched.avatarId
