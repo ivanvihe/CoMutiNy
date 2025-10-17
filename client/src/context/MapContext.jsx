@@ -1,5 +1,6 @@
-import { createContext, useCallback, useContext, useMemo, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { MAPS } from '../game/maps.js';
+import { useWorld } from './WorldContext.jsx';
 
 const MapContext = createContext(undefined);
 
@@ -42,6 +43,7 @@ export function MapProvider({ children }) {
     return startMap?.spawn ?? { x: 0, y: 0 };
   });
   const [activeEvent, setActiveEvent] = useState(null);
+  const { updateLocalPlayerState } = useWorld();
 
   const availableMaps = useMemo(() => MAPS.map((map) => MAP_LOOKUP.get(map.id)), []);
   const currentMap = useMemo(() => MAP_LOOKUP.get(currentMapId), [currentMapId]);
@@ -119,6 +121,11 @@ export function MapProvider({ children }) {
       setCurrentMapId(mapId);
       const nextPosition = position ?? targetMap.spawn ?? { x: 0, y: 0 };
       setPlayerPosition(nextPosition);
+      updateLocalPlayerState({
+        position: { ...nextPosition, z: 0 },
+        metadata: { mapId },
+        animation: 'idle'
+      });
       if (event) {
         setActiveEvent(event);
       } else {
@@ -172,9 +179,14 @@ export function MapProvider({ children }) {
 
       setPlayerPosition(nextPosition);
       setActiveEvent(null);
+      updateLocalPlayerState({
+        position: { ...nextPosition, z: 0 },
+        metadata: { mapId: currentMapId },
+        animation: 'walk'
+      });
       return { moved: true, reason: 'moved', mapId: currentMapId };
     },
-    [canMoveTo, currentMapId, findPortalAt, playerPosition, switchMap]
+    [canMoveTo, currentMapId, findPortalAt, playerPosition, switchMap, updateLocalPlayerState]
   );
 
   const interact = useCallback(() => {
@@ -225,6 +237,13 @@ export function MapProvider({ children }) {
       switchMap
     ]
   );
+
+  useEffect(() => {
+    updateLocalPlayerState({
+      position: { ...playerPosition, z: 0 },
+      metadata: { mapId: currentMapId }
+    });
+  }, [currentMapId, playerPosition, updateLocalPlayerState]);
 
   return <MapContext.Provider value={value}>{children}</MapContext.Provider>;
 }

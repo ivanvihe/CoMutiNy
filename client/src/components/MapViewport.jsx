@@ -13,6 +13,7 @@ import {
 } from '@mui/material';
 import { useMemo } from 'react';
 import { useMap } from '../context/MapContext.jsx';
+import { useWorld } from '../context/WorldContext.jsx';
 
 const CELL_SIZE = 32;
 
@@ -23,9 +24,15 @@ const DIRECTIONS = [
   { label: 'Derecha', value: 'right' }
 ];
 
-const getCellStatus = ({ x, y, map, playerPosition }) => {
+const getCellStatus = ({ x, y, map, playerPosition, remotePlayers }) => {
   if (playerPosition.x === x && playerPosition.y === y) {
     return { type: 'player' };
+  }
+
+  const remoteAtTile = remotePlayers?.get(`${x},${y}`);
+
+  if (remoteAtTile?.length) {
+    return { type: 'remote-player', players: remoteAtTile };
   }
 
   if (map.blockedTiles.has(`${x},${y}`)) {
@@ -69,6 +76,10 @@ const cellStyles = {
     backgroundColor: 'rgba(255, 112, 67, 0.4)',
     border: '1px dashed rgba(255, 112, 67, 0.8)'
   },
+  'remote-player': {
+    backgroundColor: 'rgba(76, 175, 80, 0.35)',
+    border: '2px solid rgba(129, 199, 132, 0.8)'
+  },
   object: {
     backgroundColor: 'rgba(171, 71, 188, 0.35)',
     border: '1px solid rgba(171, 71, 188, 0.6)'
@@ -96,8 +107,39 @@ export default function MapViewport() {
     objectAtPlayerPosition,
     switchMap
   } = useMap();
+  const { players: remotePlayers, localPlayerId, connectionStatus } = useWorld();
 
   const canInteract = Boolean(objectAtPlayerPosition?.interaction);
+
+  const remotePlayersByTile = useMemo(() => {
+    if (!currentMapId) {
+      return new Map();
+    }
+
+    const entries = new Map();
+
+    remotePlayers
+      .filter((player) => player.id !== localPlayerId)
+      .filter((player) => player.metadata?.mapId === currentMapId)
+      .forEach((player) => {
+        const position = player.renderPosition ?? player.position ?? {};
+        const tileX = Math.round(position.x ?? 0);
+        const tileY = Math.round(position.y ?? 0);
+        const key = `${tileX},${tileY}`;
+        const list = entries.get(key) ?? [];
+        entries.set(key, [...list, player]);
+      });
+
+    return entries;
+  }, [currentMapId, localPlayerId, remotePlayers]);
+
+  const remotePlayersInMap = useMemo(
+    () =>
+      remotePlayers.filter(
+        (player) => player.id !== localPlayerId && player.metadata?.mapId === currentMapId
+      ),
+    [currentMapId, localPlayerId, remotePlayers]
+  );
 
   const grid = useMemo(() => {
     if (!currentMap) {
@@ -107,12 +149,14 @@ export default function MapViewport() {
     for (let y = 0; y < currentMap.size.height; y += 1) {
       const row = [];
       for (let x = 0; x < currentMap.size.width; x += 1) {
-        row.push(getCellStatus({ x, y, map: currentMap, playerPosition }));
+        row.push(
+          getCellStatus({ x, y, map: currentMap, playerPosition, remotePlayers: remotePlayersByTile })
+        );
       }
       rows.push(row);
     }
     return rows;
-  }, [currentMap, playerPosition]);
+  }, [currentMap, playerPosition, remotePlayersByTile]);
 
   if (!currentMap) {
     return null;
@@ -131,6 +175,9 @@ export default function MapViewport() {
               <Typography variant="h6">{currentMap.name}</Typography>
               <Typography variant="body2" color="text.secondary">
                 Posición: ({playerPosition.x}, {playerPosition.y})
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                Estado de red: {connectionStatus}
               </Typography>
             </Box>
             <FormControl size="small" sx={{ minWidth: 160 }}>
@@ -161,6 +208,9 @@ export default function MapViewport() {
               Acércate a un objeto resaltado para interactuar.
             </Typography>
           )}
+          <Typography variant="body2" color="text.secondary">
+            Compañeros en este mapa: {remotePlayersInMap.length}
+          </Typography>
 
           <Box>
             <Grid container spacing={1} justifyContent="center">
@@ -202,6 +252,10 @@ export default function MapViewport() {
                   }}
                 >
                   {cell.type === 'player' && 'Tú'}
+                  {cell.type === 'remote-player' &&
+                    (cell.players.length > 1
+                      ? `+${cell.players.length}`
+                      : cell.players[0]?.name?.slice(0, 3) ?? 'Aliado')}
                   {cell.type === 'object' && 'Obj'}
                   {cell.type === 'portal' && 'Puerta'}
                 </Box>

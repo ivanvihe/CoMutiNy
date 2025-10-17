@@ -6,6 +6,7 @@ import { useAuth } from './context/AuthContext.jsx';
 import AdminDashboard from './components/AdminDashboard.jsx';
 import MapViewport from './components/MapViewport.jsx';
 import { MapProvider } from './context/MapContext.jsx';
+import { WorldProvider } from './context/WorldContext.jsx';
 
 const formTabs = [
   { value: 'login', label: 'Iniciar sesión' },
@@ -99,9 +100,11 @@ export default function App() {
             <Box flex={1}>
               <Stack spacing={3}>
                 <AvatarCustomizer appearance={appearance} onChange={setAppearance} />
-                <MapProvider>
-                  <MapViewport />
-                </MapProvider>
+                <WorldProvider>
+                  <MapProvider>
+                    <MapViewport />
+                  </MapProvider>
+                </WorldProvider>
               </Stack>
             </Box>
           </Stack>
