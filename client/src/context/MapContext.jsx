@@ -44,6 +44,12 @@ const normaliseMap = (mapDefinition) => {
     expandArea(area).forEach((tile) => blockedTiles.add(tile));
   });
 
+  mapDefinition.collidableTiles?.forEach((position) => {
+    if (position && Number.isFinite(position.x) && Number.isFinite(position.y)) {
+      blockedTiles.add(`${position.x},${position.y}`);
+    }
+  });
+
   mapDefinition.objects?.forEach((object) => {
     if (object.solid) {
       expandArea({ ...object.position, ...object.size }).forEach((tile) => blockedTiles.add(tile));

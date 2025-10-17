@@ -99,7 +99,28 @@ if (!MAPS.length) {
     doors: [],
     portals: [],
     theme: { borderColour: null },
-    sourcePath: null
+    sourcePath: null,
+    tileTypes: {
+      floor: {
+        id: 'floor',
+        symbol: '.',
+        name: 'Suelo',
+        collides: false,
+        transparent: true,
+        color: '#8eb5ff',
+        metadata: { default: true }
+      }
+    },
+    layers: [
+      {
+        id: 'ground',
+        name: 'Ground',
+        order: 0,
+        visible: true,
+        tiles: [['floor']]
+      }
+    ],
+    collidableTiles: []
   });
 }
 

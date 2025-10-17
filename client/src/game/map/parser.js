@@ -265,6 +265,247 @@ const parseObjects = (lines, { registry }) => {
   return objects;
 };
 
+const parseBoolean = (value, defaultValue = false) => {
+  if (value === null || value === undefined) {
+    return defaultValue;
+  }
+
+  const normalised = `${value}`.trim().toLowerCase();
+  if (['true', '1', 'yes', 'y', 'on', 'solid'].includes(normalised)) {
+    return true;
+  }
+  if (['false', '0', 'no', 'n', 'off', 'transparent', 'none'].includes(normalised)) {
+    return false;
+  }
+  return defaultValue;
+};
+
+const DEFAULT_TILE_TYPE = {
+  id: 'floor',
+  symbol: '.',
+  name: 'Suelo',
+  collides: false,
+  transparent: true,
+  color: '#8eb5ff',
+  metadata: { default: true }
+};
+
+const parseTileDefinitions = (lines = []) => {
+  const tileTypes = new Map();
+  const symbolMap = new Map();
+
+  lines.forEach((rawLine) => {
+    const line = rawLine.trim();
+    if (!line || line.startsWith('#') || !line.includes('=')) {
+      return;
+    }
+
+    const [rawSymbol, remainder] = line.split('=', 2);
+    const symbol = rawSymbol.trim();
+    if (!symbol) {
+      throw new Error(`Definición de tile sin símbolo: "${line}"`);
+    }
+
+    const tokens = remainder
+      .split(';')
+      .map((token) => token.trim())
+      .filter(Boolean);
+
+    if (!tokens.length) {
+      throw new Error(`Definición de tile incompleta: "${line}"`);
+    }
+
+    const [tileId, ...propertyTokens] = tokens;
+    if (!tileId) {
+      throw new Error(`Tile sin identificador: "${line}"`);
+    }
+
+    const properties = new Map();
+    propertyTokens.forEach((token) => {
+      if (token.includes('=')) {
+        const [key, value] = token.split('=', 2);
+        properties.set(normaliseSectionKey(key), value.trim());
+      } else {
+        properties.set(normaliseSectionKey(token), 'true');
+      }
+    });
+
+    const name = properties.get('name') ?? properties.get('label') ?? tileId;
+    const collides = parseBoolean(
+      properties.get('collides') ?? properties.get('solid') ?? properties.get('collision'),
+      false
+    );
+    const transparent = parseBoolean(properties.get('transparent'), true);
+    const color = properties.get('color') ?? properties.get('colour') ?? null;
+
+    const metadata = {};
+    properties.forEach((value, key) => {
+      if (
+        ![
+          'name',
+          'label',
+          'collides',
+          'solid',
+          'collision',
+          'transparent',
+          'color',
+          'colour'
+        ].includes(key)
+      ) {
+        metadata[key] = value;
+      }
+    });
+
+    if (symbolMap.has(symbol) && symbolMap.get(symbol) !== tileId) {
+      throw new Error(
+        `El símbolo "${symbol}" ya está asignado a "${symbolMap.get(symbol)}"`
+      );
+    }
+
+    tileTypes.set(tileId, {
+      id: tileId,
+      symbol,
+      name,
+      collides,
+      transparent,
+      ...(color ? { color } : {}),
+      metadata
+    });
+    symbolMap.set(symbol, tileId);
+  });
+
+  if (!tileTypes.size) {
+    tileTypes.set(DEFAULT_TILE_TYPE.id, { ...DEFAULT_TILE_TYPE });
+    symbolMap.set(DEFAULT_TILE_TYPE.symbol, DEFAULT_TILE_TYPE.id);
+  }
+
+  return { tileTypes, symbolMap };
+};
+
+const tokeniseLayerRow = (line) => {
+  const tokens = line.split(/\s+/).filter(Boolean);
+  if (tokens.length === 1 && tokens[0].length > 1) {
+    return [...tokens[0]];
+  }
+  if (!tokens.length && line.trim()) {
+    return [...line.trim()];
+  }
+  return tokens;
+};
+
+const resolveTileReference = (token, { tileTypes, symbolMap }) => {
+  const trimmed = token.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  const lowered = trimmed.toLowerCase();
+  if (['none', 'empty', 'void', 'transparent'].includes(lowered)) {
+    return null;
+  }
+
+  if (symbolMap.has(trimmed)) {
+    return symbolMap.get(trimmed);
+  }
+
+  if (tileTypes.has(trimmed)) {
+    return trimmed;
+  }
+
+  throw new Error(`Tile desconocido en capa: "${token}"`);
+};
+
+const parseKeyValueLines = (lines = []) => {
+  const result = new Map();
+  lines.forEach((line) => {
+    const separatorIndex = line.indexOf(':');
+    if (separatorIndex === -1) {
+      return;
+    }
+    const key = normaliseSectionKey(line.slice(0, separatorIndex));
+    if (!key) {
+      return;
+    }
+    const value = line.slice(separatorIndex + 1).trim();
+    result.set(key, value);
+  });
+  return result;
+};
+
+const parseLayerSections = (sections, { tileTypes, symbolMap }) => {
+  const layers = [];
+
+  sections.forEach((lines, key) => {
+    if (!key.startsWith('layer')) {
+      return;
+    }
+
+    const properties = parseKeyValueLines(lines.filter((line) => line.includes(':')));
+    const rawRows = lines.filter((line) => !line.includes(':'));
+
+    const rows = [];
+    rawRows.forEach((raw) => {
+      const cleaned = raw.trim();
+      if (!cleaned || cleaned.startsWith('#')) {
+        return;
+      }
+      const tokens = tokeniseLayerRow(cleaned);
+      if (!tokens.length) {
+        return;
+      }
+      const resolvedRow = tokens.map((token) =>
+        resolveTileReference(token, { tileTypes, symbolMap })
+      );
+      rows.push(resolvedRow);
+    });
+
+    if (!rows.length) {
+      return;
+    }
+
+    const width = Math.max(...rows.map((row) => row.length));
+    rows.forEach((row) => {
+      if (row.length !== width) {
+        throw new Error(`Todas las filas de la capa "${key}" deben tener el mismo ancho`);
+      }
+    });
+
+    let layerId;
+    if (key === 'layer') {
+      layerId = properties.get('id') ?? properties.get('name') ?? 'layer';
+    } else if (key.startsWith('layer_')) {
+      layerId = properties.get('id') ?? key.slice('layer_'.length);
+    } else {
+      layerId = properties.get('id') ?? key.replace(/^layer_?/, '') || key;
+    }
+    layerId = layerId || `layer_${layers.length + 1}`;
+
+    const name = properties.get('name') ?? properties.get('label') ?? layerId;
+    let order = Number.parseInt(properties.get('order') ?? `${layers.length}`, 10);
+    if (!Number.isFinite(order)) {
+      order = layers.length;
+    }
+    const visible = parseBoolean(properties.get('visible'), true);
+
+    layers.push({
+      id: layerId,
+      name,
+      order,
+      visible,
+      tiles: rows.map((row) => row.map((tile) => tile ?? null))
+    });
+  });
+
+  layers.sort((a, b) => {
+    if (a.order === b.order) {
+      return a.id.localeCompare(b.id);
+    }
+    return a.order - b.order;
+  });
+
+  return layers;
+};
+
 const buildBlockedAreas = (size) => {
   const width = size?.width ?? 0;
   const height = size?.height ?? 0;
@@ -299,12 +540,55 @@ export const parseMapDefinition = (rawContents, { sourcePath = null } = {}) => {
     metadata[normalisedKey] = value.trim();
   }
 
-  const size = parseDimensions(metadata.dimensions ?? '') ?? { width: 0, height: 0 };
+  const { tileTypes, symbolMap } = parseTileDefinitions(sections.get('tiles') ?? []);
+  let layers = parseLayerSections(sections, { tileTypes, symbolMap });
+
+  let size = parseDimensions(metadata.dimensions ?? '') ?? { width: 0, height: 0 };
+
+  if (layers.length) {
+    let layerWidth = 0;
+    let layerHeight = 0;
+    layers.forEach((layer) => {
+      layerHeight = Math.max(layerHeight, layer.tiles.length);
+      layer.tiles.forEach((row) => {
+        layerWidth = Math.max(layerWidth, row.length);
+      });
+    });
+
+    if (layerWidth && (size.width <= 0 || size.width !== layerWidth)) {
+      size = { ...size, width: layerWidth };
+    }
+    if (layerHeight && (size.height <= 0 || size.height !== layerHeight)) {
+      size = { ...size, height: layerHeight };
+    }
+  }
+
+  if (!layers.length) {
+    const fallbackWidth = size.width > 0 ? size.width : 1;
+    const fallbackHeight = size.height > 0 ? size.height : 1;
+    const defaultTileId = tileTypes.keys().next().value;
+    const fallbackTiles = Array.from({ length: fallbackHeight }, () =>
+      Array.from({ length: fallbackWidth }, () => defaultTileId)
+    );
+    layers = [
+      {
+        id: 'ground',
+        name: 'Ground',
+        order: 0,
+        visible: true,
+        tiles: fallbackTiles
+      }
+    ];
+    size = { width: fallbackWidth, height: fallbackHeight };
+  }
+
   const spawn =
     parseCoordinate(metadata.startingPoint ?? '') ??
     parseCoordinate(metadata.spawnPoint ?? '') ??
-    parseCoordinate(metadata.spawn ?? '') ??
-    { x: Math.floor(size.width / 2) || 0, y: Math.floor(size.height / 2) || 0 };
+    parseCoordinate(metadata.spawn ?? '') ?? {
+      x: size.width ? Math.floor(size.width / 2) : 0,
+      y: size.height ? Math.floor(size.height / 2) : 0
+    };
   const inboundDoorEntries = splitDoorEntries(metadata.doorIn);
   const outboundDoorEntries = (() => {
     const explicit = splitDoorEntries(metadata.doorOut);
@@ -352,6 +636,49 @@ export const parseMapDefinition = (rawContents, { sourcePath = null } = {}) => {
   const parsedObjects = parseObjects(sections.get('objects') ?? [], { registry });
   objects.push(...parsedObjects);
 
+  const collidableLookup = new Map();
+  layers.forEach((layer) => {
+    layer.tiles.forEach((row, y) => {
+      row.forEach((tileId, x) => {
+        if (!tileId) {
+          return;
+        }
+        const tile = tileTypes.get(tileId);
+        if (tile?.collides) {
+          const key = `${x},${y}`;
+          if (!collidableLookup.has(key)) {
+            collidableLookup.set(key, { x, y });
+          }
+        }
+      });
+    });
+  });
+
+  const collidableTiles = Array.from(collidableLookup.values()).sort((a, b) => {
+    if (a.y === b.y) {
+      return a.x - b.x;
+    }
+    return a.y - b.y;
+  });
+
+  const tileTypeMap = {};
+  tileTypes.forEach((value, key) => {
+    const payload = {
+      id: value.id,
+      symbol: value.symbol,
+      name: value.name,
+      collides: Boolean(value.collides),
+      transparent: Boolean(value.transparent)
+    };
+    if (value.color) {
+      payload.color = value.color;
+    }
+    if (value.metadata && Object.keys(value.metadata).length) {
+      payload.metadata = { ...value.metadata };
+    }
+    tileTypeMap[key] = payload;
+  });
+
   return {
     id,
     name: title,
@@ -364,7 +691,10 @@ export const parseMapDefinition = (rawContents, { sourcePath = null } = {}) => {
     doors,
     portals: [],
     theme: { borderColour: metadata.borderColour ?? null },
-    sourcePath: sourcePath ?? fileName
+    sourcePath: sourcePath ?? fileName,
+    tileTypes: tileTypeMap,
+    layers,
+    collidableTiles
   };
 };
 
