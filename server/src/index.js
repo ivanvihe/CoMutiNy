@@ -1,6 +1,7 @@
 import http from 'http'
 import path from 'node:path'
 import express from 'express'
+import cors from 'cors'
 import dotenv from 'dotenv'
 
 import { connectDatabase } from './config/database.js'
@@ -15,6 +16,30 @@ import createSocketServer from './network/socketServer.js'
 dotenv.config()
 
 const app = express()
+
+const parseCorsOrigins = (value) => {
+  if (!value) {
+    return '*'
+  }
+
+  if (value.trim() === '*') {
+    return '*'
+  }
+
+  return value
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean)
+}
+
+const corsOrigin = parseCorsOrigins(process.env.CORS_ORIGIN ?? process.env.CORS_ORIGINS ?? '*')
+
+app.use(
+  cors({
+    origin: corsOrigin,
+    credentials: corsOrigin !== '*'
+  })
+)
 
 app.use(express.json())
 app.use(
