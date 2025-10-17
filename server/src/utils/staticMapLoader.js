@@ -3,6 +3,26 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const moduleDir = path.dirname(fileURLToPath(import.meta.url))
+
+const parseDirectoryList = (value) => {
+  if (!value) {
+    return []
+  }
+
+  return `${value}`
+    .split(',')
+    .flatMap((entry) => entry.split(path.delimiter))
+    .map((entry) => entry.trim())
+    .filter(Boolean)
+    .map((entry) => path.resolve(entry))
+}
+
+const ENVIRONMENT_MAP_DIRECTORIES = parseDirectoryList(
+  process.env.STATIC_MAP_DIRECTORIES ??
+    process.env.STATIC_MAP_DIRECTORY ??
+    process.env.MAP_DIRECTORY
+)
+
 const DEFAULT_MAP_DIRECTORIES = [
   path.resolve(moduleDir, '..', 'maps'),
   path.resolve(process.cwd(), 'server', 'maps'),
@@ -126,8 +146,24 @@ const normaliseMapDefinition = (filePath, rawContents) => {
   }
 }
 
+const dedupeDirectories = (directories) => {
+  const seen = new Set()
+  return directories.filter((directory) => {
+    const key = directory.toLowerCase()
+    if (seen.has(key)) {
+      return false
+    }
+    seen.add(key)
+    return true
+  })
+}
+
 const findReadableDirectory = async (directory) => {
-  const candidates = directory ? [directory] : DEFAULT_MAP_DIRECTORIES
+  const candidates = dedupeDirectories([
+    ...(directory ? [path.resolve(directory)] : []),
+    ...ENVIRONMENT_MAP_DIRECTORIES,
+    ...DEFAULT_MAP_DIRECTORIES
+  ])
 
   for (const candidate of candidates) {
     try {
