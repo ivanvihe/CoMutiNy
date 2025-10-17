@@ -5,6 +5,7 @@ import dotenv from 'dotenv'
 
 import { connectDatabase } from './config/database.js'
 import assetRoutes from './routes/assetRoutes.js'
+import mapRoutes from './routes/mapRoutes.js'
 import sessionManager from './services/sessionManager.js'
 import avatarRepository from './repositories/AvatarRepository.js'
 import spriteGenerationService from './sprites/spriteGenerationService.js'
@@ -28,6 +29,7 @@ app.get('/health', (req, res) => {
 })
 
 app.use('/assets', assetRoutes)
+app.use('/maps', mapRoutes)
 
 app.use((err, req, res, next) => {
   console.error(err)
