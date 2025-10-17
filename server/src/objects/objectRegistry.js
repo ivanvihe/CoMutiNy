@@ -24,6 +24,89 @@ const sanitizeString = (value, fallback = '') => {
   return trimmed || fallback
 }
 
+const clamp = (value, min, max) => {
+  if (!Number.isFinite(value)) {
+    return min
+  }
+  return Math.min(Math.max(value, min), max)
+}
+
+const sanitizeScale = (raw) => {
+  if (raw === undefined || raw === null) {
+    return { x: 1, y: 1 }
+  }
+
+  if (typeof raw === 'number') {
+    const value = clamp(raw, 0.1, 6)
+    return { x: value, y: value }
+  }
+
+  if (typeof raw === 'object') {
+    const x = clamp(toNumber(raw.x, 1), 0.1, 6)
+    const y = clamp(toNumber(raw.y, 1), 0.1, 6)
+    return { x, y }
+  }
+
+  return { x: 1, y: 1 }
+}
+
+const sanitizeAnchor = (raw) => {
+  if (!raw || typeof raw !== 'object') {
+    return { x: 0.5, y: 1 }
+  }
+  const x = clamp(toNumber(raw.x, 0.5), 0, 1)
+  const y = clamp(toNumber(raw.y, 1), 0, 1.5)
+  return { x, y }
+}
+
+const sanitizeOffset = (raw) => {
+  if (!raw || typeof raw !== 'object') {
+    return { x: 0, y: 0 }
+  }
+  const x = toNumber(raw.x, 0)
+  const y = toNumber(raw.y, 0)
+  return { x, y }
+}
+
+const sanitizeAppearance = (raw, { fallbackSize } = {}) => {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    return null
+  }
+
+  const generatorCandidate =
+    sanitizeString(raw.generator) ||
+    sanitizeString(raw.type) ||
+    sanitizeString(raw.id) ||
+    sanitizeString(raw.kind)
+
+  if (!generatorCandidate) {
+    return null
+  }
+
+  const width = Math.max(1, Math.trunc(toNumber(raw.width ?? raw.columns, fallbackSize?.width ?? 1)))
+  const height = Math.max(1, Math.trunc(toNumber(raw.height ?? raw.rows, fallbackSize?.height ?? 1)))
+  const tileSize = Math.max(4, Math.trunc(toNumber(raw.tileSize ?? raw.tile_size ?? raw.pixelSize, 16)))
+
+  const options =
+    raw.options && typeof raw.options === 'object' && !Array.isArray(raw.options)
+      ? { ...raw.options }
+      : {}
+
+  const variant = sanitizeString(raw.variant)
+
+  return {
+    generator: generatorCandidate,
+    width,
+    height,
+    tileSize,
+    options,
+    anchor: sanitizeAnchor(raw.anchor),
+    offset: sanitizeOffset(raw.offset ?? raw.positionOffset),
+    scale: sanitizeScale(raw.scale),
+    ...(variant ? { variant } : {})
+  }
+}
+
 const sanitizeInteraction = (raw, { fallbackTitle, fallbackDescription }) => {
   const base = typeof raw === 'object' && raw
     ? { ...raw }
@@ -115,6 +198,10 @@ const loadObjectFile = async (filePath) => {
       ? { ...definition.metadata }
       : {}
 
+  const appearance = sanitizeAppearance(definition.appearance ?? definition.sprite, {
+    fallbackSize: { width: 1, height: 1 }
+  })
+
   return {
     id,
     name,
@@ -122,6 +209,7 @@ const loadObjectFile = async (filePath) => {
     interaction,
     behaviour,
     metadata,
+    appearance,
     source: filePath
   }
 }
@@ -181,6 +269,11 @@ const mergeObjectWithDefinition = (objectDefinition) => {
   const referencedId = sanitizeString(objectDefinition.objectId ?? metadata.objectId)
   const definition = referencedId ? getDefinition(referencedId) : null
 
+  const baseAppearance = sanitizeAppearance(definition?.appearance, { fallbackSize: size })
+  const metadataAppearance = sanitizeAppearance(metadata.appearance, { fallbackSize: size })
+  const explicitAppearance = sanitizeAppearance(objectDefinition.appearance, { fallbackSize: size })
+  delete metadata.appearance
+
   const name = sanitizeString(objectDefinition.name, definition?.name ?? id)
   const description = sanitizeString(objectDefinition.description, definition?.description ?? '')
 
@@ -197,6 +290,8 @@ const mergeObjectWithDefinition = (objectDefinition) => {
     }
   )
 
+  const appearance = explicitAppearance ?? metadataAppearance ?? baseAppearance
+
   const publicObject = {
     id,
     name,
@@ -211,7 +306,8 @@ const mergeObjectWithDefinition = (objectDefinition) => {
       ...(referencedId ? { objectId: referencedId } : {})
     },
     objectId: referencedId || definition?.id || null,
-    interaction
+    interaction,
+    ...(appearance ? { appearance } : {})
   }
 
   const runtime = {

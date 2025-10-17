@@ -8,6 +8,20 @@
     "title": "Panel de bienvenida",
     "description": "Bienvenido a CoMutiNy. Explora y conoce a la comunidad."
   },
+  "appearance": {
+    "generator": "terminalPanel",
+    "width": 1,
+    "height": 1,
+    "tileSize": 32,
+    "anchor": { "x": 0.5, "y": 1 },
+    "offset": { "x": 0, "y": -0.1 },
+    "scale": { "x": 1, "y": 1.25 },
+    "options": {
+      "baseColor": "#1f2933",
+      "screenColor": "#4fc3f7",
+      "accentColor": "#82e9ff"
+    }
+  },
   "behavior": {
     "type": "message",
     "title": "Mensaje de bienvenida",
