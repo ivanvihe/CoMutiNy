@@ -5,6 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>CoMutiNy Canvas Demo</title>
     <style>
+      :root {
+        color-scheme: dark;
+      }
+
       body {
         margin: 0;
         font-family: system-ui, sans-serif;
@@ -13,21 +17,59 @@
         display: flex;
         flex-direction: column;
         align-items: center;
-        justify-content: center;
+        justify-content: flex-start;
         min-height: 100vh;
         gap: 1.5rem;
+        padding: 2rem 1.5rem 3rem;
+        box-sizing: border-box;
       }
 
       #game-container {
+        position: relative;
         padding: 1rem;
         background: #111;
-        border-radius: 8px;
+        border-radius: 12px;
         box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 1rem;
+      }
+
+      #canvas-wrapper {
+        position: relative;
+        border-radius: 8px;
+        overflow: hidden;
       }
 
       canvas {
         display: block;
         image-rendering: pixelated;
+      }
+
+      #chat-overlay {
+        pointer-events: none;
+        position: absolute;
+        inset: 0;
+        font-size: 0.9rem;
+      }
+
+      .chat-bubble {
+        position: absolute;
+        transform: translate(-50%, -120%);
+        background: rgba(33, 37, 62, 0.9);
+        color: #f5f5f5;
+        padding: 0.35rem 0.6rem;
+        border-radius: 999px;
+        white-space: nowrap;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+        opacity: 0;
+        transition: opacity 0.2s ease-out, transform 0.2s ease-out;
+      }
+
+      .chat-bubble.visible {
+        opacity: 1;
+        transform: translate(-50%, -130%);
       }
 
       .instructions {
@@ -36,17 +78,131 @@
         line-height: 1.5;
         font-size: 0.95rem;
         color: #c8c8c8;
+        margin: 0;
+      }
+
+      #chat-panel {
+        width: min(640px, 100%);
+        background: rgba(18, 21, 34, 0.9);
+        border: 1px solid rgba(255, 255, 255, 0.05);
+        border-radius: 12px;
+        box-shadow: 0 18px 40px rgba(0, 0, 0, 0.35);
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+      }
+
+      #chat-messages {
+        flex: 1;
+        max-height: 220px;
+        overflow-y: auto;
+        padding: 1rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+      }
+
+      .chat-message {
+        display: flex;
+        flex-direction: column;
+        gap: 0.2rem;
+      }
+
+      .chat-author {
+        font-size: 0.8rem;
+        color: rgba(255, 255, 255, 0.6);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+      }
+
+      .chat-content {
+        font-size: 0.95rem;
+        color: #f5f5f5;
+        word-break: break-word;
+      }
+
+      #chat-form {
+        display: flex;
+        gap: 0.75rem;
+        padding: 0.85rem 1rem;
+        border-top: 1px solid rgba(255, 255, 255, 0.08);
+        background: rgba(12, 14, 22, 0.9);
+      }
+
+      #chat-input {
+        flex: 1;
+        padding: 0.65rem 0.85rem;
+        border-radius: 999px;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        background: rgba(32, 36, 56, 0.8);
+        color: #f5f5f5;
+        font-size: 0.95rem;
+      }
+
+      #chat-input:focus {
+        outline: 2px solid rgba(86, 138, 255, 0.5);
+        border-color: rgba(86, 138, 255, 0.6);
+      }
+
+      #chat-submit {
+        padding: 0.65rem 1.1rem;
+        border-radius: 999px;
+        border: none;
+        background: linear-gradient(135deg, #5a5df0, #6f87ff);
+        color: white;
+        font-weight: 600;
+        cursor: pointer;
+        transition: transform 0.15s ease-out, box-shadow 0.15s ease-out;
+      }
+
+      #chat-submit:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 6px 20px rgba(104, 132, 255, 0.45);
+      }
+
+      #chat-submit:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+        box-shadow: none;
+        transform: none;
+      }
+
+      @media (max-width: 768px) {
+        body {
+          padding: 1.5rem 1rem 2rem;
+        }
+
+        #chat-messages {
+          max-height: 180px;
+        }
       }
     </style>
   </head>
   <body>
     <div id="game-container">
-      <canvas id="game-canvas" width="512" height="384"></canvas>
+      <div id="canvas-wrapper">
+        <canvas id="game-canvas" width="512" height="384"></canvas>
+        <div id="chat-overlay" aria-hidden="true"></div>
+      </div>
+      <p class="instructions">
+        Usa las flechas izquierda y derecha para mover a tu personaje y hablar con otros
+        jugadores usando el chat inferior.
+      </p>
     </div>
-    <p class="instructions">
-      Usa las flechas izquierda y derecha para alternar entre las animaciones de caminar
-      y estado ocioso.
-    </p>
+    <section id="chat-panel" aria-label="Chat">
+      <div id="chat-messages" role="log" aria-live="polite"></div>
+      <form id="chat-form" autocomplete="off">
+        <input
+          id="chat-input"
+          type="text"
+          name="message"
+          placeholder="Escribe un mensaje..."
+          maxlength="500"
+          required
+        />
+        <button id="chat-submit" type="submit">Enviar</button>
+      </form>
+    </section>
     <script type="module" src="./src/main.js"></script>
   </body>
 </html>
