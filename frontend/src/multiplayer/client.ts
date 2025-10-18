@@ -32,6 +32,8 @@ export interface BlockRemovedEvent {
   id: string;
   by: string;
   timestamp: number;
+  position: Vector3Like;
+  type?: string;
 }
 
 export interface PlayerJoinEvent {
@@ -85,6 +87,7 @@ export class MultiplayerClient extends EventTarget {
   private updateHandle: number | undefined;
   private connectionState: ConnectionState = 'desconectado';
   private displayName: string;
+  private sessionId: string | null = null;
 
   constructor(statusElement: HTMLElement) {
     super();
@@ -116,6 +119,7 @@ export class MultiplayerClient extends EventTarget {
       this.captureSnapshot();
       this.startLoop();
       this.updateStatus('conectado');
+      this.sessionId = this.room.sessionId;
       this.dispatchEvent(new CustomEvent('connected'));
     } catch (error) {
       console.error('No se pudo conectar con Colyseus:', error);
@@ -208,11 +212,16 @@ export class MultiplayerClient extends EventTarget {
     return this.connectionState;
   }
 
+  getSessionId(): string | null {
+    return this.sessionId;
+  }
+
   private registerRoomHandlers(room: Room<WorldState>): void {
     room.onLeave(() => {
       this.stopLoop();
       this.room = undefined;
       this.updateStatus('desconectado');
+      this.sessionId = null;
       this.dispatchEvent(new CustomEvent('disconnected'));
     });
 

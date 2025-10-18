@@ -246,11 +246,19 @@ body {
     box-shadow 200ms ease;
 }
 
+.quickbar__slot[data-empty='true'] {
+  opacity: 0.75;
+}
+
 .quickbar__slot[data-selected='true'] {
   transform: translateY(-6px);
   color: var(--ui-text-primary);
   border-color: var(--ui-accent);
   box-shadow: 0 12px 24px rgba(56, 189, 248, 0.25);
+}
+
+.quickbar__slot[data-selected='true'][data-empty='true'] {
+  opacity: 1;
 }
 
 .quickbar__slot:hover {
@@ -269,6 +277,23 @@ body {
 .quickbar__label {
   display: block;
   font-size: 0.8rem;
+}
+
+.quickbar__quantity {
+  position: absolute;
+  bottom: 0.55rem;
+  right: 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--ui-text-muted);
+}
+
+.quickbar__slot[data-selected='true'] .quickbar__quantity {
+  color: var(--ui-text-primary);
+}
+
+.quickbar__quantity[data-empty='true'] {
+  opacity: 0.6;
 }
 
 .chat-panel {

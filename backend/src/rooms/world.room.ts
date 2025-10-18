@@ -2,6 +2,7 @@ import { Client, Room } from 'colyseus';
 import { getAuthService, getWorldPersistence } from '../context.js';
 import { BlockState, PlayerState, WorldState } from '../world/state.js';
 import { createWorldGenerator } from '../world/generator.js';
+import { isAllowedBlockType } from '../world/blocks.js';
 
 const CHUNK_FLUSH_INTERVAL_MS = Number(process.env.WORLD_FLUSH_INTERVAL_MS ?? 15_000);
 
@@ -215,6 +216,14 @@ export class WorldRoom extends Room<WorldState> {
     if (!this.isVector3Message(message.position)) {
       return;
     }
+    if (!this.hasBuildPermission(client)) {
+      return;
+    }
+
+    const type = this.normalizeBlockType(message.type);
+    if (!isAllowedBlockType(type)) {
+      return;
+    }
 
     const position = this.sanitizeVector3(message.position);
     const key = this.getBlockKey(position);
@@ -227,8 +236,9 @@ export class WorldRoom extends Room<WorldState> {
     } else {
       block.position.copyFrom(position);
     }
-    block.type = message.type;
-    block.placedBy = (client.auth as AuthContext | undefined)?.userId ?? client.sessionId;
+    block.type = type;
+    const auth = client.auth as AuthContext | undefined;
+    block.placedBy = auth?.userId ?? client.sessionId;
     block.updatedAt = Date.now();
 
     this.pendingChunkUpdates.add(this.persistence.determineChunkIdFromBlockKey(key));
@@ -243,23 +253,56 @@ export class WorldRoom extends Room<WorldState> {
   }
 
   private handleBlockRemoval(client: Client, message: BlockRemovalMessage): void {
+    if (!this.hasBuildPermission(client)) {
+      return;
+    }
+
     let key = typeof message?.id === 'string' ? message.id : undefined;
-    if (!key && message?.position && this.isVector3Message(message.position)) {
-      key = this.getBlockKey(this.sanitizeVector3(message.position));
+    let position: NormalizedVector3 | null = null;
+    if (message?.position && this.isVector3Message(message.position)) {
+      position = this.sanitizeVector3(message.position);
+      key = this.getBlockKey(position);
     }
     if (!key) {
       return;
     }
-
-    if (this.state.blocks.has(key)) {
-      this.state.blocks.delete(key);
-      this.pendingChunkUpdates.add(this.persistence.determineChunkIdFromBlockKey(key));
-      this.broadcast('block:removed', {
-        id: key,
-        by: client.sessionId,
-        timestamp: Date.now(),
-      });
+    if (!position) {
+      position = this.parseBlockKey(key);
     }
+    if (!position) {
+      return;
+    }
+
+    const chunkId = this.persistence.determineChunkIdFromBlockKey(key);
+    const timestamp = Date.now();
+    const auth = client.auth as AuthContext | undefined;
+    const existing = this.state.blocks.get(key);
+    if (existing && existing.type === 'air') {
+      return;
+    }
+
+    if (existing) {
+      existing.type = 'air';
+      existing.updatedAt = timestamp;
+      existing.placedBy = auth?.userId ?? client.sessionId;
+    } else {
+      const removal = new BlockState();
+      removal.id = key;
+      removal.type = 'air';
+      removal.position.copyFrom(position);
+      removal.placedBy = auth?.userId ?? client.sessionId;
+      removal.updatedAt = timestamp;
+      this.state.blocks.set(key, removal);
+    }
+
+    this.pendingChunkUpdates.add(chunkId);
+    this.broadcast('block:removed', {
+      id: key,
+      type: 'air',
+      position,
+      by: client.sessionId,
+      timestamp,
+    });
   }
 
   private handleChatMessage(client: Client, message: ChatMessagePayload): void {
@@ -341,6 +384,18 @@ export class WorldRoom extends Room<WorldState> {
     };
   }
 
+  private parseBlockKey(key: string): NormalizedVector3 | null {
+    const parts = key.split(':');
+    if (parts.length !== 3) {
+      return null;
+    }
+    const [x, y, z] = parts.map((value) => Number(value));
+    if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z)) {
+      return null;
+    }
+    return { x, y, z };
+  }
+
   private toFiniteNumber(value: unknown, fallback = 0): number {
     if (typeof value === 'number' && Number.isFinite(value)) {
       return value;
@@ -353,5 +408,14 @@ export class WorldRoom extends Room<WorldState> {
     const y = Math.round(position.y);
     const z = Math.round(position.z);
     return `${x}:${y}:${z}`;
+  }
+
+  private hasBuildPermission(client: Client): boolean {
+    const auth = client.auth as AuthContext | undefined;
+    return Boolean(auth?.userId);
+  }
+
+  private normalizeBlockType(raw: string): string {
+    return raw.trim().toLowerCase();
   }
 }

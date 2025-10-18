@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import type {
   ChatMessageEvent,
   ChatScope,
@@ -7,17 +7,27 @@ import type {
   MultiplayerSnapshotEvent,
 } from '../multiplayer';
 import { createDefaultBlockRegistry, type BlockDefinition } from '../voxel/blocks';
+import {
+  GameController,
+  HOTBAR_FEEDBACK_EVENT,
+  HOTBAR_SELECT_EVENT,
+  HOTBAR_UPDATE_EVENT,
+  type GameHotbarSlot,
+  type HotbarFeedbackDetail,
+} from '../game';
 import './styles.css';
 
 export type ThemeMode = 'light' | 'dark';
 
 interface GameUiProps {
   multiplayer?: MultiplayerClient;
+  game?: GameController;
 }
 
 interface QuickSlot {
   key: number;
   block: BlockDefinition | null;
+  quantity: number | 'infinite' | null;
 }
 
 type ChatChannel = ChatScope;
@@ -67,6 +77,34 @@ interface ChatPanelProps {
 
 const THEME_STORAGE_KEY = 'comutiny:ui-theme';
 
+const HOTBAR_KEYS = Array.from({ length: 9 }, (_value, index) => index + 1);
+
+const buildDefaultQuickSlots = (): QuickSlot[] => {
+  const registry = createDefaultBlockRegistry();
+  const definitions = registry.getAll().sort((a, b) => a.id - b.id);
+  const slots: QuickSlot[] = [];
+  for (let index = 0; index < HOTBAR_KEYS.length; index += 1) {
+    const block = definitions[index] ?? null;
+    slots.push({
+      key: HOTBAR_KEYS[index],
+      block,
+      quantity: block ? 'infinite' : null,
+    });
+  }
+  return slots;
+};
+
+const mapGameHotbarSlots = (slots?: GameHotbarSlot[]): QuickSlot[] => {
+  if (!slots || slots.length === 0) {
+    return buildDefaultQuickSlots();
+  }
+  return slots.map((slot, index) => ({
+    key: slot.key ?? HOTBAR_KEYS[index] ?? index + 1,
+    block: slot.block ?? null,
+    quantity: slot.block ? slot.quantity ?? 'infinite' : null,
+  }));
+};
+
 const resolveInitialTheme = (): ThemeMode => {
   if (typeof window === 'undefined') {
     return 'dark';
@@ -97,7 +135,7 @@ const resolveConnectionLabel = (state: ConnectionState): string => {
   }
 };
 
-export function GameUi({ multiplayer }: GameUiProps): JSX.Element {
+export function GameUi({ multiplayer, game }: GameUiProps): JSX.Element {
   const [theme, setTheme] = useState<ThemeMode>(() => resolveInitialTheme());
   const [connectionState, setConnectionState] = useState<ConnectionState>(
     multiplayer?.getConnectionState() ?? 'desconectado',
@@ -108,7 +146,12 @@ export function GameUi({ multiplayer }: GameUiProps): JSX.Element {
     multiplayer ? multiplayer.getConnectionState() !== 'conectado' : false,
   );
   const [loginError, setLoginError] = useState<string | null>(null);
-  const [selectedSlot, setSelectedSlot] = useState(0);
+  const [quickSlots, setQuickSlots] = useState<QuickSlot[]>(() =>
+    mapGameHotbarSlots(game?.getHotbarSlots()),
+  );
+  const [selectedSlot, setSelectedSlot] = useState(() =>
+    game?.getSelectedHotbarIndex() ?? 0,
+  );
   const [selectionLabel, setSelectionLabel] = useState<string | null>(null);
   const [chatMessages, setChatMessages] = useState<UiChatMessage[]>([]);
   const [chatDrafts, setChatDrafts] = useState<Record<ChatChannel, string>>({
@@ -198,24 +241,18 @@ export function GameUi({ multiplayer }: GameUiProps): JSX.Element {
     };
   }, [multiplayer]);
 
-  const quickSlots = useMemo<QuickSlot[]>(() => {
-    const registry = createDefaultBlockRegistry();
-    const definitions = registry.getAll().sort((a, b) => a.id - b.id);
-    const slots: QuickSlot[] = [];
-    for (let index = 0; index < 9; index += 1) {
-      slots.push({ key: index + 1, block: definitions[index] ?? null });
-    }
-    return slots;
-  }, []);
-
   const updateSelectionLabel = useCallback(
-    (index: number) => {
-      const slot = quickSlots[index];
+    (index: number, slots: QuickSlot[] = quickSlots) => {
+      const slot = slots[index];
       if (!slot) {
         return;
       }
       const label = slot.block ? `${slot.block.displayName}` : 'Espacio vacío';
-      setSelectionLabel(`${slot.key} · ${label}`);
+      const quantitySuffix =
+        typeof slot.quantity === 'number'
+          ? ` · ${slot.quantity} disponibles`
+          : '';
+      setSelectionLabel(`${slot.key} · ${label}${quantitySuffix}`);
     },
     [quickSlots],
   );
@@ -232,8 +269,9 @@ export function GameUi({ multiplayer }: GameUiProps): JSX.Element {
     (index: number) => {
       setSelectedSlot(index);
       updateSelectionLabel(index);
+      game?.selectHotbarIndex(index);
     },
-    [updateSelectionLabel],
+    [game, updateSelectionLabel],
   );
 
   const openChat = useCallback(
@@ -296,7 +334,74 @@ export function GameUi({ multiplayer }: GameUiProps): JSX.Element {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [chatVisibility, closeChat, handleSelectSlot, loginVisible, openChat, quickSlots.length]);
+  }, [
+    chatVisibility,
+    closeChat,
+    game,
+    handleSelectSlot,
+    loginVisible,
+    openChat,
+    quickSlots.length,
+  ]);
+
+  useEffect(() => {
+    if (!game) {
+      const defaults = buildDefaultQuickSlots();
+      setQuickSlots(defaults);
+      setSelectedSlot((current) => {
+        const next = Math.min(current, defaults.length - 1);
+        updateSelectionLabel(next, defaults);
+        return next;
+      });
+      return;
+    }
+
+    const applySlots = (slots: GameHotbarSlot[]) => {
+      const mapped = mapGameHotbarSlots(slots);
+      setQuickSlots(mapped);
+      const index = game.getSelectedHotbarIndex();
+      setSelectedSlot(index);
+      updateSelectionLabel(index, mapped);
+    };
+
+    const handleUpdate = (event: Event) => {
+      const detail = (event as CustomEvent<GameHotbarSlot[]>).detail;
+      applySlots(detail);
+    };
+    const handleSelect = (event: Event) => {
+      const index = (event as CustomEvent<number>).detail;
+      setSelectedSlot(index);
+      updateSelectionLabel(index);
+    };
+    const handleFeedback = (event: Event) => {
+      const detail = (event as CustomEvent<HotbarFeedbackDetail>).detail;
+      const message =
+        detail.reason === 'empty'
+          ? 'Sin bloques disponibles'
+          : 'No se puede colocar aquí';
+      setSelectionLabel(`${detail.slotKey} · ${message}`);
+    };
+
+    applySlots(game.getHotbarSlots());
+
+    game.addEventListener(HOTBAR_UPDATE_EVENT, handleUpdate as EventListener);
+    game.addEventListener(HOTBAR_SELECT_EVENT, handleSelect as EventListener);
+    game.addEventListener(HOTBAR_FEEDBACK_EVENT, handleFeedback as EventListener);
+
+    return () => {
+      game.removeEventListener(HOTBAR_UPDATE_EVENT, handleUpdate as EventListener);
+      game.removeEventListener(HOTBAR_SELECT_EVENT, handleSelect as EventListener);
+      game.removeEventListener(HOTBAR_FEEDBACK_EVENT, handleFeedback as EventListener);
+    };
+  }, [game, updateSelectionLabel]);
+
+  useEffect(() => {
+    if (!game) {
+      return;
+    }
+    const blocked = loginVisible || chatVisibility !== 'hidden';
+    game.setInputEnabled(!blocked);
+  }, [chatVisibility, game, loginVisible]);
 
   const handleLoginSubmit = useCallback(async () => {
     if (!multiplayer) {
@@ -519,10 +624,23 @@ function QuickBar({
           key={slot.key}
           className="quickbar__slot"
           data-selected={index === selectedIndex}
+          data-empty={
+            typeof slot.quantity === 'number' && slot.quantity <= 0 ? 'true' : 'false'
+          }
           onClick={() => onSelectSlot(index)}
         >
           <span className="quickbar__key">{slot.key}</span>
           <span className="quickbar__label">{slot.block?.displayName ?? 'Vacío'}</span>
+          {slot.quantity !== null ? (
+            <span
+              className="quickbar__quantity"
+              data-empty={
+                typeof slot.quantity === 'number' && slot.quantity <= 0 ? 'true' : 'false'
+              }
+            >
+              {slot.quantity === 'infinite' ? '∞' : slot.quantity}
+            </span>
+          ) : null}
         </button>
       ))}
     </div>
