@@ -1,0 +1,38 @@
+{
+  "id": "observation_tower",
+  "type": "landmark",
+  "name": "Torre modular de observación",
+  "description": "Estructura alta con pasarela y focos para probar capas superpuestas.",
+  "appearance": {
+    "generator": "observationTower",
+    "width": 1,
+    "height": 3,
+    "tileSize": 32,
+    "anchor": { "x": 0.5, "y": 1 },
+    "offset": { "x": 0, "y": -0.1 },
+    "scale": { "x": 1, "y": 1 },
+    "options": {
+      "bodyColor": "#6c7ba0",
+      "platformColor": "#d6dee8",
+      "lightColor": "#ffcc66"
+    }
+  },
+  "interaction": {
+    "type": "message",
+    "title": "Módulo de observación",
+    "description": "Escucha el viento sobre la plaza y revisa la alineación de las copas.",
+    "message": "La vista desde la torre confirma la superposición correcta de capas." 
+  },
+  "volume": {
+    "height": 3.4,
+    "anchor": { "x": 0.5, "y": 1, "z": 0 }
+  },
+  "metadata": {
+    "tags": ["prototype", "tower"],
+    "qa": {
+      "shadow": "marcada",
+      "collision": "columna_central",
+      "variation": "luces_dia_noche"
+    }
+  }
+}

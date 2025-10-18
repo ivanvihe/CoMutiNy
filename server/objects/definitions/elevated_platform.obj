@@ -1,0 +1,32 @@
+{
+  "id": "elevated_platform",
+  "type": "structure",
+  "name": "Plataforma elevada modular",
+  "description": "Segmento de pasarela con soportes visibles para validar alturas y colisiones.",
+  "appearance": {
+    "generator": "tieredPlatform",
+    "width": 1,
+    "height": 1,
+    "tileSize": 32,
+    "anchor": { "x": 0.5, "y": 1 },
+    "offset": { "x": 0, "y": -0.05 },
+    "scale": { "x": 1, "y": 1 },
+    "options": {
+      "topColor": "#c6d8ff",
+      "sideColor": "#8ba8d9",
+      "trimColor": "#4a5f82"
+    }
+  },
+  "volume": {
+    "height": 1.6,
+    "anchor": { "x": 0.5, "y": 1, "z": 0 }
+  },
+  "metadata": {
+    "tags": ["prototype", "platform"],
+    "qa": {
+      "shadow": "suave",
+      "collision": "completa",
+      "variation": "tonos_fríos"
+    }
+  }
+}

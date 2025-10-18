@@ -95,14 +95,71 @@ const generateClientPlayerId = () => {
   return `client-${timestamp}${random}`;
 };
 
+const normaliseProfilePayload = (candidate) => {
+  if (!candidate || typeof candidate !== 'object') {
+    return null;
+  }
+
+  const alias = typeof candidate.alias === 'string' ? candidate.alias.trim() : '';
+  if (!alias) {
+    return null;
+  }
+
+  const avatar = candidate.avatar && typeof candidate.avatar === 'object' ? candidate.avatar : null;
+  const mapId =
+    typeof candidate.mapId === 'string' && candidate.mapId.trim() ? candidate.mapId.trim() : null;
+  const playerId =
+    typeof candidate.playerId === 'string' && candidate.playerId.trim()
+      ? candidate.playerId.trim()
+      : typeof candidate.id === 'string' && candidate.id.trim()
+        ? candidate.id.trim()
+        : null;
+
+  return {
+    alias,
+    ...(avatar ? { avatar } : {}),
+    ...(mapId ? { mapId } : {}),
+    ...(playerId ? { playerId } : {})
+  };
+};
+
 export function WorldProvider({ children }) {
+  const initialBootstrapProfile = (() => {
+    if (typeof window === 'undefined') {
+      return null;
+    }
+
+    try {
+      const candidate = normaliseProfilePayload(window.__COMMUNITY_BOOTSTRAP_PROFILE__);
+      if (!candidate) {
+        return null;
+      }
+
+      return {
+        ...candidate,
+        playerId: candidate.playerId ?? generateClientPlayerId()
+      };
+    } catch (error) {
+      console.warn('No se pudo inicializar el perfil precargado.', error);
+      return null;
+    }
+  })();
+
+  if (initialBootstrapProfile && typeof window !== 'undefined') {
+    window.__COMMUNITY_PROFILE_READY__ = true;
+  }
+
   const [connectionState, setConnectionState] = useState({ status: 'idle', error: null });
   const [players, setPlayers] = useState([]);
-  const [localPlayerId, setLocalPlayerId] = useState(null);
+  const [localPlayerId, setLocalPlayerId] = useState(
+    () => initialBootstrapProfile?.playerId ?? null
+  );
   const [spriteAtlas, setSpriteAtlas] = useState(null);
   const [chatMessages, setChatMessages] = useState([]);
-  const [profile, setProfile] = useState(null);
-  const [joinState, setJoinState] = useState({ status: 'idle', error: null });
+  const [profile, setProfile] = useState(initialBootstrapProfile);
+  const [joinState, setJoinState] = useState(() =>
+    initialBootstrapProfile ? { status: 'ready', error: null } : { status: 'idle', error: null }
+  );
   const [appearanceState, setAppearanceState] = useState(() => {
     const stored = getStoredPreferences();
     return { ...DEFAULT_APPEARANCE, ...(stored.appearance ?? {}) };
@@ -110,9 +167,11 @@ export function WorldProvider({ children }) {
   const [lastObjectEvent, setLastObjectEvent] = useState(null);
 
   const socketRef = useRef(null);
-  const localPlayerIdRef = useRef(null);
-  const profileRef = useRef(null);
-  const joinStateRef = useRef({ status: 'idle', error: null });
+  const localPlayerIdRef = useRef(initialBootstrapProfile?.playerId ?? null);
+  const profileRef = useRef(initialBootstrapProfile);
+  const joinStateRef = useRef(
+    initialBootstrapProfile ? { status: 'ready', error: null } : { status: 'idle', error: null }
+  );
   const playersRef = useRef(new Map());
   const compensatorsRef = useRef(new Map());
   const chatRef = useRef([]);
@@ -149,6 +208,92 @@ export function WorldProvider({ children }) {
       compensatorsRef.current.set(playerId, compensator);
     }
     return compensator;
+  }, []);
+
+  useEffect(() => {
+    if (profileRef.current?.alias) {
+      return undefined;
+    }
+
+    let cancelled = false;
+    const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+
+    const applyInitialProfile = (candidate) => {
+      if (cancelled || profileRef.current?.alias) {
+        return;
+      }
+
+      const normalised = normaliseProfilePayload(candidate);
+      if (!normalised) {
+        return;
+      }
+
+      const resolvedPlayerId =
+        normalised.playerId ?? localPlayerIdRef.current ?? generateClientPlayerId();
+
+      const nextProfile = {
+        ...normalised,
+        playerId: resolvedPlayerId
+      };
+
+      profileRef.current = nextProfile;
+      setProfile(nextProfile);
+
+      if (!localPlayerIdRef.current) {
+        localPlayerIdRef.current = resolvedPlayerId;
+        setLocalPlayerId(resolvedPlayerId);
+      }
+
+      setJoinState((previous) => {
+        if (previous.status === 'idle') {
+          return { status: 'ready', error: null };
+        }
+        return previous;
+      });
+
+      if (typeof window !== 'undefined') {
+        window.__COMMUNITY_PROFILE_READY__ = true;
+      }
+    };
+
+    if (typeof window !== 'undefined') {
+      const bootstrapProfile = window.__COMMUNITY_BOOTSTRAP_PROFILE__;
+      if (bootstrapProfile && typeof bootstrapProfile === 'object') {
+        applyInitialProfile(bootstrapProfile);
+      }
+    }
+
+    if (profileRef.current?.alias || typeof fetch !== 'function') {
+      return () => {
+        cancelled = true;
+        if (controller) {
+          controller.abort();
+        }
+      };
+    }
+
+    const loadProfile = async () => {
+      try {
+        const response = await fetch('/auth/me', { signal: controller?.signal });
+        if (!response.ok) {
+          return;
+        }
+
+        const payload = await response.json();
+        applyInitialProfile(payload?.user ?? payload ?? null);
+      } catch (error) {
+        console.warn('No se pudo obtener la sesión del usuario actual.', error);
+      }
+    };
+
+    loadProfile();
+
+    return () => {
+      cancelled = true;
+      if (controller) {
+        controller.abort();
+      }
+    };
   }, []);
 
   const applyPlayerSnapshot = useCallback((player, timestamp = Date.now()) => {
@@ -631,6 +776,10 @@ export function WorldProvider({ children }) {
     const url = resolveServerUrl();
 
     if (!url) {
+      return undefined;
+    }
+
+    if (window.__COMMUNITY_DISABLE_SOCKET__) {
       return undefined;
     }
 

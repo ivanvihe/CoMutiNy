@@ -52,6 +52,14 @@ Los mapas residen en `client/src/game/maps.js` (y se exportan a `config/maps.jso
 
 `MapContext` expande las áreas en listas de tiles para colisiones y `MapViewport` aplica resaltado a portales y objetos. Los mapas se pueden ampliar siguiendo el mismo esquema y el resumen en `docs/maps/world-expansion.md` documenta las zonas disponibles.
 
+### Capas y superposiciones
+
+- El parser (`client/src/game/map/parser.js`) reconoce propiedades `mode`/`placement`, `elevation` y `opacity` por capa para controlar la posición relativa y la altura virtual de cada tile.
+- `IsometricEngine` separa las capas en grupos `ground` y `overlay`, renderizando estas últimas después de jugadores y objetos para permitir copas de árboles, puentes o cubiertas.<sup>1</sup>
+- Los atributos de diagnóstico (`data-layer-count`, `data-overlay-count`, `data-solid-count`, `data-max-volume-height`) expuestos en `MapViewport` facilitan la validación visual automática.
+
+<sup>1</sup> Ver `client/src/game/isometricEngine.js` para detalles de renderizado y agrupación de capas.
+
 ## Renderizado de sprites y atlas
 
 - Los sprites del jugador local y remotos pueden provenir del atlas compartido (`spriteAtlas`) o de avatares base dibujados en tiempo real.

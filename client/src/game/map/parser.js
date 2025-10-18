@@ -284,6 +284,49 @@ const parseBoolean = (value, defaultValue = false) => {
   return defaultValue;
 };
 
+const normaliseLayerPlacement = (value) => {
+  if (typeof value !== 'string') {
+    return 'ground';
+  }
+
+  const trimmed = value.trim().toLowerCase();
+  if (!trimmed) {
+    return 'ground';
+  }
+
+  if (['overlay', 'ceiling', 'upper', 'canopy', 'above'].includes(trimmed)) {
+    return 'overlay';
+  }
+
+  if (['elevated', 'raised', 'mid', 'detail'].includes(trimmed)) {
+    return 'elevated';
+  }
+
+  return 'ground';
+};
+
+const parseLayerElevation = (value) => {
+  if (value === null || value === undefined) {
+    return 0;
+  }
+
+  const numeric = Number.parseFloat(value);
+  return Number.isFinite(numeric) ? numeric : 0;
+};
+
+const parseLayerOpacity = (value) => {
+  if (value === null || value === undefined) {
+    return null;
+  }
+
+  const numeric = Number.parseFloat(value);
+  if (!Number.isFinite(numeric)) {
+    return null;
+  }
+
+  return Math.min(Math.max(numeric, 0), 1);
+};
+
 const DEFAULT_TILE_TYPE = {
   id: 'floor',
   symbol: '.',
@@ -491,12 +534,22 @@ const parseLayerSections = (sections, { tileTypes, symbolMap }) => {
       order = layers.length;
     }
     const visible = parseBoolean(properties.get('visible'), true);
+    const placement = normaliseLayerPlacement(
+      properties.get('placement') ?? properties.get('mode') ?? properties.get('type')
+    );
+    const elevation = parseLayerElevation(
+      properties.get('elevation') ?? properties.get('height') ?? properties.get('level') ?? properties.get('offset')
+    );
+    const opacity = parseLayerOpacity(properties.get('opacity') ?? properties.get('alpha'));
 
     layers.push({
       id: layerId,
       name,
       order,
       visible,
+      placement,
+      elevation,
+      ...(opacity !== null ? { opacity } : {}),
       tiles: rows.map((row) => row.map((tile) => tile ?? null))
     });
   });
