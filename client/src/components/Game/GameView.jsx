@@ -13,6 +13,7 @@ import '../../styles/game.css';
 
 export default function GameView() {
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [showMapViewport, setShowMapViewport] = useState(false);
   const gameContainerRef = useRef(null);
   const gameRef = useRef(null);
   const { connected, connectionStatus, players, localPlayerId, profile, getSocket } = useWorld();
@@ -144,7 +145,12 @@ export default function GameView() {
     <div className="game-view">
       <div className="game-view__map">
         <div id="game-container" ref={gameContainerRef} />
-        <MapViewport onOpenSettings={handleOpenSettings} />
+        {showMapViewport ? <MapViewport onOpenSettings={handleOpenSettings} /> : null}
+        <div className="game-view__map-toggle">
+          <button type="button" onClick={() => setShowMapViewport((value) => !value)}>
+            {showMapViewport ? 'Ocultar HUD' : 'Mostrar HUD'}
+          </button>
+        </div>
       </div>
       <aside className="game-view__chat">
         <ChatPanel />

@@ -10,6 +10,8 @@
 .game-view__map {
   position: relative;
   min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 .game-view__chat {
@@ -22,6 +24,44 @@
 
 .map-viewport {
   height: 100%;
+}
+
+#game-container {
+  position: relative;
+  flex: 1;
+  width: 100%;
+  min-height: 100%;
+  min-width: 0;
+  z-index: 1;
+}
+
+#game-container canvas {
+  display: block;
+}
+
+.game-view__map-toggle {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  z-index: 2;
+}
+
+.game-view__map-toggle button {
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(128, 222, 234, 0.45);
+  background: rgba(8, 16, 28, 0.8);
+  color: #d8f4ff;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.game-view__map-toggle button:hover {
+  background: rgba(12, 26, 42, 0.85);
+  border-color: rgba(128, 222, 234, 0.65);
 }
 
 .topbar {
