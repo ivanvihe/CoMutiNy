@@ -84,4 +84,11 @@ describe('MapContext', () => {
     expect(event).toBeNull();
     expect(result.current.activeEvent).toBeNull();
   });
+
+  it('detecta colisiones sin depender de indicadores visuales de celdas', () => {
+    const { result } = renderHook(() => useMap(), { wrapper });
+
+    expect(result.current.canMoveTo({ x: 14, y: 14 })).toBe(true);
+    expect(result.current.canMoveTo({ x: 0, y: 0 })).toBe(false);
+  });
 });
