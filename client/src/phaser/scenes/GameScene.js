@@ -101,6 +101,7 @@ export default class GameScene extends Phaser.Scene {
     this.currentMap = null;
     this.layersContainer = null;
     this.objectsContainer = null;
+    this.mapContainer = null;
     this.mapManager = null;
     this.player = null;
     this.keyboard = null;
@@ -163,8 +164,12 @@ export default class GameScene extends Phaser.Scene {
     this.cameras.main.setBackgroundColor(DEFAULT_BACKGROUND);
     this.cameras.main.setZoom(1);
 
+    this.mapContainer = this.add.container(0, 0);
     this.layersContainer = this.add.layer();
     this.objectsContainer = this.add.layer();
+    this.layersContainer.setDepth(0);
+    this.objectsContainer.setDepth(1000);
+    this.mapContainer.add([this.layersContainer, this.objectsContainer]);
 
     this.mapManager = new MapManager(this, {
       tileSize: this.tileSize,
@@ -213,6 +218,11 @@ export default class GameScene extends Phaser.Scene {
       if (this.mapManager) {
         this.mapManager.destroy();
         this.mapManager = null;
+      }
+
+      if (this.mapContainer) {
+        this.mapContainer.destroy(true);
+        this.mapContainer = null;
       }
     });
   }

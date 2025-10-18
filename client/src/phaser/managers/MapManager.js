@@ -5,6 +5,9 @@ const TILE_TEXTURE_PREFIX = 'tile/';
 
 const toArray = (value) => (Array.isArray(value) ? value : []);
 
+const isDisplayCollection = (value) =>
+  value instanceof Phaser.GameObjects.Layer || value instanceof Phaser.GameObjects.Container;
+
 const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
 
 const normaliseOffset = (offset, fallback = { x: 0, y: 0, z: 0 }) => {
@@ -96,7 +99,7 @@ export default class MapManager {
     this.tileTextures = tileTextures;
     this.objectSprites = objectSprites;
 
-    if (containers.tileLayers instanceof Phaser.GameObjects.Layer) {
+    if (isDisplayCollection(containers.tileLayers)) {
       this.layerContainer = containers.tileLayers;
       this._ownsLayerContainer = false;
     } else {
@@ -104,7 +107,7 @@ export default class MapManager {
       this._ownsLayerContainer = true;
     }
 
-    if (containers.objects instanceof Phaser.GameObjects.Layer) {
+    if (isDisplayCollection(containers.objects)) {
       this.objectsContainer = containers.objects;
       this._ownsObjectsContainer = false;
     } else {
@@ -129,7 +132,9 @@ export default class MapManager {
   }
 
   clear() {
-    this.layerContainer.removeAll(true);
+    if (typeof this.layerContainer.removeAll === 'function') {
+      this.layerContainer.removeAll(true);
+    }
 
     this.interactiveObjects.children.each((child) => {
       if (child && typeof child.destroy === 'function') {
@@ -138,7 +143,9 @@ export default class MapManager {
     });
     this.interactiveObjects.clear(false, false);
 
-    this.objectsContainer.removeAll(true);
+    if (typeof this.objectsContainer.removeAll === 'function') {
+      this.objectsContainer.removeAll(true);
+    }
     this.collidableTiles.clear(true, true);
     this.solidObjects.clear(true, true);
     this.currentMap = null;
@@ -192,6 +199,9 @@ export default class MapManager {
         return;
       }
       const layerGroup = this.scene.add.layer();
+      if (typeof layerGroup.setCullPadding === 'function') {
+        layerGroup.setCullPadding(this.tileSize, this.tileSize);
+      }
       layer.tiles.forEach((row, y) => {
         row.forEach((tileId, x) => {
           if (!tileId) {
@@ -206,6 +216,9 @@ export default class MapManager {
           const posY = y * this.tileSize + this.tileSize / 2;
           const image = this.scene.add.image(posX, posY, textureKey);
           image.setDisplaySize(this.tileSize, this.tileSize);
+          if (typeof image.setCullPadding === 'function') {
+            image.setCullPadding(this.tileSize / 2, this.tileSize / 2);
+          }
           layerGroup.add(image);
 
           const tileType = resolveTileType(map, tileId);
@@ -222,6 +235,10 @@ export default class MapManager {
       });
       if (Number.isFinite(layer.opacity)) {
         layerGroup.setAlpha(clamp(layer.opacity, 0, 1));
+      }
+      if (typeof layerGroup.setDepth === 'function') {
+        const depth = Number.isFinite(layer?.order) ? layer.order : 0;
+        layerGroup.setDepth(depth);
       }
       this.layerContainer.add(layerGroup);
     });
@@ -268,6 +285,10 @@ export default class MapManager {
 
       this.objectsContainer.add(interactive);
       this.interactiveObjects.add(interactive);
+
+      if (typeof interactive.setCullPadding === 'function') {
+        interactive.setCullPadding(this.tileSize, this.tileSize);
+      }
 
       interactive.on('behaviour', (payload) => {
         this.scene.events.emit('map:object-behaviour', payload, interactive);
