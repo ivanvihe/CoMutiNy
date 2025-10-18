@@ -1,5 +1,5 @@
 import "dotenv/config";
-import express from "express";
+import express, { type Request, type Response } from "express";
 import { createServer } from "http";
 import { Server } from "colyseus";
 import { monitor } from "@colyseus/monitor";
@@ -13,15 +13,15 @@ async function bootstrap() {
 
   const app = express();
   app.use(express.json());
-  app.get("/health", (_req, res) => {
+  app.get("/health", (_req: Request, res: Response) => {
     res.json({ status: "ok" });
   });
 
   const port = Number(process.env.PORT ?? 2567);
   const server = createServer(app);
-  const gameServer = new Server({ server, express: app });
+  const gameServer = new Server({ server });
 
-  gameServer.define("world", WorldRoom, { maxClients: 120 }).enableRealtimeListing();
+  gameServer.define("world", WorldRoom).enableRealtimeListing();
 
   app.use("/colyseus", monitor());
 
