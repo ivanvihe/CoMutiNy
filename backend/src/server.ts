@@ -4,7 +4,7 @@ import { Server } from 'colyseus';
 import dotenv from 'dotenv';
 
 import { initializeDatabase } from './database';
-import { LobbyRoom } from './rooms';
+import { CommunityRoom, LobbyRoom } from './rooms';
 
 dotenv.config();
 
@@ -28,6 +28,10 @@ async function bootstrap(): Promise<void> {
   const gameServer = new Server({ server: httpServer });
 
   gameServer.define('lobby', LobbyRoom);
+  gameServer.define('community', CommunityRoom, {
+    worldId: process.env.DEFAULT_WORLD_ID,
+    chunkSize: Number(process.env.COMMUNITY_CHUNK_SIZE) || CommunityRoom.DEFAULT_CHUNK_SIZE,
+  });
 
   httpServer.listen(PORT, () => {
     console.log(`Server listening on http://localhost:${PORT}`);
