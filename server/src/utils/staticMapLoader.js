@@ -57,7 +57,11 @@ const parseSections = (rawContents) => {
 
   rawContents.split(/\r?\n/).forEach((rawLine) => {
     let line = rawLine.trim()
-    if (!line || line.startsWith('#')) {
+    if (!line) {
+      return
+    }
+
+    if (line.startsWith('#') && !/^#\s*=/.test(line)) {
       return
     }
 
@@ -187,20 +191,36 @@ const DEFAULT_TILE_TYPE = {
   metadata: { default: true }
 }
 
+const TILE_DEFINITION_PATTERN = /^(.+?)\s*=\s*(.+)$/
+
 const parseTileDefinitions = (lines = []) => {
   const tileTypes = new Map()
   const symbolMap = new Map()
 
   lines.forEach((rawLine) => {
     const line = rawLine.trim()
-    if (!line || line.startsWith('#') || !line.includes('=')) {
+    if (!line || !line.includes('=')) {
       return
     }
 
-    const [rawSymbol, remainder] = line.split('=', 2)
-    const symbol = rawSymbol.trim()
+    if (line.startsWith('#') && !/^#\s*=/.test(line)) {
+      return
+    }
+
+    const match = line.match(TILE_DEFINITION_PATTERN)
+
+    if (!match) {
+      throw new Error(`Definición de tile inválida: "${line}"`)
+    }
+
+    const symbol = match[1].trim()
     if (!symbol) {
       throw new Error(`Definición de tile sin símbolo: "${line}"`)
+    }
+
+    const remainder = match[2].trim()
+    if (!remainder) {
+      throw new Error(`Definición de tile sin contenido: "${line}"`)
     }
 
     const tokens = remainder
