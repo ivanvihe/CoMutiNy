@@ -123,9 +123,11 @@ export default class GameScene extends Phaser.Scene {
     this.lastBroadcastState = { x: null, y: null, animation: null, direction: null };
     this.lastBroadcastTime = 0;
     this.playerDirection = 'down';
+    this.initialCurrentMap = null;
   }
 
   init(data) {
+    this.initialCurrentMap = data?.currentMap ?? null;
     if (data?.tileSize) {
       this.tileSize = data.tileSize;
     }
@@ -140,6 +142,10 @@ export default class GameScene extends Phaser.Scene {
     }
     if (data?.socket) {
       this.socket = data.socket;
+    }
+    if (this.initialCurrentMap && typeof this.initialCurrentMap === 'object') {
+      gameState.registerMap(this.initialCurrentMap);
+      gameState.handleMapChange({ definition: this.initialCurrentMap }).catch(() => {});
     }
     if (isValidString(data?.localPlayerId)) {
       this.localPlayerId = data.localPlayerId.trim();
@@ -182,6 +188,11 @@ export default class GameScene extends Phaser.Scene {
     this.unsubscribe = gameState.subscribe((snapshot) => {
       this.loadMap(snapshot?.map ?? null);
     });
+
+    if (this.initialCurrentMap) {
+      this.loadMap(this.initialCurrentMap);
+      this.initialCurrentMap = null;
+    }
 
     this.events.once('shutdown', () => {
       this.playerColliders.forEach((collider) => collider?.destroy());

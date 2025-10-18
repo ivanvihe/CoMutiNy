@@ -129,9 +129,11 @@ export default class PreloadScene extends Phaser.Scene {
     this.characterTextures = new Map();
     this.generators = null;
     this.readyPromise = null;
+    this.initializationData = {};
   }
 
-  init() {
+  init(data = {}) {
+    this.initializationData = data && typeof data === 'object' ? { ...data } : {};
     this.tileTextures.clear();
     this.objectSprites.clear();
     this.characterTextures.clear();
@@ -147,6 +149,7 @@ export default class PreloadScene extends Phaser.Scene {
   create() {
     const next = () => {
       this.scene.start('GameScene', {
+        ...this.initializationData,
         tileTextures: this.tileTextures,
         objectSprites: this.objectSprites,
         characterTextures: this.characterTextures,
