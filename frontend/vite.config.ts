@@ -1,23 +1,17 @@
-import { defineConfig } from "vite";
-import react from "@vitejs/plugin-react";
+import { defineConfig } from 'vite';
 
 export default defineConfig({
-  plugins: [react()],
+  root: '.',
+  build: {
+    outDir: 'dist',
+    sourcemap: true,
+  },
   server: {
-    host: "0.0.0.0",
-    port: 5173
+    port: 5173,
+    host: '0.0.0.0',
   },
   preview: {
-    host: "0.0.0.0",
-    port: 4173
+    port: 5173,
+    host: '0.0.0.0',
   },
-  resolve: {
-    alias: {
-      "@engine": "/src/engine",
-      "@voxel": "/src/voxel",
-      "@multiplayer": "/src/multiplayer",
-      "@ui": "/src/ui",
-      "@types": "/src/types"
-    }
-  }
 });
