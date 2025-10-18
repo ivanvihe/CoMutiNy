@@ -47,7 +47,9 @@ export default class IsometricPlugin extends Phaser.Plugins.ScenePlugin {
     return new Phaser.Math.Vector2(screenX, screenY);
   }
 
-  screenToIso(point: Phaser.Math.Vector2 | Phaser.Math.Vector3 | { x: number; y: number }): Phaser.Math.Vector3 {
+  screenToIso(
+    point: Phaser.Math.Vector2 | Phaser.Math.Vector3 | { x: number; y: number }
+  ): Phaser.Math.Vector3 {
     const { x: screenX, y: screenY } = point as Phaser.Math.Vector2;
     const halfWidth = this._tileWidth / 2;
     const halfHeight = this._tileHeight / 2;
@@ -59,7 +61,10 @@ export default class IsometricPlugin extends Phaser.Plugins.ScenePlugin {
   }
 
   projectGameObject(
-    gameObject: Phaser.GameObjects.GameObject & { setPosition: (x: number, y: number) => void; setDepth?: (value: number) => void },
+    gameObject: Phaser.GameObjects.GameObject & {
+      setPosition: (x: number, y: number) => void;
+      setDepth?: (value: number) => void;
+    },
     isoPoint: IsoPointLike,
     options: ProjectOptions = {}
   ): void {
