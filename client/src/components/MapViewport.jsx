@@ -74,7 +74,7 @@ export default function MapViewport({ onOpenSettings } = {}) {
     }
 
     const engine = new IsometricEngine(canvas, {
-      tileset: { tileWidth: 64, tileHeight: 32 },
+      tileset: { tileWidth: 64, tileHeight: 64 },
       sprites: {
         frameWidth: 48,
         frameHeight: 64,
