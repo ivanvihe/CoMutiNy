@@ -200,7 +200,26 @@ const enrichJoinPayloadWithAvatar = async (payload = {}) => {
   return enriched
 }
 
-const PORT = Number(process.env.SERVER_PORT || 4000)
+const parsePort = (value, fallback = 4000) => {
+  if (value === 0) {
+    return 0
+  }
+
+  if (!value && value !== 0) {
+    return fallback
+  }
+
+  const parsed = Number.parseInt(value, 10)
+
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return fallback
+  }
+
+  return parsed
+}
+
+const PORT = parsePort(process.env.SERVER_PORT ?? process.env.PORT, 4000)
+const HOST = (process.env.SERVER_HOST ?? process.env.HOST ?? '0.0.0.0').trim() || '0.0.0.0'
 
 const start = async () => {
   try {
@@ -214,8 +233,8 @@ const start = async () => {
       enrichJoinPayload: enrichJoinPayloadWithAvatar
     })
 
-    server.listen(PORT, '0.0.0.0', () => {
-      console.log(`Server listening on port ${PORT}`)
+    server.listen(PORT, HOST, () => {
+      console.log(`Server listening on ${HOST}:${PORT}`)
     })
   } catch (error) {
     process.exitCode = 1
