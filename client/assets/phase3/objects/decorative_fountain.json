@@ -1,0 +1,28 @@
+{
+  "id": "decorative_fountain",
+  "type": "decor",
+  "name": "Fuente decorativa",
+  "description": "Fuente circular con cuenco elevado y caídas de agua suaves.",
+  "appearance": {
+    "generator": "decorativeFountain",
+    "width": 2,
+    "height": 2,
+    "tileSize": 32,
+    "anchor": { "x": 0.5, "y": 1, "z": 0 },
+    "options": {
+      "stoneColor": "#bfc5ce",
+      "stoneShadow": "#8d939a",
+      "waterColor": "#66bcd3",
+      "waterHighlight": "#b5ecff",
+      "lightingColor": "#7ad7f0"
+    }
+  },
+  "volume": {
+    "height": 1.2,
+    "anchor": { "x": 0.5, "y": 1, "z": 0 }
+  },
+  "metadata": {
+    "tags": ["decor", "water", "phase3"],
+    "palette": "decorativeFountain"
+  }
+}

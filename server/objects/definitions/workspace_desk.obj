@@ -1,0 +1,28 @@
+{
+  "id": "workspace_desk",
+  "type": "furniture",
+  "name": "Mesa escritorio modular",
+  "description": "Superficie generosa para trabajo en equipo con pata central reforzada.",
+  "appearance": {
+    "generator": "workspaceDesk",
+    "width": 2,
+    "height": 1,
+    "tileSize": 32,
+    "anchor": { "x": 0.5, "y": 1, "z": 0 },
+    "options": {
+      "surfaceColor": "#d8b394",
+      "surfaceHighlight": "#efd4b8",
+      "frameColor": "#4f4032",
+      "frameShadow": "#32261b",
+      "accentColor": "#5e7fa4"
+    }
+  },
+  "volume": {
+    "height": 1.1,
+    "anchor": { "x": 0.5, "y": 1, "z": 0 }
+  },
+  "metadata": {
+    "tags": ["furniture", "workspace", "phase3"],
+    "palette": "workspaceDesk"
+  }
+}

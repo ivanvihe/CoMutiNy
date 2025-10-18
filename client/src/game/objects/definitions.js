@@ -151,11 +151,18 @@ const sanitizeBehaviour = (raw, { fallbackTitle, fallbackDescription }) => {
 
 const loadDefinitionSources = () => {
   if (typeof import.meta !== 'undefined' && typeof import.meta.glob === 'function') {
-    return import.meta.glob('../../../server/objects/definitions/*.obj', {
+    const serverDefinitions = import.meta.glob('../../../server/objects/definitions/*.obj', {
       eager: true,
       import: 'default',
       query: '?raw'
     });
+
+    const phase3Definitions = import.meta.glob('../../../assets/phase3/objects/*.json', {
+      eager: true,
+      import: 'default'
+    });
+
+    return { ...serverDefinitions, ...phase3Definitions };
   }
 
   if (typeof process !== 'undefined' && process.versions?.node && typeof require === 'function') {
@@ -174,16 +181,47 @@ const loadDefinitionSources = () => {
         }
         return process.cwd();
       })();
-      const directory = path.resolve(baseDir, '../../../server/objects/definitions');
-      const entries = fs.readdirSync(directory, { withFileTypes: true });
-      return entries
-        .filter((entry) => entry.isFile() && entry.name.endsWith('.obj'))
-        .reduce((accumulator, entry) => {
-          const filePath = path.join(directory, entry.name);
-          const rawContents = fs.readFileSync(filePath, 'utf-8');
-          const key = `../../../server/objects/definitions/${entry.name}`;
-          return { ...accumulator, [key]: rawContents };
-        }, {});
+      const serverDirectory = path.resolve(baseDir, '../../../server/objects/definitions');
+      const clientPhase3Directory = path.resolve(baseDir, '../../../assets/phase3/objects');
+
+      const loadDirectory = (directory, { extension, prefix, raw = true }) => {
+        try {
+          const entries = fs.readdirSync(directory, { withFileTypes: true });
+          return entries
+            .filter((entry) => entry.isFile() && entry.name.endsWith(extension))
+            .reduce((accumulator, entry) => {
+              const filePath = path.join(directory, entry.name);
+              const rawContents = fs.readFileSync(filePath, 'utf-8');
+              const key = `${prefix}/${entry.name}`;
+              if (raw) {
+                return { ...accumulator, [key]: rawContents };
+              }
+
+              try {
+                const parsed = JSON.parse(rawContents);
+                return { ...accumulator, [key]: parsed };
+              } catch (parseError) {
+                console.warn('[objects] No se pudo parsear', filePath, parseError?.message ?? parseError);
+                return accumulator;
+              }
+            }, {});
+        } catch (error) {
+          return {};
+        }
+      };
+
+      const serverEntries = loadDirectory(serverDirectory, {
+        extension: '.obj',
+        prefix: '../../../server/objects/definitions'
+      });
+
+      const clientEntries = loadDirectory(clientPhase3Directory, {
+        extension: '.json',
+        prefix: '../../../assets/phase3/objects',
+        raw: false
+      });
+
+      return { ...serverEntries, ...clientEntries };
     } catch (error) {
       console.warn('[objects] No se pudieron cargar definiciones locales', error?.message ?? error);
       return {};

@@ -372,6 +372,446 @@ const drawSansevieriaPlant = (ctx, { width, height, tileSize, options = {} }, he
   }
 };
 
+const drawWorkspaceDesk = (ctx, { width, height, tileSize, options = {} }, helpers = null) => {
+  const pixelWidth = width * tileSize;
+  const pixelHeight = height * tileSize;
+  const surfaceColor = options.surfaceColor ?? '#d8b394';
+  const surfaceHighlight = options.surfaceHighlight ?? '#efd4b8';
+  const frameColor = options.frameColor ?? '#4f4032';
+  const frameShadow = options.frameShadow ?? '#32261b';
+  const accentColor = options.accentColor ?? '#5e7fa4';
+
+  registerShadowLayer(helpers, {
+    id: 'desk-shadow',
+    width,
+    height,
+    tileSize,
+    color: 'rgba(0, 0, 0, 0.28)',
+    radiusX: (width * tileSize) / 2.3,
+    radiusY: tileSize * 0.18,
+    centerYOffset: 0.08,
+    pixelOffsetY: -tileSize * 0.12,
+    alpha: 0.8,
+    order: -20,
+    offset: { z: -0.05 }
+  });
+
+  helpers?.setVolume?.({ height: Math.max(height * 1.05, 1.05), anchor: { x: 0.5, y: 1, z: 0 } });
+
+  const tableHeight = tileSize * Math.min(0.55, Math.max(0.4, height * 0.45));
+  const tableTopY = Math.max(tileSize * 0.12, tileSize * height * 0.12);
+  const tableBottomY = tableTopY + tableHeight;
+
+  ctx.fillStyle = surfaceColor;
+  ctx.beginPath();
+  ctx.roundRect(tileSize * 0.12, tableTopY, pixelWidth - tileSize * 0.24, tableHeight, tileSize * 0.18);
+  ctx.fill();
+
+  ctx.fillStyle = surfaceHighlight;
+  ctx.beginPath();
+  ctx.roundRect(tileSize * 0.18, tableTopY + tileSize * 0.05, pixelWidth - tileSize * 0.36, tableHeight - tileSize * 0.12, tileSize * 0.14);
+  ctx.fill();
+
+  ctx.fillStyle = accentColor;
+  ctx.fillRect(pixelWidth / 2 - tileSize * 0.12, tableTopY + tileSize * 0.05, tileSize * 0.24, tableHeight - tileSize * 0.12);
+
+  const legWidth = Math.max(tileSize * 0.12, 6);
+  const legHeight = pixelHeight - tableBottomY - tileSize * 0.08;
+
+  [tileSize * 0.28, pixelWidth - tileSize * 0.28].forEach((x) => {
+    ctx.fillStyle = frameColor;
+    ctx.fillRect(x - legWidth / 2, tableBottomY, legWidth, legHeight);
+
+    ctx.fillStyle = frameShadow;
+    ctx.fillRect(x - legWidth / 2 + 1, pixelHeight - tileSize * 0.3, legWidth - 2, tileSize * 0.22);
+  });
+};
+
+const drawCollabChairs = (ctx, { width, height, tileSize, options = {} }, helpers = null) => {
+  const pixelWidth = width * tileSize;
+  const pixelHeight = height * tileSize;
+  const upholsteryColor = options.upholsteryColor ?? '#5a7da6';
+  const upholsteryHighlight = options.upholsteryHighlight ?? '#7ba0c8';
+  const frameColor = options.frameColor ?? '#2e3944';
+  const feetColor = options.feetColor ?? '#1f252b';
+
+  registerShadowLayer(helpers, {
+    id: 'chairs-shadow',
+    width,
+    height,
+    tileSize,
+    color: 'rgba(0, 0, 0, 0.25)',
+    radiusX: (width * tileSize) / 3,
+    radiusY: tileSize * 0.18,
+    centerYOffset: 0.12,
+    pixelOffsetY: -tileSize * 0.08,
+    alpha: 0.75,
+    order: -18,
+    offset: { z: -0.05 }
+  });
+
+  helpers?.setVolume?.({ height: Math.max(height * 1.1, 1), anchor: { x: 0.5, y: 1, z: 0 } });
+
+  const seatTop = pixelHeight * 0.52;
+  const seatBottom = seatTop + tileSize * 0.26;
+  const seatPadding = tileSize * 0.18;
+
+  ctx.fillStyle = upholsteryColor;
+  ctx.beginPath();
+  ctx.roundRect(seatPadding, seatTop - tileSize * 0.28, pixelWidth - seatPadding * 2, tileSize * 0.28, tileSize * 0.14);
+  ctx.fill();
+
+  ctx.fillStyle = upholsteryHighlight;
+  ctx.beginPath();
+  ctx.roundRect(seatPadding + tileSize * 0.05, seatTop - tileSize * 0.24, pixelWidth - (seatPadding + tileSize * 0.05) * 2, tileSize * 0.22, tileSize * 0.12);
+  ctx.fill();
+
+  ctx.fillStyle = upholsteryColor;
+  ctx.beginPath();
+  ctx.roundRect(seatPadding + tileSize * 0.05, seatTop - tileSize * 0.6, pixelWidth - (seatPadding + tileSize * 0.05) * 2, tileSize * 0.28, tileSize * 0.12);
+  ctx.fill();
+
+  ctx.fillStyle = upholsteryHighlight;
+  ctx.beginPath();
+  ctx.roundRect(seatPadding + tileSize * 0.09, seatTop - tileSize * 0.56, pixelWidth - (seatPadding + tileSize * 0.09) * 2, tileSize * 0.22, tileSize * 0.1);
+  ctx.fill();
+
+  [pixelWidth * 0.3, pixelWidth * 0.7].forEach((x) => {
+    ctx.fillStyle = frameColor;
+    ctx.fillRect(x - tileSize * 0.04, seatBottom - tileSize * 0.04, tileSize * 0.08, pixelHeight - seatBottom - tileSize * 0.05);
+
+    ctx.fillStyle = feetColor;
+    ctx.fillRect(x - tileSize * 0.04, pixelHeight - tileSize * 0.12, tileSize * 0.08, tileSize * 0.12);
+  });
+};
+
+const drawLivingRoomLamp = (ctx, { width, height, tileSize, options = {} }, helpers = null) => {
+  const pixelWidth = width * tileSize;
+  const pixelHeight = height * tileSize;
+  const centerX = pixelWidth / 2;
+  const shadeColor = options.shadeColor ?? '#f2e2c4';
+  const shadeShadow = options.shadeShadow ?? '#d6c29a';
+  const stemColor = options.stemColor ?? '#5a4e42';
+  const baseColor = options.baseColor ?? '#3f3730';
+  const glowColor = options.glowColor ?? '#ffe8a3';
+
+  registerShadowLayer(helpers, {
+    id: 'lamp-shadow',
+    width,
+    height,
+    tileSize,
+    color: 'rgba(0, 0, 0, 0.24)',
+    radiusX: tileSize * 0.35,
+    radiusY: tileSize * 0.16,
+    centerYOffset: 0.16,
+    pixelOffsetY: -tileSize * 0.12,
+    alpha: 0.8,
+    order: -18,
+    offset: { z: -0.05 }
+  });
+
+  helpers?.setVolume?.({ height: Math.max(height * 1.6, 1.5), anchor: { x: 0.5, y: 1, z: 0 } });
+
+  const baseRadiusX = tileSize * 0.28;
+  const baseRadiusY = tileSize * 0.12;
+  const baseY = pixelHeight - tileSize * 0.1;
+
+  ctx.fillStyle = baseColor;
+  ctx.beginPath();
+  ctx.ellipse(centerX, baseY - baseRadiusY, baseRadiusX, baseRadiusY, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = stemColor;
+  ctx.fillRect(centerX - tileSize * 0.04, tileSize * 0.8, tileSize * 0.08, pixelHeight - tileSize * 0.9);
+
+  const shadeTop = tileSize * 0.2;
+  const shadeBottom = tileSize * 1.3;
+
+  ctx.fillStyle = shadeColor;
+  ctx.beginPath();
+  ctx.moveTo(centerX - tileSize * 0.3, shadeTop);
+  ctx.lineTo(centerX + tileSize * 0.3, shadeTop);
+  ctx.lineTo(centerX + tileSize * 0.4, shadeBottom);
+  ctx.lineTo(centerX - tileSize * 0.4, shadeBottom);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.fillStyle = shadeShadow;
+  ctx.beginPath();
+  ctx.moveTo(centerX - tileSize * 0.26, shadeTop + tileSize * 0.06);
+  ctx.lineTo(centerX + tileSize * 0.26, shadeTop + tileSize * 0.06);
+  ctx.lineTo(centerX + tileSize * 0.34, shadeBottom - tileSize * 0.08);
+  ctx.lineTo(centerX - tileSize * 0.34, shadeBottom - tileSize * 0.08);
+  ctx.closePath();
+  ctx.fill();
+
+  if (helpers?.registerLayer) {
+    helpers.registerLayer(
+      'lamp-glow',
+      (layerCtx) => {
+        const gradient = layerCtx.createRadialGradient(
+          centerX,
+          shadeTop + tileSize * 0.1,
+          tileSize * 0.05,
+          centerX,
+          shadeTop + tileSize * 0.1,
+          tileSize * 0.4
+        );
+        gradient.addColorStop(0, `${glowColor}99`);
+        gradient.addColorStop(1, 'rgba(255, 232, 163, 0)');
+        layerCtx.fillStyle = gradient;
+        layerCtx.beginPath();
+        layerCtx.ellipse(centerX, shadeTop + tileSize * 0.2, tileSize * 0.6, tileSize * 0.5, 0, 0, Math.PI * 2);
+        layerCtx.fill();
+      },
+      {
+        width,
+        height,
+        tileSize,
+        anchor: { x: 0.5, y: 1, z: 0 },
+        offset: { z: 0.6 },
+        pixelOffset: { y: -tileSize * 0.8 },
+        alpha: 0.8,
+        order: 16
+      }
+    );
+  }
+};
+
+const drawLoungePlant = (ctx, { width, height, tileSize, options = {} }, helpers = null) => {
+  const pixelWidth = width * tileSize;
+  const pixelHeight = height * tileSize;
+  const centerX = pixelWidth / 2;
+  const potColor = options.potColor ?? '#8c6b56';
+  const potHighlight = options.potHighlight ?? '#b8926f';
+  const leafLight = options.leafLight ?? '#52b788';
+  const leafDark = options.leafDark ?? '#2d6a4f';
+  const leafAccent = options.leafAccent ?? '#95d5b2';
+
+  registerShadowLayer(helpers, {
+    id: 'plant-shadow',
+    width,
+    height,
+    tileSize,
+    color: 'rgba(0, 0, 0, 0.24)',
+    radiusX: tileSize * 0.32,
+    radiusY: tileSize * 0.16,
+    centerYOffset: 0.18,
+    pixelOffsetY: -tileSize * 0.1,
+    alpha: 0.75,
+    order: -16,
+    offset: { z: -0.05 }
+  });
+
+  helpers?.setVolume?.({ height: Math.max(height * 1.3, 1.35), anchor: { x: 0.5, y: 1, z: 0 } });
+
+  const potHeight = tileSize * 0.4;
+  const potTop = pixelHeight - potHeight - tileSize * 0.1;
+
+  ctx.fillStyle = potColor;
+  ctx.beginPath();
+  ctx.roundRect(centerX - tileSize * 0.3, potTop, tileSize * 0.6, potHeight, tileSize * 0.1);
+  ctx.fill();
+
+  ctx.fillStyle = potHighlight;
+  ctx.beginPath();
+  ctx.roundRect(centerX - tileSize * 0.26, potTop + tileSize * 0.05, tileSize * 0.52, potHeight - tileSize * 0.12, tileSize * 0.08);
+  ctx.fill();
+
+  const leafBaseY = potTop + tileSize * 0.02;
+  const leafOffsets = [-tileSize * 0.35, -tileSize * 0.18, 0, tileSize * 0.18, tileSize * 0.35];
+
+  leafOffsets.forEach((offset, index) => {
+    const tilt = offset / (tileSize * 1.8);
+    const length = tileSize * (1.2 + Math.abs(offset) / (tileSize * 2.8));
+    ctx.save();
+    ctx.translate(centerX + offset, leafBaseY);
+    ctx.rotate(tilt);
+    ctx.fillStyle = index % 2 === 0 ? leafLight : leafDark;
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.quadraticCurveTo(tileSize * 0.12, -length * 0.3, tileSize * 0.04, -length);
+    ctx.quadraticCurveTo(-tileSize * 0.12, -length * 0.3, 0, 0);
+    ctx.fill();
+    ctx.restore();
+  });
+
+  ctx.save();
+  ctx.translate(centerX, leafBaseY - tileSize * 1.2);
+  ctx.fillStyle = leafAccent;
+  ctx.beginPath();
+  ctx.moveTo(0, -tileSize * 0.4);
+  ctx.quadraticCurveTo(tileSize * 0.1, -tileSize * 0.1, 0, tileSize * 0.2);
+  ctx.quadraticCurveTo(-tileSize * 0.1, -tileSize * 0.1, 0, -tileSize * 0.4);
+  ctx.fill();
+  ctx.restore();
+};
+
+const drawOutdoorTree = (ctx, { width, height, tileSize, options = {} }, helpers = null) => {
+  const pixelWidth = width * tileSize;
+  const pixelHeight = height * tileSize;
+  const centerX = pixelWidth / 2;
+  const trunkColor = options.trunkColor ?? '#6f4f28';
+  const trunkShadow = options.trunkShadow ?? '#4d351b';
+  const foliageDark = options.foliageDark ?? '#2b5d34';
+  const foliageLight = options.foliageLight ?? '#4d8f4c';
+  const foliageAccent = options.foliageAccent ?? '#7cc96f';
+
+  registerShadowLayer(helpers, {
+    id: 'tree-shadow',
+    width,
+    height,
+    tileSize,
+    color: 'rgba(0, 0, 0, 0.3)',
+    radiusX: tileSize * 0.7,
+    radiusY: tileSize * 0.24,
+    centerYOffset: 0.22,
+    pixelOffsetY: -tileSize * 0.12,
+    alpha: 0.85,
+    order: -18,
+    offset: { z: -0.05 }
+  });
+
+  helpers?.setVolume?.({ height: Math.max(height * 2.4, 2.2), anchor: { x: 0.5, y: 1, z: 0 } });
+
+  const trunkWidth = tileSize * 0.28;
+  const trunkHeight = tileSize * Math.max(0.9, height * 0.8);
+  const trunkTop = pixelHeight - trunkHeight - tileSize * 0.1;
+
+  ctx.fillStyle = trunkColor;
+  ctx.fillRect(centerX - trunkWidth / 2, trunkTop, trunkWidth, trunkHeight);
+
+  ctx.fillStyle = trunkShadow;
+  ctx.fillRect(centerX, trunkTop, trunkWidth / 2, trunkHeight);
+
+  const crownWidth = tileSize * Math.max(1.8, width * 1.6);
+  const crownHeight = tileSize * Math.max(1.6, height * 1.4);
+  const crownTop = trunkTop - crownHeight * 0.7;
+
+  ctx.fillStyle = foliageDark;
+  ctx.beginPath();
+  ctx.ellipse(centerX, crownTop + crownHeight * 0.6, crownWidth / 2, crownHeight / 2, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = foliageLight;
+  ctx.beginPath();
+  ctx.ellipse(centerX, crownTop + crownHeight * 0.55, crownWidth * 0.42, crownHeight * 0.45, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = foliageAccent;
+  [-tileSize * 0.35, tileSize * 0.28, -tileSize * 0.12].forEach((offset, index) => {
+    ctx.beginPath();
+    ctx.ellipse(centerX + offset, crownTop + crownHeight * (0.3 + index * 0.2), tileSize * 0.22, tileSize * 0.2, 0, 0, Math.PI * 2);
+    ctx.fill();
+  });
+};
+
+const drawDecorativeFountain = (ctx, { width, height, tileSize, options = {} }, helpers = null) => {
+  const pixelWidth = width * tileSize;
+  const pixelHeight = height * tileSize;
+  const centerX = pixelWidth / 2;
+  const baseColor = options.stoneColor ?? '#bfc5ce';
+  const baseShadow = options.stoneShadow ?? '#8d939a';
+  const waterColor = options.waterColor ?? '#66bcd3';
+  const waterHighlight = options.waterHighlight ?? '#b5ecff';
+  const lightingColor = options.lightingColor ?? '#7ad7f0';
+
+  registerShadowLayer(helpers, {
+    id: 'fountain-shadow',
+    width,
+    height,
+    tileSize,
+    color: 'rgba(0, 0, 0, 0.26)',
+    radiusX: tileSize * 0.8,
+    radiusY: tileSize * 0.28,
+    centerYOffset: 0.18,
+    pixelOffsetY: -tileSize * 0.12,
+    alpha: 0.78,
+    order: -18,
+    offset: { z: -0.05 }
+  });
+
+  helpers?.setVolume?.({ height: Math.max(height * 1.2, 1.1), anchor: { x: 0.5, y: 1, z: 0 } });
+
+  const baseTop = pixelHeight - tileSize * 0.6;
+
+  ctx.fillStyle = baseColor;
+  ctx.beginPath();
+  ctx.ellipse(centerX, baseTop + tileSize * 0.4, tileSize * 0.9, tileSize * 0.32, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = baseShadow;
+  ctx.beginPath();
+  ctx.ellipse(centerX, baseTop + tileSize * 0.4, tileSize * 0.78, tileSize * 0.26, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = waterColor;
+  ctx.beginPath();
+  ctx.ellipse(centerX, baseTop + tileSize * 0.38, tileSize * 0.7, tileSize * 0.24, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = waterHighlight;
+  ctx.beginPath();
+  ctx.ellipse(centerX, baseTop + tileSize * 0.36, tileSize * 0.54, tileSize * 0.18, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  const pillarWidth = tileSize * 0.32;
+  const pillarHeight = tileSize * 0.9;
+  const pillarTop = baseTop - pillarHeight + tileSize * 0.15;
+
+  ctx.fillStyle = baseColor;
+  ctx.fillRect(centerX - pillarWidth / 2, pillarTop, pillarWidth, pillarHeight);
+
+  ctx.fillStyle = baseShadow;
+  ctx.fillRect(centerX, pillarTop, pillarWidth / 2, pillarHeight);
+
+  ctx.fillStyle = baseColor;
+  ctx.beginPath();
+  ctx.ellipse(centerX, pillarTop + tileSize * 0.05, tileSize * 0.7, tileSize * 0.22, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = waterColor;
+  ctx.beginPath();
+  ctx.ellipse(centerX, pillarTop, tileSize * 0.5, tileSize * 0.16, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = waterHighlight;
+  ctx.beginPath();
+  ctx.ellipse(centerX, pillarTop - tileSize * 0.02, tileSize * 0.36, tileSize * 0.1, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  if (helpers?.registerLayer) {
+    helpers.registerLayer(
+      'fountain-spray',
+      (layerCtx) => {
+        layerCtx.strokeStyle = lightingColor;
+        layerCtx.lineWidth = Math.max(2, tileSize * 0.06);
+        [-tileSize * 0.3, tileSize * 0.3].forEach((offset) => {
+          layerCtx.beginPath();
+          layerCtx.moveTo(centerX + offset, pillarTop + tileSize * 0.05);
+          layerCtx.quadraticCurveTo(
+            centerX + offset * 1.1,
+            pillarTop + tileSize * 0.6,
+            centerX + offset * 0.6,
+            pillarTop + tileSize * 1.2
+          );
+          layerCtx.stroke();
+        });
+      },
+      {
+        width,
+        height,
+        tileSize,
+        anchor: { x: 0.5, y: 1, z: 0 },
+        offset: { z: 0.5 },
+        pixelOffset: { y: -tileSize * 0.4 },
+        alpha: 0.75,
+        order: 14
+      }
+    );
+  }
+};
+
 const drawStonePath = (ctx, { width, height, tileSize, options = {} }) => {
   ctx.fillStyle = options.background ?? '#8B7355';
   ctx.fillRect(0, 0, width * tileSize, height * tileSize);
@@ -952,6 +1392,12 @@ const BUILTIN_SPRITE_GENERATORS = {
   agavePlant: drawAgavePlant,
   palmPlant: drawPalmPlant,
   sansevieriaPlant: drawSansevieriaPlant,
+  workspaceDesk: drawWorkspaceDesk,
+  collabChairs: drawCollabChairs,
+  livingRoomLamp: drawLivingRoomLamp,
+  loungePlant: drawLoungePlant,
+  outdoorTree: drawOutdoorTree,
+  decorativeFountain: drawDecorativeFountain,
   stonePath: drawStonePath,
   tree: drawTree,
   grass: drawGrass,

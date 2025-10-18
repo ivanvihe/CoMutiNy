@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "label": "Objetos fase 3",
+  "objects": [
+    {
+      "id": "workspace_desk",
+      "definition": "workspace_desk",
+      "palette": "workspaceDesk",
+      "collides": true
+    },
+    {
+      "id": "collab_chairs",
+      "definition": "collab_chairs",
+      "palette": "collabChairs",
+      "collides": true
+    },
+    {
+      "id": "livingroom_lamp",
+      "definition": "livingroom_lamp",
+      "palette": "livingRoomLamp",
+      "collides": true
+    },
+    {
+      "id": "lounge_plant",
+      "definition": "lounge_plant",
+      "palette": "indoorPlant",
+      "collides": false
+    },
+    {
+      "id": "outdoor_tree_large",
+      "definition": "outdoor_tree_large",
+      "palette": "outdoorTree",
+      "collides": true
+    },
+    {
+      "id": "decorative_fountain",
+      "definition": "decorative_fountain",
+      "palette": "decorativeFountain",
+      "collides": true
+    }
+  ]
+}
