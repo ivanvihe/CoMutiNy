@@ -1,7 +1,8 @@
 import 'reflect-metadata';
 import express from 'express';
 import { createServer } from 'http';
-import { Server } from 'colyseus';
+import Colyseus from 'colyseus';
+const { Server } = Colyseus;
 import authRouter from './auth/routes.js';
 import { WorldRoom } from './rooms/world.room.js';
 import { createDatabaseConnection } from './database/index.js';
