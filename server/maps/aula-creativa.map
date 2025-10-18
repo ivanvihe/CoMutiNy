@@ -6,5 +6,6 @@ dimensions: 28x36
 starting_point: 10x18
 border colour: #5e35b1
 floor colour: #d1c4e9
+ambient sound: workshop-chatter
 door in: 2x18 -> comunidad-inicial
 door out: 1x18 -> comunidad-inicial@25x14

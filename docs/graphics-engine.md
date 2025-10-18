@@ -68,6 +68,12 @@ Los mapas residen en `client/src/game/maps.js` (y se exportan a `config/maps.jso
 
 Para añadir nuevas animaciones consulta la guía en `docs/testing/multiplayer.md`. Si cambias las dimensiones de los sprites, ajusta también la configuración `sprites` al crear el motor.
 
+## Texturas continuas y paisajes sonoros
+
+- `IsometricEngine` mantiene una caché en memoria para los sprites generados por Canvas (`spriteAssetCache`). Las capas producidas por `createSpriteCanvas` se reutilizan entre objetos con la misma configuración, evitando regenerarlas en cada cambio de zoom y reduciendo picos de CPU en escenas con texturas continuas.【F:client/src/game/isometricEngine.js†L35-L111,L1506-L1575】
+- Los mapas pueden declarar una ambientación sonora mediante las claves `soundscape`, `ambient sound` o `soundtrack` en la sección de metadatos (`.map`). El parser la normaliza y la expone en `theme.soundscape`, lo que permite activar el paisaje sonoro correcto en el cliente sin lógica adicional.【F:client/src/game/map/parser.js†L848-L878】
+- `MapViewport` añade el atributo `data-soundscape` al canvas principal. Las pruebas end-to-end lo consultan durante los recorridos de mapas para asegurar que el HUD refleja la pista sonora asociada al escenario activo.【F:client/src/components/MapViewport.jsx†L280-L310】
+
 ## Requisitos de tilesets y sprites
 
 1. **Tileset**

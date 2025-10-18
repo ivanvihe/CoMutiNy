@@ -255,6 +255,23 @@ export default function MapViewport({ onOpenSettings } = {}) {
     };
   }, [currentMap]);
 
+  const soundscapeId = useMemo(() => {
+    const themeSound =
+      typeof currentMap?.theme?.soundscape === 'string'
+        ? currentMap.theme.soundscape.trim()
+        : typeof currentMap?.theme?.ambientSound === 'string'
+          ? currentMap.theme.ambientSound.trim()
+          : typeof currentMap?.theme?.soundtrack === 'string'
+            ? currentMap.theme.soundtrack.trim()
+            : null;
+    const fallbackSound =
+      typeof currentMap?.soundscape === 'string'
+        ? currentMap.soundscape.trim()
+        : null;
+    const candidate = themeSound && themeSound.length ? themeSound : fallbackSound;
+    return candidate && candidate.length ? candidate : null;
+  }, [currentMap]);
+
   useEffect(() => {
     const engine = engineRef.current;
     if (!engine) {
@@ -453,6 +470,7 @@ export default function MapViewport({ onOpenSettings } = {}) {
         data-overlay-count={layerDiagnostics.overlayLayers}
         data-solid-count={layerDiagnostics.solidObjects}
         data-max-volume-height={layerDiagnostics.maxVolumeHeight.toFixed(2)}
+        data-soundscape={soundscapeId ?? undefined}
       />
 
       <Topbar

@@ -6,5 +6,6 @@ dimensions: 28x28
 starting_point: 14x14
 border colour: black
 floor colour: #8faefc
+ambient sound: plaza-bustle
 door in: 2x14 -> laboratorio-maker; 25x14 -> aula-creativa; 14x25 -> jardin-urbano
 door out: 1x14 -> laboratorio-maker@20x2; 27x14 -> aula-creativa@2x18; 14x27 -> jardin-urbano@2x20

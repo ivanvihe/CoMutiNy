@@ -5,6 +5,7 @@ description: Zona verde con senderos curvos, estaciones creativas y acceso a tal
 dimensions: 24x18
 starting_point: 12x14
 border colour: #2E7D32
+ambient sound: park-breeze
 door in: 23x9 -> comunidad-inicial
 door out: 24x9 -> comunidad-inicial@4x14
 

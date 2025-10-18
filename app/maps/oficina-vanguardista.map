@@ -5,6 +5,7 @@ description: Planta abierta con espacios de colaboración y vegetación interior
 dimensions: 20x16
 starting_point: 10x12
 border colour: #455A64
+ambient sound: office-soft
 door in: 2x8 -> comunidad-inicial
 door out: 1x8 -> comunidad-inicial@20x14
 

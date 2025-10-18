@@ -1,4 +1,5 @@
 floor colour: #eceff1
+ambient sound: sandbox-drones
 
 [tiles]
 . = floor; name=Suelo experimental; color=#9db4ff; transparent=true

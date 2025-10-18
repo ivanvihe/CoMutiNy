@@ -863,6 +863,16 @@ export const parseMapDefinition = (rawContents, { sourcePath = null } = {}) => {
     tileTypeMap[key] = payload;
   });
 
+  const rawSoundscape =
+    metadata.soundscape ?? metadata.ambientSound ?? metadata.soundtrack ?? metadata.sound ?? null;
+  const soundscape =
+    typeof rawSoundscape === 'string' && rawSoundscape.trim() ? rawSoundscape.trim() : null;
+
+  const theme = {
+    borderColour: metadata.borderColour ?? null,
+    ...(soundscape ? { soundscape } : {})
+  };
+
   return {
     id,
     name: title,
@@ -875,7 +885,7 @@ export const parseMapDefinition = (rawContents, { sourcePath = null } = {}) => {
     objectLayers,
     doors,
     portals: [],
-    theme: { borderColour: metadata.borderColour ?? null },
+    theme,
     sourcePath: sourcePath ?? fileName,
     tileTypes: tileTypeMap,
     layers,
