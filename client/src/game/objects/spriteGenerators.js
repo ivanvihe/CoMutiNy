@@ -1386,6 +1386,284 @@ const drawObservationTower = (ctx, { width, height, tileSize, options = {} }, he
   }
 };
 
+const drawStreetLamp = (ctx, { width, height, tileSize, options = {} }, helpers = null) => {
+  const pixelWidth = width * tileSize;
+  const pixelHeight = height * tileSize;
+  const poleColor = options.poleColor ?? '#546e7a';
+  const poleHighlight = options.poleHighlight ?? '#90a4ae';
+  const baseColor = options.baseColor ?? '#263238';
+  const lampColor = options.lampColor ?? '#ffe082';
+  const glowColor = options.glowColor ?? 'rgba(255, 224, 130, 0.65)';
+
+  helpers?.setVolume?.({ height: Math.max(height * 2.4, 1.9), anchor: { x: 0.5, y: 1, z: 0 } });
+
+  registerShadowLayer(helpers, {
+    id: 'street-lamp-shadow',
+    width,
+    height,
+    tileSize,
+    color: 'rgba(0, 0, 0, 0.28)',
+    radiusX: (pixelWidth * 0.45) / 2,
+    radiusY: tileSize * 0.18,
+    centerYOffset: 0.1,
+    pixelOffsetY: -tileSize * 0.1,
+    alpha: 0.8,
+    order: -20,
+    offset: { z: -0.06 }
+  });
+
+  const baseWidth = pixelWidth * 0.45;
+  const baseHeight = tileSize * 0.22;
+  const baseX = (pixelWidth - baseWidth) / 2;
+  const baseY = pixelHeight - baseHeight;
+
+  ctx.fillStyle = baseColor;
+  ctx.beginPath();
+  ctx.roundRect(baseX, baseY, baseWidth, baseHeight, baseHeight * 0.35);
+  ctx.fill();
+
+  const poleWidth = Math.max(tileSize * 0.14, 6);
+  const poleX = (pixelWidth - poleWidth) / 2;
+  const poleTop = pixelHeight - baseHeight - tileSize * 1.6;
+
+  const gradient = ctx.createLinearGradient(poleX, poleTop, poleX + poleWidth, poleTop);
+  gradient.addColorStop(0, poleHighlight);
+  gradient.addColorStop(0.4, poleColor);
+  gradient.addColorStop(1, poleColor);
+
+  ctx.fillStyle = gradient;
+  ctx.fillRect(poleX, poleTop, poleWidth, tileSize * 1.6);
+
+  const housingWidth = poleWidth * 2.1;
+  const housingHeight = tileSize * 0.45;
+  const housingX = (pixelWidth - housingWidth) / 2;
+  const housingY = poleTop - housingHeight * 0.85;
+
+  ctx.fillStyle = poleColor;
+  ctx.beginPath();
+  ctx.roundRect(housingX, housingY, housingWidth, housingHeight, housingHeight * 0.4);
+  ctx.fill();
+
+  ctx.fillStyle = lampColor;
+  ctx.beginPath();
+  ctx.roundRect(
+    housingX + housingWidth * 0.12,
+    housingY + housingHeight * 0.18,
+    housingWidth * 0.76,
+    housingHeight * 0.58,
+    housingHeight * 0.2
+  );
+  ctx.fill();
+
+  if (helpers?.registerLayer) {
+    helpers.registerLayer(
+      'street-lamp-glow',
+      (layerCtx) => {
+        const glowRadius = housingWidth * 0.75;
+        const glowGradient = layerCtx.createRadialGradient(
+          pixelWidth / 2,
+          housingY + housingHeight / 2,
+          glowRadius * 0.25,
+          pixelWidth / 2,
+          housingY + housingHeight / 2,
+          glowRadius
+        );
+        glowGradient.addColorStop(0, glowColor);
+        glowGradient.addColorStop(1, 'rgba(255, 224, 130, 0)');
+        layerCtx.fillStyle = glowGradient;
+        layerCtx.fillRect(0, 0, pixelWidth, Math.max(tileSize * 2, pixelHeight));
+      },
+      {
+        width,
+        height: Math.max(1, height * 2),
+        anchor: { x: 0.5, y: 1, z: 0 },
+        offset: { z: 0.8 },
+        pixelOffset: { y: -pixelHeight * 1.35 },
+        alpha: 0.75,
+        order: 22
+      }
+    );
+  }
+};
+
+const drawStreetBench = (ctx, { width, height, tileSize, options = {} }, helpers = null) => {
+  const pixelWidth = width * tileSize;
+  const seatColor = options.seatColor ?? '#8d6e63';
+  const backColor = options.backColor ?? '#a1887f';
+  const frameColor = options.frameColor ?? '#4e342e';
+  const accentColor = options.accentColor ?? '#d7ccc8';
+
+  helpers?.setVolume?.({ height: Math.max(height * 1.1, 1.1), anchor: { x: 0.5, y: 1, z: 0 } });
+
+  registerShadowLayer(helpers, {
+    id: 'street-bench-shadow',
+    width,
+    height,
+    tileSize,
+    color: 'rgba(0, 0, 0, 0.26)',
+    radiusX: (pixelWidth * 0.9) / 2,
+    radiusY: tileSize * 0.16,
+    centerYOffset: 0.12,
+    pixelOffsetY: -tileSize * 0.08,
+    alpha: 0.78,
+    order: -18,
+    offset: { z: -0.05 }
+  });
+
+  const seatHeight = tileSize * 0.28;
+  const seatY = tileSize * 0.65;
+  ctx.fillStyle = seatColor;
+  ctx.fillRect(tileSize * 0.1, seatY, pixelWidth - tileSize * 0.2, seatHeight);
+
+  ctx.fillStyle = accentColor;
+  for (let i = 0; i < 4; i += 1) {
+    const slatY = seatY + seatHeight * 0.2 + (seatHeight * 0.16 * i);
+    ctx.fillRect(tileSize * 0.12, slatY, pixelWidth - tileSize * 0.24, seatHeight * 0.08);
+  }
+
+  const backHeight = tileSize * 0.35;
+  const backY = seatY - backHeight - tileSize * 0.05;
+  ctx.fillStyle = backColor;
+  ctx.fillRect(tileSize * 0.1, backY, pixelWidth - tileSize * 0.2, backHeight);
+
+  ctx.fillStyle = accentColor;
+  for (let i = 0; i < 3; i += 1) {
+    const slatY = backY + backHeight * 0.2 + (backHeight * 0.22 * i);
+    ctx.fillRect(tileSize * 0.12, slatY, pixelWidth - tileSize * 0.24, backHeight * 0.08);
+  }
+
+  ctx.fillStyle = frameColor;
+  const legWidth = Math.max(tileSize * 0.12, 6);
+  const legHeight = tileSize * 0.42;
+  [tileSize * 0.18, pixelWidth - tileSize * 0.18 - legWidth].forEach((x) => {
+    ctx.fillRect(x, seatY + seatHeight - tileSize * 0.05, legWidth, legHeight);
+  });
+};
+
+const drawStreetPlanter = (ctx, { width, height, tileSize, options = {} }, helpers = null) => {
+  const pixelWidth = width * tileSize;
+  const planterColor = options.planterColor ?? '#4e5b3c';
+  const planterHighlight = options.planterHighlight ?? '#7cb342';
+  const soilColor = options.soilColor ?? '#5d4037';
+  const foliageColors = options.foliageColors ?? ['#8bc34a', '#7cb342', '#aed581'];
+
+  helpers?.setVolume?.({ height: Math.max(height * 1.25, 1.2), anchor: { x: 0.5, y: 1, z: 0 } });
+
+  registerShadowLayer(helpers, {
+    id: 'street-planter-shadow',
+    width,
+    height,
+    tileSize,
+    color: 'rgba(0, 0, 0, 0.25)',
+    radiusX: (pixelWidth * 0.8) / 2,
+    radiusY: tileSize * 0.18,
+    centerYOffset: 0.14,
+    pixelOffsetY: -tileSize * 0.08,
+    alpha: 0.72,
+    order: -16,
+    offset: { z: -0.05 }
+  });
+
+  const planterHeight = tileSize * 0.42;
+  const planterY = tileSize * 0.78;
+  ctx.fillStyle = planterColor;
+  ctx.beginPath();
+  ctx.roundRect(tileSize * 0.12, planterY, pixelWidth - tileSize * 0.24, planterHeight, planterHeight * 0.28);
+  ctx.fill();
+
+  ctx.strokeStyle = planterHighlight;
+  ctx.lineWidth = 2;
+  ctx.strokeRect(tileSize * 0.12, planterY, pixelWidth - tileSize * 0.24, planterHeight);
+
+  ctx.fillStyle = soilColor;
+  ctx.beginPath();
+  ctx.ellipse(pixelWidth / 2, planterY, (pixelWidth - tileSize * 0.32) / 2, planterHeight * 0.32, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  const plantBaseY = planterY;
+  foliageColors.forEach((color, index) => {
+    const angleOffset = (index - (foliageColors.length - 1) / 2) * 0.25;
+    const leafHeight = tileSize * (0.9 + index * 0.08);
+    const leafWidth = tileSize * 0.35;
+
+    ctx.save();
+    ctx.translate(pixelWidth / 2 + angleOffset * tileSize * 0.6, plantBaseY);
+    ctx.rotate(angleOffset * 0.8);
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.quadraticCurveTo(leafWidth, -leafHeight * 0.35, 0, -leafHeight);
+    ctx.quadraticCurveTo(-leafWidth, -leafHeight * 0.35, 0, 0);
+    ctx.fill();
+    ctx.restore();
+  });
+};
+
+const drawOfficeStorageUnit = (ctx, { width, height, tileSize, options = {} }, helpers = null) => {
+  const pixelWidth = width * tileSize;
+  const pixelHeight = height * tileSize;
+  const bodyColor = options.bodyColor ?? '#cfd8dc';
+  const sideColor = options.sideColor ?? '#90a4ae';
+  const handleColor = options.handleColor ?? '#37474f';
+  const shelfColor = options.shelfColor ?? '#b0bec5';
+
+  helpers?.setVolume?.({ height: Math.max(height * 1.8, 1.6), anchor: { x: 0.5, y: 1, z: 0 } });
+
+  registerShadowLayer(helpers, {
+    id: 'office-storage-shadow',
+    width,
+    height,
+    tileSize,
+    color: 'rgba(0, 0, 0, 0.24)',
+    radiusX: (pixelWidth * 0.7) / 2,
+    radiusY: tileSize * 0.18,
+    centerYOffset: 0.08,
+    pixelOffsetY: -tileSize * 0.12,
+    alpha: 0.75,
+    order: -18,
+    offset: { z: -0.05 }
+  });
+
+  const cabinetWidth = pixelWidth * 0.82;
+  const cabinetHeight = pixelHeight * 0.85;
+  const cabinetX = (pixelWidth - cabinetWidth) / 2;
+  const cabinetY = pixelHeight - cabinetHeight;
+
+  const gradient = ctx.createLinearGradient(cabinetX, cabinetY, cabinetX + cabinetWidth, cabinetY);
+  gradient.addColorStop(0, sideColor);
+  gradient.addColorStop(0.6, bodyColor);
+  gradient.addColorStop(1, bodyColor);
+
+  ctx.fillStyle = gradient;
+  ctx.fillRect(cabinetX, cabinetY, cabinetWidth, cabinetHeight);
+
+  ctx.strokeStyle = shelfColor;
+  ctx.lineWidth = 2;
+  const shelfCount = 3;
+  for (let i = 1; i <= shelfCount; i += 1) {
+    const y = cabinetY + (cabinetHeight / (shelfCount + 1)) * i;
+    ctx.beginPath();
+    ctx.moveTo(cabinetX + tileSize * 0.1, y);
+    ctx.lineTo(cabinetX + cabinetWidth - tileSize * 0.1, y);
+    ctx.stroke();
+  }
+
+  ctx.fillStyle = handleColor;
+  const handleWidth = tileSize * 0.18;
+  const handleHeight = tileSize * 0.08;
+  [cabinetY + cabinetHeight * 0.35, cabinetY + cabinetHeight * 0.65].forEach((y) => {
+    ctx.beginPath();
+    ctx.roundRect(
+      cabinetX + cabinetWidth / 2 - handleWidth / 2,
+      y,
+      handleWidth,
+      handleHeight,
+      handleHeight / 2
+    );
+    ctx.fill();
+  });
+};
+
 const BUILTIN_SPRITE_GENERATORS = {
   brickWall: drawBrickWall,
   monstera: drawMonstera,
@@ -1407,7 +1685,11 @@ const BUILTIN_SPRITE_GENERATORS = {
   terminalPanel: drawTerminalPanel,
   communityDoor: drawCommunityDoor,
   tieredPlatform: drawTieredPlatform,
-  observationTower: drawObservationTower
+  observationTower: drawObservationTower,
+  streetLamp: drawStreetLamp,
+  streetBench: drawStreetBench,
+  streetPlanter: drawStreetPlanter,
+  officeStorageUnit: drawOfficeStorageUnit
 };
 
 const CUSTOM_SPRITE_GENERATORS = new Map();

@@ -39,6 +39,7 @@ const HELLO_WORLD = Object.freeze({
   description: '',
   size: DEFAULT_SIZE,
   spawn: DEFAULT_SPAWN,
+  spawnPoints: {},
   biome: 'Comunidad',
   blockedAreas: [],
   objects: [],
@@ -295,6 +296,29 @@ const cloneMapCollection = (collection) => {
   })
 }
 
+const cloneSpawnPoints = (spawnPoints, size = DEFAULT_SIZE) => {
+  if (!spawnPoints || typeof spawnPoints !== 'object' || Array.isArray(spawnPoints)) {
+    return {}
+  }
+
+  const sanitizedSize = sanitizeSize(size, DEFAULT_SIZE)
+  const result = {}
+
+  for (const [key, value] of Object.entries(spawnPoints)) {
+    if (typeof key !== 'string' || !key.trim()) {
+      continue
+    }
+    const coordinate = value && typeof value === 'object' ? value : null
+    if (!coordinate) {
+      continue
+    }
+    const sanitized = sanitizeSpawn(coordinate, sanitizedSize, coordinate)
+    result[key.trim()] = { x: sanitized.x, y: sanitized.y }
+  }
+
+  return result
+}
+
 const sanitizeObjectInteraction = (interaction, { title, description }) => {
   if (!interaction || typeof interaction !== 'object') {
     return {
@@ -547,22 +571,26 @@ const cloneTheme = (theme, fallback = DEFAULT_THEME) => {
   return { ...fallback, ...theme }
 }
 
-const cloneWorld = (world = HELLO_WORLD) => ({
-  id: world.id,
-  name: world.name,
-  description: world.description,
-  size: sanitizeSize(world.size, DEFAULT_SIZE),
-  spawn: sanitizeSpawn(world.spawn, world.size ?? DEFAULT_SIZE, DEFAULT_SPAWN),
-  biome: typeof world.biome === 'string' ? world.biome : HELLO_WORLD.biome,
-  blockedAreas: cloneMapCollection(world.blockedAreas),
-  objects: cloneMapCollection(world.objects),
-  portals: cloneMapCollection(world.portals),
-  theme: cloneTheme(world.theme, DEFAULT_THEME),
-  sourcePath:
-    typeof world.sourcePath === 'string' && world.sourcePath.trim()
-      ? world.sourcePath.trim()
-      : HELLO_WORLD.sourcePath ?? null
-})
+const cloneWorld = (world = HELLO_WORLD) => {
+  const size = sanitizeSize(world.size, DEFAULT_SIZE)
+  return {
+    id: world.id,
+    name: world.name,
+    description: world.description,
+    size,
+    spawn: sanitizeSpawn(world.spawn, size, DEFAULT_SPAWN),
+    spawnPoints: cloneSpawnPoints(world.spawnPoints, size),
+    biome: typeof world.biome === 'string' ? world.biome : HELLO_WORLD.biome,
+    blockedAreas: cloneMapCollection(world.blockedAreas),
+    objects: cloneMapCollection(world.objects),
+    portals: cloneMapCollection(world.portals),
+    theme: cloneTheme(world.theme, DEFAULT_THEME),
+    sourcePath:
+      typeof world.sourcePath === 'string' && world.sourcePath.trim()
+        ? world.sourcePath.trim()
+        : HELLO_WORLD.sourcePath ?? null
+  }
+}
 
 class WorldState {
   constructor () {
@@ -603,6 +631,11 @@ class WorldState {
 
     const size = sanitizeSize(world.size, current.size)
     const spawn = sanitizeSpawn(world.spawn, size, current.spawn)
+    const spawnPointsSource =
+      world.spawnPoints && typeof world.spawnPoints === 'object' && !Array.isArray(world.spawnPoints)
+        ? world.spawnPoints
+        : current.spawnPoints
+    const spawnPoints = cloneSpawnPoints(spawnPointsSource, size)
 
     const biome = typeof world.biome === 'string' ? world.biome : current.biome
     const blockedAreas = cloneMapCollection(Array.isArray(world.blockedAreas) ? world.blockedAreas : current.blockedAreas)
@@ -621,6 +654,7 @@ class WorldState {
       description,
       size,
       spawn,
+      spawnPoints,
       biome,
       blockedAreas,
       objects: sanitizedObjects,

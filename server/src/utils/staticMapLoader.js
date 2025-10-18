@@ -2,6 +2,8 @@ import { promises as fs } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
+import loadTiledMapDefinition from '../world/mapLoader.js'
+
 const moduleDir = path.dirname(fileURLToPath(import.meta.url))
 
 const parseDirectoryList = (value) => {
@@ -25,10 +27,11 @@ const ENVIRONMENT_MAP_DIRECTORIES = parseDirectoryList(
 
 const DEFAULT_MAP_DIRECTORIES = [
   path.resolve(moduleDir, '..', 'maps'),
+  path.resolve(process.cwd(), 'server', 'content', 'maps'),
   path.resolve(process.cwd(), 'server', 'maps'),
   path.resolve(process.cwd(), 'maps')
 ]
-const MAP_FILE_EXTENSION = '.map'
+const MAP_FILE_EXTENSIONS = ['.map', '.json']
 
 const toCamelCase = (rawKey = '') =>
   rawKey
@@ -876,9 +879,34 @@ export const loadStaticMapDefinitions = async (directory) => {
 
   const definitions = await Promise.all(
     entries
-      .filter((entry) => entry.isFile() && entry.name.endsWith(MAP_FILE_EXTENSION))
+      .filter((entry) => {
+        if (!entry.isFile()) {
+          return false
+        }
+        const extension = path.extname(entry.name).toLowerCase()
+        return MAP_FILE_EXTENSIONS.includes(extension)
+      })
       .map(async (entry) => {
         const filePath = path.join(resolvedDirectory, entry.name)
+        const extension = path.extname(entry.name).toLowerCase()
+
+        if (extension === '.json') {
+          try {
+            const definition = await loadTiledMapDefinition(filePath)
+            const objectCount = Array.isArray(definition.objects) ? definition.objects.length : 0
+            const layerCount = Array.isArray(definition.objectLayers) ? definition.objectLayers.length : 0
+            console.info(
+              `[maps] Parsed tiled map "${definition.name}" (${definition.sourcePath}) ` +
+                `with size ${definition.size.width}x${definition.size.height}, ` +
+                `${objectCount} objects and ${layerCount} object layers`
+            )
+            return definition
+          } catch (error) {
+            console.error(`[maps] Failed to parse tiled map ${entry.name}`, error)
+            return null
+          }
+        }
+
         const rawContents = await fs.readFile(filePath, 'utf-8')
         const definition = normaliseMapDefinition(filePath, rawContents)
         const objectCount = Array.isArray(definition.objects) ? definition.objects.length : 0
@@ -892,7 +920,9 @@ export const loadStaticMapDefinitions = async (directory) => {
       })
   )
 
-  definitions.sort((a, b) => {
+  const normalisedDefinitions = definitions.filter(Boolean)
+
+  normalisedDefinitions.sort((a, b) => {
     const aIsInit = /(^|\/)init\.map$/i.test(a.sourcePath ?? '')
     const bIsInit = /(^|\/)init\.map$/i.test(b.sourcePath ?? '')
     if (aIsInit && !bIsInit) {
@@ -904,7 +934,7 @@ export const loadStaticMapDefinitions = async (directory) => {
     return a.name.localeCompare(b.name)
   })
 
-  return definitions
+  return normalisedDefinitions
 }
 
 export default loadStaticMapDefinitions
