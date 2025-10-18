@@ -4,7 +4,11 @@ import MapViewport from '../MapViewport.jsx';
 import ChatPanel from '../Chat/ChatPanel.jsx';
 import SettingsModal from '../SettingsModal.tsx';
 import { useWorld } from '../../context/WorldContext.jsx';
+import { useMap } from '../../context/MapContext.jsx';
+import gameState from '../../game/state/index.js';
 import phaserConfig from '../../phaser/config.js';
+import PreloadScene from '../../phaser/scenes/PreloadScene.js';
+import GameScene from '../../phaser/scenes/GameScene.js';
 import '../../styles/game.css';
 
 export default function GameView() {
@@ -12,6 +16,15 @@ export default function GameView() {
   const gameContainerRef = useRef(null);
   const gameRef = useRef(null);
   const { connected, connectionStatus, players, localPlayerId, profile, getSocket } = useWorld();
+  const { maps, currentMap } = useMap();
+  const previousMapIdRef = useRef(null);
+  const sceneInitializationRef = useRef({ socket: null, currentMap: null });
+
+  const socket = typeof getSocket === 'function' ? getSocket() : null;
+  sceneInitializationRef.current = {
+    socket,
+    currentMap: currentMap ?? null
+  };
 
   const handleOpenSettings = useCallback(() => {
     setSettingsOpen(true);
@@ -29,11 +42,26 @@ export default function GameView() {
 
     const config = {
       ...phaserConfig,
-      parent: container
+      parent: container,
+      scene: []
     };
 
     const game = new Phaser.Game(config);
     gameRef.current = game;
+
+    const initializationData = sceneInitializationRef.current ?? {};
+    const scenes = [
+      { key: 'GameScene', Scene: GameScene, autoStart: false },
+      { key: 'PreloadScene', Scene: PreloadScene, autoStart: true }
+    ];
+
+    scenes.forEach(({ key, Scene, autoStart }) => {
+      const instance = new Scene();
+      game.scene.add(key, instance, autoStart, {
+        socket: initializationData.socket ?? null,
+        currentMap: initializationData.currentMap ?? null
+      });
+    });
 
     return () => {
       game.destroy(true);
@@ -67,13 +95,44 @@ export default function GameView() {
       }
     };
 
-    const socket = typeof getSocket === 'function' ? getSocket() : null;
-
     assignIfChanged('network:socket', socket);
     assignIfChanged('player:localId', localPlayerId ?? null);
     assignIfChanged('player:profile', profile ?? null);
     assignIfChanged('world:players', Array.isArray(players) ? players : []);
-  }, [getSocket, localPlayerId, players, profile, connectionStatus, connected]);
+  }, [socket, localPlayerId, players, profile, connectionStatus, connected]);
+
+  useEffect(() => {
+    if (!Array.isArray(maps) || maps.length === 0) {
+      return;
+    }
+
+    maps.forEach((map) => {
+      if (map && typeof map === 'object') {
+        gameState.registerMap(map);
+      }
+    });
+  }, [maps]);
+
+  useEffect(() => {
+    const game = gameRef.current;
+    if (game && game.registry.get('world:currentMap') !== (currentMap ?? null)) {
+      game.registry.set('world:currentMap', currentMap ?? null);
+    }
+
+    const mapId = currentMap?.id ?? null;
+    if (mapId === previousMapIdRef.current) {
+      return;
+    }
+
+    previousMapIdRef.current = mapId;
+
+    if (!currentMap) {
+      return;
+    }
+
+    gameState.registerMap(currentMap);
+    gameState.handleMapChange({ definition: currentMap }).catch(() => {});
+  }, [currentMap]);
 
   return (
     <div className="game-view">
