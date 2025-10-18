@@ -1,0 +1,21 @@
+{
+  "id": "plant_agave",
+  "type": "decor",
+  "name": "Agave en maceta",
+  "description": "Una planta suculenta de hojas simétricas que aporta frescura al espacio.",
+  "appearance": {
+    "generator": "agavePlant",
+    "width": 1,
+    "height": 1,
+    "tileSize": 16,
+    "anchor": { "x": 0.5, "y": 1, "z": 0 },
+    "options": {
+      "leafColors": ["#3b8d58", "#2f7246", "#4ea06a"],
+      "potColor": "#7c6555",
+      "rimColor": "#b39b8a"
+    }
+  },
+  "metadata": {
+    "tags": ["decorative", "plant", "indoor"]
+  }
+}

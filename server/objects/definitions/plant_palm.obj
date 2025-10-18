@@ -1,0 +1,22 @@
+{
+  "id": "plant_palm",
+  "type": "decor",
+  "name": "Palmera interior",
+  "description": "Palmera estilizada en maceta metálica, ideal para zonas comunes luminosas.",
+  "appearance": {
+    "generator": "palmPlant",
+    "width": 1,
+    "height": 1,
+    "tileSize": 16,
+    "anchor": { "x": 0.5, "y": 1, "z": 0 },
+    "options": {
+      "potColor": "#5e6a71",
+      "potHighlight": "#90a4ae",
+      "frondColor": "#5cab68",
+      "frondHighlight": "#7fce8c"
+    }
+  },
+  "metadata": {
+    "tags": ["decorative", "plant", "tropical"]
+  }
+}

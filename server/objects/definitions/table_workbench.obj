@@ -1,0 +1,21 @@
+{
+  "id": "table_workbench",
+  "type": "furniture",
+  "name": "Mesa de trabajo modular",
+  "description": "Banco robusto pensado para proyectos colaborativos y prototipado.",
+  "appearance": {
+    "generator": "workbenchTable",
+    "width": 2,
+    "height": 1,
+    "tileSize": 16,
+    "anchor": { "x": 0.5, "y": 1, "z": 0 },
+    "options": {
+      "surfaceColor": "#d1a97c",
+      "frameColor": "#6d4c41",
+      "accentColor": "#8d6e63"
+    }
+  },
+  "metadata": {
+    "tags": ["decorative", "furniture", "workbench"]
+  }
+}

@@ -13,29 +13,57 @@ const withRandom = (seed) => {
 };
 
 const drawBrickWall = (ctx, { width, height, tileSize, options = {} }) => {
-  const brickW = tileSize;
-  const brickH = tileSize / 2;
+  const pixelWidth = width * tileSize;
+  const pixelHeight = height * tileSize;
+  const brickWidth = tileSize;
+  const brickHeight = Math.max(tileSize / 2, 8);
+  const mortarColor = options.mortarColor ?? '#d4c2b5';
   const colors = options.colors ?? ['#8B4513', '#A0522D', '#9B5523', '#8A4513'];
+  const strokeColor = options.strokeColor ?? '#5D3A1A';
+  const highlightColor = options.highlightColor ?? 'rgba(255, 255, 255, 0.08)';
+  const shadowColor = options.shadowColor ?? 'rgba(0, 0, 0, 0.12)';
   const random = withRandom(options.seed);
 
-  for (let y = 0; y < height * 2; y += 1) {
-    for (let x = 0; x < width; x += 1) {
-      const offset = y % 2 === 0 ? 0 : brickW / 2;
-      const baseX = x * brickW + offset;
-      const baseY = (y * brickH) / 2;
+  ctx.fillStyle = mortarColor;
+  ctx.fillRect(0, 0, pixelWidth, pixelHeight);
+
+  const rows = Math.ceil(pixelHeight / brickHeight);
+  const columns = Math.ceil(pixelWidth / brickWidth) + 1;
+
+  for (let row = 0; row <= rows; row += 1) {
+    const y = row * brickHeight;
+    const offset = row % 2 === 0 ? 0 : brickWidth / 2;
+
+    for (let col = -1; col <= columns; col += 1) {
+      const x = col * brickWidth + offset;
+      if (x >= pixelWidth || x + brickWidth <= -brickWidth) {
+        continue;
+      }
 
       const colorIndex = Math.floor(random() * colors.length);
-      ctx.fillStyle = colors[(colorIndex + x + y) % colors.length];
-      ctx.fillRect(baseX, baseY, brickW - 2, brickH - 2);
+      ctx.fillStyle = colors[(colorIndex + row + col + colors.length) % colors.length];
+      ctx.beginPath();
+      ctx.rect(x + 0.5, y + 0.5, brickWidth - 1, brickHeight - 1);
+      ctx.fill();
 
-      ctx.fillStyle = 'rgba(0,0,0,0.2)';
-      ctx.fillRect(baseX, baseY + brickH - 4, brickW - 2, 2);
+      ctx.fillStyle = shadowColor;
+      ctx.fillRect(x + 0.5, y + brickHeight - 4, brickWidth - 1, 2.5);
 
-      ctx.strokeStyle = options.strokeColor ?? '#5D3A1A';
+      ctx.fillStyle = highlightColor;
+      ctx.fillRect(x + 1, y + 1, brickWidth - 2, 1.5);
+
+      ctx.strokeStyle = strokeColor;
       ctx.lineWidth = 1;
-      ctx.strokeRect(baseX + 0.5, baseY + 0.5, brickW - 3, brickH - 3);
+      ctx.strokeRect(x + 0.5, y + 0.5, brickWidth - 1, brickHeight - 1);
     }
   }
+
+  const vignette = ctx.createLinearGradient(0, 0, 0, pixelHeight);
+  vignette.addColorStop(0, 'rgba(255, 255, 255, 0.08)');
+  vignette.addColorStop(0.5, 'rgba(0, 0, 0, 0)');
+  vignette.addColorStop(1, 'rgba(0, 0, 0, 0.12)');
+  ctx.fillStyle = vignette;
+  ctx.fillRect(0, 0, pixelWidth, pixelHeight);
 };
 
 const drawMonstera = (ctx, { width, height, tileSize, options = {} }, helpers = null) => {
@@ -112,6 +140,252 @@ const drawMonstera = (ctx, { width, height, tileSize, options = {} }, helpers = 
   drawLeaf(centerX + 15, tileSize * 0.8, 0.9, 0.4);
   drawLeaf(centerX - 12, tileSize * 1.2, 0.7, -0.5);
   drawLeaf(centerX + 10, tileSize * 1.5, 0.85, 0.2);
+};
+
+const drawAgavePlant = (ctx, { width, height, tileSize, options = {} }, helpers = null) => {
+  const pixelWidth = width * tileSize;
+  const pixelHeight = height * tileSize;
+  const centerX = pixelWidth / 2;
+  const potWidth = tileSize * 0.8;
+  const potHeight = tileSize * 0.42;
+  const potColor = options.potColor ?? '#7c6555';
+  const rimColor = options.rimColor ?? '#b39b8a';
+  const leafColors = options.leafColors ?? ['#3b8d58', '#2f7246', '#4ea06a'];
+  const veinColor = options.veinColor ?? 'rgba(255,255,255,0.28)';
+  const random = withRandom(options.seed);
+
+  helpers?.registerLayer?.(
+    'shadow',
+    (shadowCtx) => {
+      shadowCtx.fillStyle = 'rgba(0, 0, 0, 0.25)';
+      shadowCtx.beginPath();
+      shadowCtx.ellipse(centerX, pixelHeight - tileSize * 0.2, potWidth * 0.75, tileSize * 0.22, 0, 0, Math.PI * 2);
+      shadowCtx.fill();
+    },
+    {
+      width,
+      height: Math.min(1, height * 0.6),
+      anchor: { x: 0.5, y: 1, z: 0 },
+      offset: { z: -0.05 },
+      pixelOffset: { y: -tileSize * 0.1 },
+      alpha: 0.7,
+      order: -18
+    }
+  );
+
+  helpers?.setVolume?.({ height: Math.max(height * 1.4, 1.4), anchor: { x: 0.5, y: 1, z: 0 } });
+
+  const potY = pixelHeight - potHeight;
+  ctx.fillStyle = potColor;
+  ctx.beginPath();
+  ctx.roundRect(centerX - potWidth / 2, potY, potWidth, potHeight, potHeight * 0.25);
+  ctx.fill();
+  ctx.strokeStyle = rimColor;
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  ctx.fillStyle = rimColor;
+  ctx.beginPath();
+  ctx.ellipse(centerX, potY, potWidth * 0.52, potHeight * 0.35, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  const leafBaseY = potY + tileSize * 0.1;
+  const leafCount = 9;
+  for (let i = 0; i < leafCount; i += 1) {
+    const angle = (-Math.PI / 2 + (i - (leafCount - 1) / 2) * (Math.PI / (leafCount + 2))) * 0.85;
+    const length = tileSize * (1.2 + random() * 0.4);
+    const widthFactor = tileSize * (0.32 + random() * 0.1);
+    const colorIndex = i % leafColors.length;
+
+    ctx.save();
+    ctx.translate(centerX, leafBaseY);
+    ctx.rotate(angle);
+    ctx.fillStyle = leafColors[colorIndex];
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.quadraticCurveTo(widthFactor, -length * 0.35, 0, -length);
+    ctx.quadraticCurveTo(-widthFactor, -length * 0.35, 0, 0);
+    ctx.fill();
+
+    ctx.strokeStyle = veinColor;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(0, -length);
+    ctx.quadraticCurveTo(widthFactor * 0.1, -length * 0.4, 0, -2);
+    ctx.stroke();
+    ctx.restore();
+  }
+};
+
+const drawPalmPlant = (ctx, { width, height, tileSize, options = {} }, helpers = null) => {
+  const pixelWidth = width * tileSize;
+  const pixelHeight = height * tileSize;
+  const centerX = pixelWidth / 2;
+  const trunkColor = options.trunkColor ?? '#8c5a3b';
+  const trunkShadow = options.trunkShadow ?? '#5c3a27';
+  const frondColor = options.frondColor ?? '#5cab68';
+  const frondHighlight = options.frondHighlight ?? '#7fce8c';
+  const potColor = options.potColor ?? '#5e6a71';
+  const potHighlight = options.potHighlight ?? '#90a4ae';
+  const random = withRandom(options.seed ?? 42);
+
+  helpers?.registerLayer?.(
+    'shadow',
+    (shadowCtx) => {
+      shadowCtx.fillStyle = 'rgba(0, 0, 0, 0.22)';
+      shadowCtx.beginPath();
+      shadowCtx.ellipse(centerX, pixelHeight - tileSize * 0.25, tileSize * 0.6, tileSize * 0.28, 0, 0, Math.PI * 2);
+      shadowCtx.fill();
+    },
+    {
+      width,
+      height: Math.min(1, height * 0.5),
+      anchor: { x: 0.5, y: 1, z: 0 },
+      offset: { z: -0.05 },
+      pixelOffset: { y: -tileSize * 0.15 },
+      alpha: 0.8,
+      order: -16
+    }
+  );
+
+  helpers?.setVolume?.({ height: Math.max(height * 2.2, 1.8), anchor: { x: 0.5, y: 1, z: 0 } });
+
+  const potHeight = tileSize * 0.45;
+  const potWidth = tileSize * 0.9;
+  const potY = pixelHeight - potHeight;
+  ctx.fillStyle = potColor;
+  ctx.beginPath();
+  ctx.roundRect(centerX - potWidth / 2, potY, potWidth, potHeight, potHeight * 0.25);
+  ctx.fill();
+  ctx.strokeStyle = potHighlight;
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  ctx.fillStyle = potHighlight;
+  ctx.beginPath();
+  ctx.ellipse(centerX, potY, potWidth * 0.55, potHeight * 0.35, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  const trunkHeight = tileSize * 1.6;
+  ctx.fillStyle = trunkColor;
+  ctx.beginPath();
+  ctx.moveTo(centerX - tileSize * 0.12, potY);
+  ctx.lineTo(centerX - tileSize * 0.08, potY - trunkHeight);
+  ctx.lineTo(centerX + tileSize * 0.08, potY - trunkHeight);
+  ctx.lineTo(centerX + tileSize * 0.12, potY);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.fillStyle = trunkShadow;
+  ctx.beginPath();
+  ctx.moveTo(centerX + tileSize * 0.02, potY);
+  ctx.lineTo(centerX + tileSize * 0.05, potY - trunkHeight);
+  ctx.lineTo(centerX + tileSize * 0.12, potY - trunkHeight);
+  ctx.lineTo(centerX + tileSize * 0.12, potY);
+  ctx.closePath();
+  ctx.fill();
+
+  const crownY = potY - trunkHeight;
+  const frondCount = 6;
+  for (let i = 0; i < frondCount; i += 1) {
+    const angle = (-Math.PI / 2 + (i * Math.PI) / (frondCount - 1)) * 0.65;
+    const frondLength = tileSize * (1.5 + random() * 0.3);
+    const frondWidth = tileSize * 0.55;
+
+    ctx.save();
+    ctx.translate(centerX, crownY);
+    ctx.rotate(angle);
+    ctx.fillStyle = frondColor;
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.quadraticCurveTo(frondWidth, -frondLength * 0.25, 0, -frondLength);
+    ctx.quadraticCurveTo(-frondWidth, -frondLength * 0.25, 0, 0);
+    ctx.fill();
+
+    ctx.strokeStyle = frondHighlight;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(0, -frondLength);
+    ctx.quadraticCurveTo(frondWidth * 0.15, -frondLength * 0.4, 0, -4);
+    ctx.stroke();
+    ctx.restore();
+  }
+};
+
+const drawSansevieriaPlant = (ctx, { width, height, tileSize, options = {} }, helpers = null) => {
+  const pixelWidth = width * tileSize;
+  const pixelHeight = height * tileSize;
+  const centerX = pixelWidth / 2;
+  const potColor = options.potColor ?? '#5e4538';
+  const potHighlight = options.potHighlight ?? '#8d6e63';
+  const leafDark = options.leafDark ?? '#1f4d35';
+  const leafLight = options.leafLight ?? '#3f8b57';
+  const accent = options.accent ?? '#9ccc65';
+  const random = withRandom(options.seed ?? 7);
+
+  helpers?.registerLayer?.(
+    'shadow',
+    (shadowCtx) => {
+      shadowCtx.fillStyle = 'rgba(0, 0, 0, 0.25)';
+      shadowCtx.beginPath();
+      shadowCtx.ellipse(centerX, pixelHeight - tileSize * 0.18, tileSize * 0.55, tileSize * 0.2, 0, 0, Math.PI * 2);
+      shadowCtx.fill();
+    },
+    {
+      width,
+      height: Math.min(1, height * 0.6),
+      anchor: { x: 0.5, y: 1, z: 0 },
+      offset: { z: -0.05 },
+      pixelOffset: { y: -tileSize * 0.08 },
+      alpha: 0.7,
+      order: -14
+    }
+  );
+
+  helpers?.setVolume?.({ height: Math.max(height * 1.8, 1.6), anchor: { x: 0.5, y: 1, z: 0 } });
+
+  const potHeight = tileSize * 0.4;
+  const potWidth = tileSize * 0.72;
+  const potY = pixelHeight - potHeight;
+  ctx.fillStyle = potColor;
+  ctx.beginPath();
+  ctx.roundRect(centerX - potWidth / 2, potY, potWidth, potHeight, potHeight * 0.2);
+  ctx.fill();
+  ctx.strokeStyle = potHighlight;
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  ctx.fillStyle = potHighlight;
+  ctx.beginPath();
+  ctx.ellipse(centerX, potY, potWidth * 0.5, potHeight * 0.3, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  const leafBaseY = potY + tileSize * 0.05;
+  const leafCount = 7;
+  for (let i = 0; i < leafCount; i += 1) {
+    const offset = (i - (leafCount - 1) / 2) * tileSize * 0.12;
+    const tilt = (i - (leafCount - 1) / 2) * 0.18;
+    const heightMultiplier = 1.3 + random() * 0.4;
+    const leafWidth = tileSize * 0.22;
+
+    ctx.save();
+    ctx.translate(centerX + offset, leafBaseY);
+    ctx.rotate(tilt);
+    ctx.fillStyle = i % 2 === 0 ? leafLight : leafDark;
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.quadraticCurveTo(leafWidth, -tileSize * 0.3 * heightMultiplier, 0, -tileSize * 1.4 * heightMultiplier);
+    ctx.quadraticCurveTo(-leafWidth, -tileSize * 0.3 * heightMultiplier, 0, 0);
+    ctx.fill();
+
+    ctx.strokeStyle = accent;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(0, -tileSize * 1.35 * heightMultiplier);
+    ctx.quadraticCurveTo(leafWidth * 0.2, -tileSize * 0.4 * heightMultiplier, 0, -4);
+    ctx.stroke();
+    ctx.restore();
+  }
 };
 
 const drawStonePath = (ctx, { width, height, tileSize, options = {} }) => {
@@ -264,6 +538,142 @@ const drawChest = (ctx, { width, height, tileSize, options = {} }) => {
   ctx.beginPath();
   ctx.arc(centerX, centerY + 2, 3, 0, Math.PI * 2);
   ctx.fill();
+};
+
+const drawRoundTable = (ctx, { width, height, tileSize, options = {} }, helpers = null) => {
+  const pixelWidth = width * tileSize;
+  const pixelHeight = height * tileSize;
+  const centerX = pixelWidth / 2;
+  const centerY = pixelHeight / 2;
+  const radius = Math.min(pixelWidth, pixelHeight) * 0.45;
+  const topColor = options.topColor ?? '#d7c0a6';
+  const edgeColor = options.edgeColor ?? '#b58a68';
+  const highlight = options.highlight ?? 'rgba(255, 255, 255, 0.22)';
+  const legColor = options.legColor ?? '#5d4037';
+
+  helpers?.registerLayer?.(
+    'shadow',
+    (shadowCtx) => {
+      shadowCtx.fillStyle = 'rgba(0, 0, 0, 0.24)';
+      shadowCtx.beginPath();
+      shadowCtx.ellipse(centerX, pixelHeight - tileSize * 0.15, radius, tileSize * 0.22, 0, 0, Math.PI * 2);
+      shadowCtx.fill();
+    },
+    {
+      width,
+      height: Math.min(1, height * 0.5),
+      anchor: { x: 0.5, y: 1, z: 0 },
+      offset: { z: -0.05 },
+      pixelOffset: { y: -tileSize * 0.08 },
+      alpha: 0.75,
+      order: -22
+    }
+  );
+
+  helpers?.setVolume?.({ height: Math.max(height * 0.8, 0.9), anchor: { x: 0.5, y: 1, z: 0 } });
+
+  const legWidth = Math.max(tileSize * 0.18, 6);
+  const legHeight = tileSize * 0.5;
+  const legOffsetX = radius * 0.55;
+  const drawLeg = (xOffset, yOffset) => {
+    ctx.fillStyle = legColor;
+    ctx.fillRect(centerX + xOffset - legWidth / 2, pixelHeight - legHeight - yOffset, legWidth, legHeight);
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
+    ctx.fillRect(centerX + xOffset - legWidth / 4, pixelHeight - legHeight - yOffset, legWidth / 8, legHeight);
+  };
+
+  drawLeg(-legOffsetX, 0);
+  drawLeg(legOffsetX, 0);
+  drawLeg(-legOffsetX * 0.6, tileSize * 0.25);
+  drawLeg(legOffsetX * 0.6, tileSize * 0.25);
+
+  ctx.fillStyle = edgeColor;
+  ctx.beginPath();
+  ctx.ellipse(centerX, centerY - tileSize * 0.1, radius, radius * 0.68, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = topColor;
+  ctx.beginPath();
+  ctx.ellipse(centerX, centerY - tileSize * 0.12, radius * 0.96, radius * 0.6, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = highlight;
+  ctx.beginPath();
+  ctx.ellipse(centerX - radius * 0.2, centerY - tileSize * 0.22, radius * 0.45, radius * 0.18, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.strokeStyle = 'rgba(93, 64, 55, 0.35)';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.ellipse(centerX, centerY - tileSize * 0.12, radius * 0.96, radius * 0.6, 0, 0, Math.PI * 2);
+  ctx.stroke();
+};
+
+const drawWorkbenchTable = (ctx, { width, height, tileSize, options = {} }, helpers = null) => {
+  const pixelWidth = width * tileSize;
+  const pixelHeight = height * tileSize;
+  const surfaceColor = options.surfaceColor ?? '#d1a97c';
+  const surfaceShadow = options.surfaceShadow ?? '#b58b63';
+  const frameColor = options.frameColor ?? '#6d4c41';
+  const accentColor = options.accentColor ?? '#8d6e63';
+
+  helpers?.registerLayer?.(
+    'shadow',
+    (shadowCtx) => {
+      shadowCtx.fillStyle = 'rgba(0, 0, 0, 0.22)';
+      shadowCtx.beginPath();
+      shadowCtx.ellipse(pixelWidth / 2, pixelHeight - tileSize * 0.12, pixelWidth * 0.45, tileSize * 0.18, 0, 0, Math.PI * 2);
+      shadowCtx.fill();
+    },
+    {
+      width,
+      height: Math.min(1, height * 0.5),
+      anchor: { x: 0.5, y: 1, z: 0 },
+      offset: { z: -0.05 },
+      pixelOffset: { y: -tileSize * 0.05 },
+      alpha: 0.75,
+      order: -20
+    }
+  );
+
+  helpers?.setVolume?.({ height: Math.max(height * 0.9, 1), anchor: { x: 0.5, y: 1, z: 0 } });
+
+  const tabletopHeight = tileSize * 0.28;
+  const tabletopY = pixelHeight - tileSize * 0.75;
+  ctx.fillStyle = surfaceShadow;
+  ctx.fillRect(0, tabletopY + tabletopHeight * 0.25, pixelWidth, tabletopHeight * 0.75);
+
+  ctx.fillStyle = surfaceColor;
+  ctx.fillRect(0, tabletopY, pixelWidth, tabletopHeight);
+
+  ctx.strokeStyle = 'rgba(0, 0, 0, 0.18)';
+  ctx.lineWidth = 1;
+  for (let plank = 1; plank < width * 2; plank += 1) {
+    const x = (plank / (width * 2)) * pixelWidth;
+    ctx.beginPath();
+    ctx.moveTo(x, tabletopY);
+    ctx.lineTo(x, tabletopY + tabletopHeight);
+    ctx.stroke();
+  }
+
+  const legWidth = Math.max(tileSize * 0.18, 6);
+  const legHeight = tileSize * 0.75;
+  const legOffset = tileSize * 0.2;
+  const placeLeg = (x) => {
+    ctx.fillStyle = frameColor;
+    ctx.fillRect(x, pixelHeight - legHeight, legWidth, legHeight);
+    ctx.fillStyle = accentColor;
+    ctx.fillRect(x + legWidth * 0.65, pixelHeight - legHeight, legWidth * 0.2, legHeight);
+  };
+
+  placeLeg(legOffset);
+  placeLeg(pixelWidth - legOffset - legWidth);
+
+  ctx.fillStyle = frameColor;
+  ctx.fillRect(legOffset, pixelHeight - legHeight, pixelWidth - legOffset * 2, tileSize * 0.12);
+
+  ctx.fillStyle = accentColor;
+  ctx.fillRect(legOffset + tileSize * 0.1, pixelHeight - tileSize * 0.3, pixelWidth - (legOffset + tileSize * 0.1) * 2, tileSize * 0.08);
 };
 
 const drawTerminalPanel = (ctx, { width, height, tileSize, options = {} }, helpers = null) => {
@@ -599,10 +1009,15 @@ const drawObservationTower = (ctx, { width, height, tileSize, options = {} }, he
 const BUILTIN_SPRITE_GENERATORS = {
   brickWall: drawBrickWall,
   monstera: drawMonstera,
+  agavePlant: drawAgavePlant,
+  palmPlant: drawPalmPlant,
+  sansevieriaPlant: drawSansevieriaPlant,
   stonePath: drawStonePath,
   tree: drawTree,
   grass: drawGrass,
   chest: drawChest,
+  roundTable: drawRoundTable,
+  workbenchTable: drawWorkbenchTable,
   terminalPanel: drawTerminalPanel,
   communityDoor: drawCommunityDoor,
   tieredPlatform: drawTieredPlatform,

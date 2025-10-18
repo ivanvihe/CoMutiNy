@@ -1,0 +1,29 @@
+{
+  "id": "storage_chest",
+  "type": "interactive",
+  "name": "Cofre de almacenamiento",
+  "description": "Un cofre robusto para guardar prototipos y herramientas valiosas.",
+  "appearance": {
+    "generator": "chest",
+    "width": 1,
+    "height": 1,
+    "tileSize": 16,
+    "anchor": { "x": 0.5, "y": 1, "z": 0 },
+    "options": {
+      "baseColor": "#8b6914",
+      "lidColor": "#9b7914",
+      "metalColor": "#4a4a4a",
+      "lockColor": "#ffd700"
+    }
+  },
+  "interaction": {
+    "type": "message",
+    "title": "Cofre de almacenamiento",
+    "description": "Contiene recursos comunitarios, mantenlo organizado.",
+    "message": "El cofre está bien cerrado. Consulta al equipo para usar su contenido."
+  },
+  "metadata": {
+    "tags": ["decorative", "storage"],
+    "capacity": 0
+  }
+}
