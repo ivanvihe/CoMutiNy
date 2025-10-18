@@ -308,9 +308,25 @@ export function WorldProvider({ children }) {
           return;
         }
 
-        const payload = await response.json();
+        const contentType = response.headers.get('content-type');
+        if (!contentType || !contentType.toLowerCase().includes('json')) {
+          console.warn('Respuesta inesperada al consultar /auth/me. Se esperaba JSON.', contentType);
+          return;
+        }
+
+        let payload = null;
+        try {
+          payload = await response.json();
+        } catch (parseError) {
+          console.warn('No se pudo interpretar la respuesta de /auth/me como JSON.', parseError);
+          return;
+        }
+
         applyInitialProfile(payload?.user ?? payload ?? null);
       } catch (error) {
+        if (error?.name === 'AbortError') {
+          return;
+        }
         console.warn('No se pudo obtener la sesión del usuario actual.', error);
       }
     };
