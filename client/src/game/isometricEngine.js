@@ -76,6 +76,10 @@ const DEFAULT_CAMERA_CONFIG = {
   lerpSpeed: 8
 };
 
+const DEFAULT_DEBUG_OPTIONS = {
+  showTileOverlays: false
+};
+
 const MIN_ZOOM = 0.5;
 const MAX_ZOOM = 2;
 const DEFAULT_ZOOM = 1;
@@ -173,6 +177,27 @@ const derivePaletteFromColor = (color) => {
 };
 
 const DEFAULT_TILE_PALETTE = derivePaletteFromColor(DEFAULT_TILE_TYPE.color);
+
+const hashStringToSeed = (value) => {
+  if (!value) {
+    return 0x1a2b3c4d;
+  }
+  let hash = 0;
+  for (let index = 0; index < value.length; index += 1) {
+    hash = (Math.imul(31, hash) + value.charCodeAt(index)) | 0;
+  }
+  return hash || 0x1a2b3c4d;
+};
+
+const createSeededRandom = (seedValue) => {
+  let state = hashStringToSeed(seedValue);
+  return () => {
+    state = (state + 0x6d2b79f5) | 0;
+    let t = Math.imul(state ^ (state >>> 15), 1 | state);
+    t ^= t + Math.imul(t ^ (t >>> 7), 61 | t);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+};
 
 const DEFAULT_SPRITE_SCALE = { x: 1, y: 1 };
 const UNASSIGNED_LAYER_ID = '__unassigned__';
@@ -502,6 +527,7 @@ export class IsometricEngine {
     this.spriteConfig = { ...DEFAULT_SPRITE_CONFIG, ...options.sprites };
     this.cameraConfig = { ...DEFAULT_CAMERA_CONFIG, ...options.camera };
     this.zoom = clampZoomValue(options.zoom ?? DEFAULT_ZOOM);
+    this.debugConfig = { ...DEFAULT_DEBUG_OPTIONS, ...(options.debug ?? {}) };
 
     this.scene = {
       map: null,
@@ -540,6 +566,13 @@ export class IsometricEngine {
     }
 
     this.handleResize();
+  }
+
+  setDebugOptions(options = {}) {
+    if (!options || typeof options !== 'object') {
+      return;
+    }
+    this.debugConfig = { ...this.debugConfig, ...options };
   }
 
   getBaseTileWidth() {
@@ -984,6 +1017,7 @@ export class IsometricEngine {
       overlay: []
     };
     const hasTileLayers = Array.isArray(tileLayerGroups.all) && tileLayerGroups.all.length > 0;
+    const showTileOverlays = Boolean(this.debugConfig?.showTileOverlays);
 
     if (hasTileLayers) {
       const groundLayers = tileLayerGroups.ground?.length
@@ -995,7 +1029,7 @@ export class IsometricEngine {
         tileWidth,
         tileHeight,
         camera,
-        includeDebug: true
+        includeDebug: showTileOverlays
       });
     } else {
       for (let y = 0; y < map.size.height; y += 1) {
@@ -1014,6 +1048,10 @@ export class IsometricEngine {
             tileIndex = 2;
           }
           this.drawTile(tileIndex, drawX, drawY);
+
+          if (!showTileOverlays) {
+            continue;
+          }
 
           if (this.scene.collisionTiles?.has?.(key)) {
             this.drawCollisionOverlay(drawX, drawY);
@@ -1048,16 +1086,17 @@ export class IsometricEngine {
 
   drawTile(tileIndex, x, y) {
     const palette = TILE_PALETTE[tileIndex] ?? TILE_PALETTE[0];
-    this.drawStyledTile(palette, x, y, 1, true);
+    this.drawStyledTile(palette, x, y, { alpha: 1, useTexture: true });
   }
 
   buildFloorTextureCanvas({ top, bottom }) {
-    const key = `${top}|${bottom}|${Math.round(this.getBaseTileWidth())}`;
+    const baseTileWidth = Math.round(this.getBaseTileWidth());
+    const key = `${top}|${bottom}|${baseTileWidth}`;
     if (this.tileTextureCache.has(key)) {
       return this.tileTextureCache.get(key);
     }
 
-    const baseSize = Math.max(Math.round(this.getBaseTileWidth()), 16);
+    const baseSize = Math.max(baseTileWidth, 16);
     const canvas = document.createElement('canvas');
     canvas.width = baseSize;
     canvas.height = baseSize;
@@ -1066,22 +1105,54 @@ export class IsometricEngine {
       return null;
     }
 
-    const gradient = ctx.createLinearGradient(0, 0, 0, baseSize);
+    const random = createSeededRandom(key);
+
+    const gradient = ctx.createLinearGradient(0, 0, baseSize, baseSize);
     gradient.addColorStop(0, top);
     gradient.addColorStop(1, bottom);
     ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, baseSize, baseSize);
 
-    const speckCount = Math.max(12, Math.round((baseSize * baseSize) / 48));
+    const radial = ctx.createRadialGradient(
+      baseSize / 2,
+      baseSize / 2,
+      baseSize * 0.1,
+      baseSize / 2,
+      baseSize / 2,
+      baseSize * 0.75
+    );
+    radial.addColorStop(0, 'rgba(255, 255, 255, 0.12)');
+    radial.addColorStop(0.6, 'rgba(255, 255, 255, 0.04)');
+    radial.addColorStop(1, 'rgba(0, 0, 0, 0.15)');
+
+    ctx.save();
+    ctx.globalCompositeOperation = 'overlay';
+    ctx.fillStyle = radial;
+    ctx.fillRect(0, 0, baseSize, baseSize);
+    ctx.restore();
+
+    const streakGradient = ctx.createLinearGradient(0, 0, baseSize * 1.2, baseSize * 0.6);
+    streakGradient.addColorStop(0, 'rgba(255, 255, 255, 0)');
+    streakGradient.addColorStop(0.45, 'rgba(255, 255, 255, 0.18)');
+    streakGradient.addColorStop(0.8, 'rgba(0, 0, 0, 0.08)');
+    streakGradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
+
+    ctx.save();
+    ctx.globalAlpha = 0.2;
+    ctx.fillStyle = streakGradient;
+    ctx.fillRect(0, 0, baseSize, baseSize);
+    ctx.restore();
+
+    const speckCount = Math.max(18, Math.round((baseSize * baseSize) / 36));
     for (let i = 0; i < speckCount; i += 1) {
-      const size = Math.max(1, Math.round((Math.random() * baseSize) / 18));
-      const x = Math.random() * baseSize;
-      const y = Math.random() * baseSize;
-      const alpha = 0.08 + Math.random() * 0.12;
+      const size = Math.max(1, Math.round((random() * baseSize) / 16));
+      const x = random() * baseSize;
+      const y = random() * baseSize;
+      const alpha = 0.06 + random() * 0.12;
       ctx.fillStyle = `rgba(255, 255, 255, ${alpha.toFixed(3)})`;
       ctx.fillRect(x, y, size, size);
 
-      const shadowAlpha = 0.08 + Math.random() * 0.1;
+      const shadowAlpha = 0.05 + random() * 0.1;
       ctx.fillStyle = `rgba(0, 0, 0, ${shadowAlpha.toFixed(3)})`;
       ctx.fillRect(x + size * 0.4, y + size * 0.4, size, size * 0.6);
     }
@@ -1111,21 +1182,21 @@ export class IsometricEngine {
     return textureId === 'floor' || textureId === 'floor_texture';
   }
 
-  drawStyledTile(palette, x, y, alpha = 1, useTexture = false) {
+  drawStyledTile(palette, x, y, { alpha = 1, useTexture = false } = {}) {
     const tileWidth = this.getTileWidth();
     const tileHeight = this.getTileHeight();
     const top = palette?.top ?? DEFAULT_TILE_PALETTE.top;
     const bottom = palette?.bottom ?? DEFAULT_TILE_PALETTE.bottom;
-
-    const gradient = this.ctx.createLinearGradient(x, y, x, y + tileHeight);
-    gradient.addColorStop(0, top);
-    gradient.addColorStop(1, bottom);
 
     const padding = 0.5;
     const drawX = x - padding;
     const drawY = y - padding;
     const drawWidth = tileWidth + padding * 2;
     const drawHeight = tileHeight + padding * 2;
+
+    const gradient = this.ctx.createLinearGradient(drawX, drawY, drawX, drawY + drawHeight);
+    gradient.addColorStop(0, top);
+    gradient.addColorStop(1, bottom);
 
     const fillWithStyle = (style, alphaValue) => {
       fillIsometricTile(this.ctx, {
@@ -1145,8 +1216,35 @@ export class IsometricEngine {
       if (textureCanvas) {
         const pattern = this.ctx.createPattern(textureCanvas, 'repeat');
         if (pattern) {
+          if (typeof pattern.setTransform === 'function') {
+            const baseWidth = textureCanvas.width || this.getBaseTileWidth();
+            const baseHeight = textureCanvas.height || this.getBaseTileHeight();
+            const scaleX = baseWidth > 0 ? tileWidth / baseWidth : 1;
+            const scaleY = baseHeight > 0 ? tileHeight / baseHeight : 1;
+            const matrix = {
+              a: scaleX,
+              b: 0,
+              c: 0,
+              d: scaleY,
+              e: 0,
+              f: 0
+            };
+            try {
+              pattern.setTransform(matrix);
+            } catch (error) {
+              if (typeof window !== 'undefined' && typeof window.DOMMatrix === 'function') {
+                const domMatrix = new window.DOMMatrix();
+                domMatrix.a = matrix.a;
+                domMatrix.d = matrix.d;
+                domMatrix.e = matrix.e;
+                domMatrix.f = matrix.f;
+                pattern.setTransform(domMatrix);
+              }
+            }
+          }
           fillWithStyle(pattern, resolvedAlpha);
-          fillWithStyle(gradient, resolvedAlpha * 0.55);
+          const depthAlpha = resolvedAlpha * 0.45;
+          fillWithStyle(gradient, depthAlpha);
         } else {
           fillWithStyle(gradient, resolvedAlpha);
         }
@@ -1164,7 +1262,7 @@ export class IsometricEngine {
     const baseAlpha = tileType?.transparent === false ? 1 : 0.92;
     const alpha = Number.isFinite(alphaOverride) ? clamp(alphaOverride, 0, 1) : baseAlpha;
     const useTexture = this.shouldUseTextureForTile(tileType);
-    this.drawStyledTile(palette, x, y, alpha, useTexture);
+    this.drawStyledTile(palette, x, y, { alpha, useTexture });
   }
 
   drawCollisionOverlay(x, y) {
