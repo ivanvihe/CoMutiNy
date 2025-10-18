@@ -1,11 +1,17 @@
 import { StrictMode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import type { MultiplayerClient } from '../multiplayer';
+import type { GameController } from '../game';
 import { GameUi } from './GameUi';
 
 let reactRoot: Root | null = null;
 
-export function registerUi(root: HTMLElement, multiplayer?: MultiplayerClient): void {
+interface RegisterUiOptions {
+  multiplayer?: MultiplayerClient;
+  game?: GameController;
+}
+
+export function registerUi(root: HTMLElement, options: RegisterUiOptions = {}): void {
   const overlay = ensureOverlay(root);
 
   if (!reactRoot) {
@@ -16,7 +22,7 @@ export function registerUi(root: HTMLElement, multiplayer?: MultiplayerClient): 
 
   reactRoot.render(
     <StrictMode>
-      <GameUi multiplayer={multiplayer} />
+      <GameUi multiplayer={options.multiplayer} game={options.game} />
     </StrictMode>,
   );
 }

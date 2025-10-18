@@ -7,6 +7,7 @@ import {
   LOD_DISTANCE_THRESHOLDS,
 } from './constants';
 import { VoxelChunk, getChunkKey, type ChunkKey } from './chunk';
+import { CHUNK_HEIGHT } from './constants';
 
 export interface ChunkProvider {
   generateChunk(
@@ -55,6 +56,14 @@ export class ChunkManager {
 
   getLoadedChunks(): VoxelChunk[] {
     return [...this.loadedChunks.values()];
+  }
+
+  getChunkContaining(x: number, y: number, z: number): VoxelChunk | undefined {
+    const chunkX = Math.floor(x / CHUNK_SIZE);
+    const chunkY = Math.floor(y / CHUNK_HEIGHT);
+    const chunkZ = Math.floor(z / CHUNK_SIZE);
+    const key = getChunkKey(chunkX, chunkY, chunkZ);
+    return this.loadedChunks.get(key);
   }
 
   async update(cameraPosition: Vector3): Promise<void> {

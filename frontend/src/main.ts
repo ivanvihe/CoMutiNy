@@ -3,6 +3,7 @@ import { bootstrapMultiplayer } from './multiplayer';
 import { createClockSynchronizer } from './multiplayer/timeSync';
 import { registerUi } from './ui';
 import { fetchTerrainParameters, generateWorld } from './voxel';
+import { GameController } from './game';
 
 document.addEventListener('DOMContentLoaded', () => {
   const app = document.querySelector('#app');
@@ -24,7 +25,7 @@ document.addEventListener('DOMContentLoaded', () => {
   `;
 
   const multiplayer = bootstrapMultiplayer('#status', { autoConnect: false });
-  registerUi(app, multiplayer);
+  registerUi(app, { multiplayer });
 
   const bootstrap = async () => {
     const engine = await initializeEngine('#world');
@@ -32,19 +33,24 @@ document.addEventListener('DOMContentLoaded', () => {
     clock.start();
     engine.environment.setTimeProvider(clock.getCurrentTime);
     const originalDispose = engine.dispose;
+    let game: GameController | null = null;
     engine.dispose = () => {
       clock.dispose();
+      game?.dispose();
       originalDispose();
     };
 
     const terrainParameters = await fetchTerrainParameters();
-    await generateWorld(engine.scene, engine.camera.position, {
+    const world = await generateWorld(engine.scene, engine.camera.position, {
       terrainParameters,
       shadowGenerators: [
         engine.environment.sunShadow,
         engine.environment.moonShadow,
       ],
     });
+
+    game = new GameController(engine, world, multiplayer);
+    registerUi(app, { multiplayer, game });
   };
 
   bootstrap().catch((error) => {
