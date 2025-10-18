@@ -1,5 +1,6 @@
 import type { Client as ColyseusClient, Room as ColyseusRoom } from 'colyseus';
 import Colyseus from 'colyseus';
+import { randomUUID } from 'node:crypto';
 
 const { Room: ColyseusRoomClass } = Colyseus as { Room: typeof ColyseusRoom };
 
@@ -58,20 +59,25 @@ export class WorldRoom extends ColyseusRoomClass<WorldState> {
   private readonly pendingChunkUpdates = new Set<string>();
   private flushTimer: NodeJS.Timeout | null = null;
 
-  async onAuth(_client: Client, options: { token?: string } = {}): Promise<AuthContext | false> {
+  async onAuth(
+    _client: Client,
+    options: { token?: string; displayName?: string } = {},
+  ): Promise<AuthContext> {
     const token = typeof options.token === 'string' ? options.token : undefined;
-    if (!token) {
-      return false;
-    }
 
-    const session = await getAuthService().verifySession(token);
-    if (!session) {
-      return false;
+    if (token) {
+      const session = await getAuthService().verifySession(token);
+      if (session) {
+        return {
+          userId: session.user.id,
+          username: session.user.username,
+        } satisfies AuthContext;
+      }
     }
 
     return {
-      userId: session.user.id,
-      username: session.user.username,
+      userId: `guest:${randomUUID()}`,
+      username: this.sanitizeDisplayName(options.displayName),
     } satisfies AuthContext;
   }
 
