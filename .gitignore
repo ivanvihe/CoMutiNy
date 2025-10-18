@@ -1,5 +1,6 @@
 # Global ignores for binary assets
 *.png
+!frontend/public/assets/tilesets/*.png
 *.jpg
 *.jpeg
 *.gif
