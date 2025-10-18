@@ -1,8 +1,11 @@
+floor colour: #eceff1
+
 [tiles]
 . = floor; name=Suelo experimental; color=#9db4ff; transparent=true
 
 [layer ground]
 order: 0
+
 ..........
 ..........
 ..........
