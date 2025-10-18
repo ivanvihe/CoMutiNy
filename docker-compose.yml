@@ -1,43 +1,58 @@
-version: '3.8'
+version: "3.9"
 
 services:
   frontend:
     build:
-      context: ./client
-    environment:
-      VITE_API_BASE_URL: http://api:4000
-    volumes:
-      - ./server/maps:/app/server/maps:ro
-      - ./server/objects/definitions:/app/server/objects/definitions:ro
+      context: ./frontend
+    command: ["npm", "run", "dev", "--", "--host", "0.0.0.0"]
     ports:
-      - "${FRONTEND_PORT:-8123}:8123"
+      - "5173:5173"
+    environment:
+      - VITE_API_URL=http://backend:2567
+    volumes:
+      - ./frontend:/app
+      - frontend-node-modules:/app/node_modules
     depends_on:
-      - api
-  api:
+      - backend
+
+  backend:
     build:
-      context: ./server
-    env_file:
-      - ./server/.env
-    environment:
-      STATIC_MAP_DIRECTORIES: /app/maps
-      OBJECT_DEFINITION_DIRECTORIES: /app/objects/definitions
-    volumes:
-      - ./server/maps:/app/maps
-      - ./server/objects/definitions:/app/objects/definitions
+      context: ./backend
+    command: ["npm", "run", "dev"]
     ports:
-      - "4000:4000"
+      - "2567:2567"
+    environment:
+      - DATABASE_URL=postgres://comutiny:comutiny@postgres:5432/comutiny
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    volumes:
+      - ./backend:/app
+      - backend-node-modules:/app/node_modules
     depends_on:
       - postgres
+      - redis
+
   postgres:
     image: postgres:16-alpine
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
-      POSTGRES_DB: ${POSTGRES_DB:-comutiny}
+      POSTGRES_USER: comutiny
+      POSTGRES_PASSWORD: comutiny
+      POSTGRES_DB: comutiny
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
     ports:
       - "5432:5432"
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - redis-data:/data
+    ports:
+      - "6379:6379"
 
 volumes:
-  postgres_data:
+  frontend-node-modules:
+  backend-node-modules:
+  postgres-data:
+  redis-data:
