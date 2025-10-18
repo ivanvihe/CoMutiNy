@@ -1170,11 +1170,22 @@ export class IsometricEngine {
     const tileHeight = this.getTileHeight();
     const top = palette?.top ?? DEFAULT_TILE_PALETTE.top;
     const bottom = palette?.bottom ?? DEFAULT_TILE_PALETTE.bottom;
-    const stroke = palette?.stroke ?? DEFAULT_TILE_PALETTE.stroke;
 
     const gradient = this.ctx.createLinearGradient(x, y, x, y + tileHeight);
     gradient.addColorStop(0, top);
     gradient.addColorStop(1, bottom);
+
+    const padding = 0.5;
+    const drawX = x - padding;
+    const drawY = y - padding;
+    const drawWidth = tileWidth + padding * 2;
+    const drawHeight = tileHeight + padding * 2;
+
+    const fillWithStyle = (style, alphaValue) => {
+      this.ctx.globalAlpha = clamp(alphaValue, 0, 1);
+      this.ctx.fillStyle = style;
+      this.ctx.fillRect(drawX, drawY, drawWidth, drawHeight);
+    };
 
     this.ctx.save();
     const resolvedAlpha = clamp(alpha, 0, 1);
@@ -1183,30 +1194,17 @@ export class IsometricEngine {
       if (textureCanvas) {
         const pattern = this.ctx.createPattern(textureCanvas, 'repeat');
         if (pattern) {
-          this.ctx.globalAlpha = resolvedAlpha;
-          this.ctx.fillStyle = pattern;
-          this.ctx.fillRect(x, y, tileWidth, tileHeight);
-          this.ctx.globalAlpha = resolvedAlpha * 0.55;
-          this.ctx.fillStyle = gradient;
+          fillWithStyle(pattern, resolvedAlpha);
+          fillWithStyle(gradient, resolvedAlpha * 0.55);
         } else {
-          this.ctx.globalAlpha = resolvedAlpha;
-          this.ctx.fillStyle = gradient;
+          fillWithStyle(gradient, resolvedAlpha);
         }
       } else {
-        this.ctx.globalAlpha = resolvedAlpha;
-        this.ctx.fillStyle = gradient;
+        fillWithStyle(gradient, resolvedAlpha);
       }
     } else {
-      this.ctx.globalAlpha = resolvedAlpha;
-      this.ctx.fillStyle = gradient;
+      fillWithStyle(gradient, resolvedAlpha);
     }
-    this.ctx.strokeStyle = stroke;
-    this.ctx.lineWidth = 1;
-    this.ctx.beginPath();
-    this.ctx.rect(x, y, tileWidth, tileHeight);
-    this.ctx.fill();
-    this.ctx.globalAlpha = resolvedAlpha;
-    this.ctx.stroke();
     this.ctx.restore();
   }
 

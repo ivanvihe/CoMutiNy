@@ -108,6 +108,31 @@ export const parseCoordinate = (value) => {
   return null;
 };
 
+const normaliseHexColour = (value) => {
+  if (typeof value !== 'string') {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  const withoutHash = trimmed.startsWith('#') ? trimmed.slice(1) : trimmed;
+  if (!/^[0-9a-fA-F]{3,6}$/.test(withoutHash)) {
+    return null;
+  }
+
+  if (withoutHash.length === 3) {
+    return `#${withoutHash
+      .split('')
+      .map((char) => `${char}${char}`)
+      .join('')}`.toLowerCase();
+  }
+
+  return `#${withoutHash.toLowerCase()}`;
+};
+
 const splitDoorEntries = (value = '') =>
   `${value}`
     .split(/[;,\n]/)
@@ -653,6 +678,26 @@ export const parseMapDefinition = (rawContents, { sourcePath = null } = {}) => {
   }
 
   const { tileTypes, symbolMap } = parseTileDefinitions(sections.get('tiles') ?? []);
+
+  const floorColourInput =
+    metadata.floorColour ?? metadata.floorColor ?? metadata.floorcolour ?? metadata.floorcolor;
+  const resolvedFloorColour = normaliseHexColour(floorColourInput);
+  if (resolvedFloorColour) {
+    tileTypes.forEach((value, key) => {
+      const metadataDefault = value?.metadata?.default;
+      const isDefaultTile =
+        value?.id === 'floor' ||
+        value?.symbol === '.' ||
+        metadataDefault === true ||
+        metadataDefault === 'true' ||
+        metadataDefault === 1 ||
+        metadataDefault === '1';
+
+      if (isDefaultTile) {
+        tileTypes.set(key, { ...value, color: resolvedFloorColour });
+      }
+    });
+  }
   let layers = parseLayerSections(sections, { tileTypes, symbolMap });
 
   let size = parseDimensions(metadata.dimensions ?? '') ?? { width: 0, height: 0 };
