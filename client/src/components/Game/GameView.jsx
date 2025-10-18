@@ -23,7 +23,10 @@ export default function GameView() {
   const socket = typeof getSocket === 'function' ? getSocket() : null;
   sceneInitializationRef.current = {
     socket,
-    currentMap: currentMap ?? null
+    currentMap: currentMap ?? null,
+    maps: Array.isArray(maps) ? maps : [],
+    players: Array.isArray(players) ? players : [],
+    profile: profile ?? null
   };
 
   const handleOpenSettings = useCallback(() => {
@@ -59,7 +62,10 @@ export default function GameView() {
       const instance = new Scene();
       game.scene.add(key, instance, autoStart, {
         socket: initializationData.socket ?? null,
-        currentMap: initializationData.currentMap ?? null
+        currentMap: initializationData.currentMap ?? null,
+        maps: Array.isArray(initializationData.maps) ? initializationData.maps : [],
+        players: Array.isArray(initializationData.players) ? initializationData.players : [],
+        profile: initializationData.profile ?? null
       });
     });
 

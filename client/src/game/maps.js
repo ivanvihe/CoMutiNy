@@ -41,7 +41,17 @@ const loadMapSources = () => {
     // eslint-disable-next-line global-require
     const path = require('path');
 
-    const directory = path.resolve(__dirname, MAP_DIRECTORY);
+    const baseDir = (() => {
+      if (typeof __dirname === 'string') {
+        return __dirname;
+      }
+      if (typeof import.meta !== 'undefined' && import.meta.url) {
+        return new URL('.', import.meta.url).pathname;
+      }
+      return process.cwd();
+    })();
+
+    const directory = path.resolve(baseDir, MAP_DIRECTORY);
     let entries = [];
     try {
       entries = fs.readdirSync(directory, { withFileTypes: true });

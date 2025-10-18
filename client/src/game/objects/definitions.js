@@ -158,6 +158,38 @@ const loadDefinitionSources = () => {
     });
   }
 
+  if (typeof process !== 'undefined' && process.versions?.node && typeof require === 'function') {
+    try {
+      // eslint-disable-next-line global-require
+      const fs = require('fs');
+      // eslint-disable-next-line global-require
+      const path = require('path');
+
+      const baseDir = (() => {
+        if (typeof __dirname === 'string') {
+          return __dirname;
+        }
+        if (typeof import.meta !== 'undefined' && import.meta.url) {
+          return new URL('.', import.meta.url).pathname;
+        }
+        return process.cwd();
+      })();
+      const directory = path.resolve(baseDir, '../../../server/objects/definitions');
+      const entries = fs.readdirSync(directory, { withFileTypes: true });
+      return entries
+        .filter((entry) => entry.isFile() && entry.name.endsWith('.obj'))
+        .reduce((accumulator, entry) => {
+          const filePath = path.join(directory, entry.name);
+          const rawContents = fs.readFileSync(filePath, 'utf-8');
+          const key = `../../../server/objects/definitions/${entry.name}`;
+          return { ...accumulator, [key]: rawContents };
+        }, {});
+    } catch (error) {
+      console.warn('[objects] No se pudieron cargar definiciones locales', error?.message ?? error);
+      return {};
+    }
+  }
+
   return {};
 };
 
