@@ -1,7 +1,7 @@
 import { initializeEngine } from './engine';
 import { bootstrapMultiplayer } from './multiplayer';
 import { registerUi } from './ui';
-import { generateWorld } from './voxel';
+import { fetchTerrainParameters, generateWorld } from './voxel';
 
 document.addEventListener('DOMContentLoaded', () => {
   const app = document.querySelector('#app');
@@ -17,8 +17,22 @@ document.addEventListener('DOMContentLoaded', () => {
     </main>
   `;
 
-  initializeEngine('#world');
-  generateWorld();
-  bootstrapMultiplayer('#status');
   registerUi(app);
+  bootstrapMultiplayer('#status');
+
+  const bootstrap = async () => {
+    const engine = await initializeEngine('#world');
+    const terrainParameters = await fetchTerrainParameters();
+    await generateWorld(engine.scene, engine.camera.position, {
+      terrainParameters,
+    });
+  };
+
+  bootstrap().catch((error) => {
+    console.error('Error al inicializar el mundo de vóxeles:', error);
+    const status = document.querySelector('#status');
+    if (status instanceof HTMLElement) {
+      status.innerHTML = `<p class="error">No se pudo cargar el mundo.</p>`;
+    }
+  });
 });

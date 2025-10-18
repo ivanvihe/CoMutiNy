@@ -6,7 +6,9 @@ import { createDefaultBlockRegistry, type BlockRegistry } from './blocks';
 import type { ChunkProvider } from './chunkManager';
 import { ChunkManager } from './chunkManager';
 import { getChunkKey, type ChunkKey, type VoxelChunk } from './chunk';
-import { SimpleTerrainChunkProvider } from './defaultChunkProvider';
+import { ProceduralTerrainChunkProvider } from './terrain';
+import type { TerrainParameters } from './terrain';
+import { normalizeTerrainParameters } from './terrain';
 import { GreedyMesher } from './greedyMesher';
 import { BlockMaterialManager, ChunkRenderer } from './materialManager';
 
@@ -15,6 +17,7 @@ export interface VoxelWorldOptions {
   provider?: ChunkProvider;
   loadDistance?: number;
   unloadDistance?: number;
+  terrainParameters?: Partial<TerrainParameters> | TerrainParameters;
 }
 
 export class VoxelWorld {
@@ -27,7 +30,11 @@ export class VoxelWorld {
 
   constructor(options: VoxelWorldOptions) {
     this.registry = createDefaultBlockRegistry();
-    const provider = options.provider ?? new SimpleTerrainChunkProvider();
+    const provider =
+      options.provider ??
+      new ProceduralTerrainChunkProvider(
+        normalizeTerrainParameters(options.terrainParameters),
+      );
     this.chunkManager = new ChunkManager({
       provider,
       loadDistance: options.loadDistance,

@@ -11,4 +11,10 @@ export class Chunk extends Schema {
 export class WorldState extends Schema {
   @type([Chunk])
   chunks = new ArraySchema<Chunk>();
+
+  @type('string')
+  terrainSeed = '';
+
+  @type('string')
+  terrainParameters = '';
 }
