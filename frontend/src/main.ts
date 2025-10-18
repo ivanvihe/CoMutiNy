@@ -1,4 +1,4 @@
-import { initializeEngine } from './engine';
+import { EngineUnsupportedError, initializeEngine } from './engine';
 import { bootstrapMultiplayer } from './multiplayer';
 import { createClockSynchronizer } from './multiplayer/timeSync';
 import { registerUi } from './ui';
@@ -57,7 +57,11 @@ document.addEventListener('DOMContentLoaded', () => {
     console.error('Error al inicializar el mundo de vóxeles:', error);
     const status = document.querySelector('#status');
     if (status instanceof HTMLElement) {
-      status.innerHTML = `<p class="error">No se pudo cargar el mundo.</p>`;
+      if (error instanceof EngineUnsupportedError) {
+        status.innerHTML = `<p class="error">Tu navegador no es compatible con WebGL. Intenta actualizarlo o usar otro dispositivo.</p>`;
+      } else {
+        status.innerHTML = `<p class="error">No se pudo cargar el mundo.</p>`;
+      }
     }
   });
 });

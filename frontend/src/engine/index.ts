@@ -89,6 +89,13 @@ export interface EngineBootstrapContext {
   dispose: () => void;
 }
 
+export class EngineUnsupportedError extends Error {
+  constructor(message = 'El motor gráfico no es compatible con este navegador.') {
+    super(message);
+    this.name = 'EngineUnsupportedError';
+  }
+}
+
 /**
  * Inicializa una escena básica de Babylon.js con iluminación física y pipeline PBR.
  */
@@ -111,6 +118,10 @@ export async function initializeEngine(
     canvas.style.height = '100%';
     canvas.style.display = 'block';
     container.appendChild(canvas);
+  }
+
+  if (typeof Engine.isSupported === 'function' && !Engine.isSupported()) {
+    throw new EngineUnsupportedError('WebGL no es compatible con este dispositivo.');
   }
 
   const engine = new Engine(canvas, options.antialias ?? true, {
