@@ -1,4 +1,9 @@
-import { Client, Room } from 'colyseus';
+import type { Client as ColyseusClient, Room as ColyseusRoom } from 'colyseus';
+import Colyseus from 'colyseus';
+
+const { Room: ColyseusRoomClass } = Colyseus as { Room: typeof ColyseusRoom };
+
+type Client = ColyseusClient;
 import { getAuthService, getWorldPersistence } from '../context.js';
 import { BlockState, PlayerState, WorldState } from '../world/state.js';
 import { createWorldGenerator } from '../world/generator.js';
@@ -47,7 +52,7 @@ type AuthContext = {
 
 const DEFAULT_SPAWN: Vector3Message = { x: 0, y: 64, z: 0 };
 
-export class WorldRoom extends Room<WorldState> {
+export class WorldRoom extends ColyseusRoomClass<WorldState> {
   private chatCounter = 0;
   private readonly persistence = getWorldPersistence();
   private readonly pendingChunkUpdates = new Set<string>();
