@@ -1,4 +1,6 @@
 /**
  * Place service classes and business logic providers in this directory.
  */
-export {}; // Placeholder export until services are implemented.
+export * from './auth/AuthService';
+export * from './buildings/BuildingService';
+export * from './chat/ChatService';

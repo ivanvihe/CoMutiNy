@@ -15,6 +15,8 @@ export const AppDataSource = new DataSource({
   type: 'postgres',
   url: databaseUrl,
   entities: [path.join(__dirname, '../entities/**/*.{ts,js}')],
+  migrations: [path.join(__dirname, './migrations/**/*.{ts,js}')],
+  migrationsRun: true,
   synchronize: false,
   logging: false,
 });
