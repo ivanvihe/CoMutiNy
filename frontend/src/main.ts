@@ -1,5 +1,6 @@
 import { initializeEngine } from './engine';
 import { bootstrapMultiplayer } from './multiplayer';
+import { createClockSynchronizer } from './multiplayer/timeSync';
 import { registerUi } from './ui';
 import { fetchTerrainParameters, generateWorld } from './voxel';
 
@@ -22,9 +23,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const bootstrap = async () => {
     const engine = await initializeEngine('#world');
+    const clock = await createClockSynchronizer();
+    clock.start();
+    engine.environment.setTimeProvider(clock.getCurrentTime);
+    const originalDispose = engine.dispose;
+    engine.dispose = () => {
+      clock.dispose();
+      originalDispose();
+    };
+
     const terrainParameters = await fetchTerrainParameters();
     await generateWorld(engine.scene, engine.camera.position, {
       terrainParameters,
+      shadowGenerators: [
+        engine.environment.sunShadow,
+        engine.environment.moonShadow,
+      ],
     });
   };
 

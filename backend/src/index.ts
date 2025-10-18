@@ -30,6 +30,16 @@ app.get('/world/config', (_req, res) => {
   res.json(getWorldConfig());
 });
 
+app.get('/world/time', (_req, res) => {
+  const now = new Date();
+  res.json({
+    timestamp: now.getTime(),
+    iso: now.toISOString(),
+    timezoneOffsetMinutes: now.getTimezoneOffset(),
+    dayLengthMs: 24 * 60 * 60 * 1000,
+  });
+});
+
 const database = createDatabaseConnection();
 
 database.connect().catch((error) => {

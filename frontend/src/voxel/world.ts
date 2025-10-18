@@ -1,6 +1,7 @@
 import { Vector3 } from '@babylonjs/core/Maths/math.vector';
 import type { Scene } from '@babylonjs/core/scene';
 import { Mesh } from '@babylonjs/core/Meshes/mesh';
+import type { ShadowGenerator } from '@babylonjs/core/Lights/Shadows/shadowGenerator';
 
 import { createDefaultBlockRegistry, type BlockRegistry } from './blocks';
 import type { ChunkProvider } from './chunkManager';
@@ -18,6 +19,7 @@ export interface VoxelWorldOptions {
   loadDistance?: number;
   unloadDistance?: number;
   terrainParameters?: Partial<TerrainParameters> | TerrainParameters;
+  shadowGenerators?: ShadowGenerator[];
 }
 
 export class VoxelWorld {
@@ -27,6 +29,7 @@ export class VoxelWorld {
   private readonly materialManager: BlockMaterialManager;
   private readonly renderer: ChunkRenderer;
   private readonly chunkMeshes = new Map<ChunkKey, Mesh>();
+  private readonly shadowGenerators: ShadowGenerator[];
 
   constructor(options: VoxelWorldOptions) {
     this.registry = createDefaultBlockRegistry();
@@ -46,6 +49,7 @@ export class VoxelWorld {
       this.registry,
     );
     this.renderer = new ChunkRenderer(options.scene, this.materialManager);
+    this.shadowGenerators = options.shadowGenerators ?? [];
 
     this.chunkManager.onChunkLoaded = ({ chunk }) =>
       this.handleChunkLoaded(chunk);
@@ -77,6 +81,12 @@ export class VoxelWorld {
     const existing = this.chunkMeshes.get(key);
     existing?.dispose();
     const mesh = this.renderer.buildMesh(key, meshData);
+    if (this.shadowGenerators.length > 0) {
+      mesh.receiveShadows = true;
+      for (const generator of this.shadowGenerators) {
+        generator.addShadowCaster(mesh, true);
+      }
+    }
     this.chunkMeshes.set(key, mesh);
     chunk.needsRemesh = false;
   }
@@ -84,6 +94,11 @@ export class VoxelWorld {
   private handleChunkUnloaded(chunkKey: ChunkKey): void {
     const mesh = this.chunkMeshes.get(chunkKey);
     if (mesh) {
+      if (this.shadowGenerators.length > 0) {
+        for (const generator of this.shadowGenerators) {
+          generator.removeShadowCaster(mesh);
+        }
+      }
       mesh.dispose();
       this.chunkMeshes.delete(chunkKey);
     }
