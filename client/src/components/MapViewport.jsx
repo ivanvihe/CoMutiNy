@@ -11,6 +11,7 @@ import {
   subscribeToUserPreferences,
   updateUserPreferences
 } from '../state/userPreferences.js';
+import { DEFAULT_ENGINE_UI } from '../config/ui.js';
 
 const CONNECTION_LABELS = {
   idle: 'Desconectado',
@@ -26,6 +27,51 @@ const MIN_ZOOM = 0.5;
 const MAX_ZOOM = 2;
 const ZOOM_STEP = 0.1;
 const DEFAULT_ZOOM = 1;
+
+const normalisePlayerUi = (raw) => {
+  if (!raw || typeof raw !== 'object') {
+    return null;
+  }
+
+  const normalised = {};
+
+  if (raw.nameplate && typeof raw.nameplate === 'object') {
+    normalised.nameplate = { ...raw.nameplate };
+  }
+  if (raw.chatBubble && typeof raw.chatBubble === 'object') {
+    normalised.chatBubble = { ...raw.chatBubble };
+  }
+
+  if (Object.prototype.hasOwnProperty.call(raw, 'nameplateOffset')) {
+    normalised.nameplate = {
+      ...(normalised.nameplate ?? {}),
+      offset: raw.nameplateOffset
+    };
+  }
+  if (Object.prototype.hasOwnProperty.call(raw, 'chatBubbleOffset')) {
+    normalised.chatBubble = {
+      ...(normalised.chatBubble ?? {}),
+      offset: raw.chatBubbleOffset
+    };
+  }
+
+  if (raw.offsets && typeof raw.offsets === 'object') {
+    if (Object.prototype.hasOwnProperty.call(raw.offsets, 'nameplate')) {
+      normalised.nameplate = {
+        ...(normalised.nameplate ?? {}),
+        offset: raw.offsets.nameplate
+      };
+    }
+    if (Object.prototype.hasOwnProperty.call(raw.offsets, 'chatBubble')) {
+      normalised.chatBubble = {
+        ...(normalised.chatBubble ?? {}),
+        offset: raw.offsets.chatBubble
+      };
+    }
+  }
+
+  return Object.keys(normalised).length ? normalised : null;
+};
 
 export default function MapViewport({ onOpenSettings } = {}) {
   const canvasRef = useRef(null);
@@ -85,7 +131,8 @@ export default function MapViewport({ onOpenSettings } = {}) {
         directions: { down: 0, left: 1, right: 2, up: 3 },
         animationSpeed: 120
       },
-      zoom
+      zoom,
+      ui: DEFAULT_ENGINE_UI
     });
     engineRef.current = engine;
     engine.start();
@@ -135,6 +182,7 @@ export default function MapViewport({ onOpenSettings } = {}) {
         if (appearance?.texture) {
           ensureCharacterTexture(appearance.texture);
         }
+        const ui = normalisePlayerUi(player.metadata?.ui);
         return {
           id: player.id,
           name: player.alias ?? player.metadata?.alias ?? player.name ?? 'Usuario',
@@ -143,7 +191,8 @@ export default function MapViewport({ onOpenSettings } = {}) {
           animation: player.animation ?? 'idle',
           appearance,
           avatar: player.metadata?.avatar ?? null,
-          sprite: player.sprite ?? player.metadata?.avatar?.sprite ?? null
+          sprite: player.sprite ?? player.metadata?.avatar?.sprite ?? null,
+          ...(ui ? { ui } : {})
         };
       });
   }, [localPlayerId, worldPlayers]);
@@ -222,13 +271,15 @@ export default function MapViewport({ onOpenSettings } = {}) {
       ensureCharacterTexture(appearance.texture);
     }
 
+    const localPlayerUi = normalisePlayerUi(profile?.ui);
     const localPlayer = {
       id: localPlayerId ?? 'local-player',
       name: profile?.alias ?? 'Tú',
       position: playerRenderPosition ?? currentMap.spawn ?? { x: 0, y: 0 },
       direction: playerDirection ?? 'down',
       animation: playerIsMoving ? 'walk' : 'idle',
-      appearance
+      appearance,
+      ...(localPlayerUi ? { ui: localPlayerUi } : {})
     };
 
     engine.setScene({
@@ -246,6 +297,7 @@ export default function MapViewport({ onOpenSettings } = {}) {
     playerRenderPosition,
     remotePlayers,
     profile?.alias,
+    profile?.ui,
     chatBubbles
   ]);
 

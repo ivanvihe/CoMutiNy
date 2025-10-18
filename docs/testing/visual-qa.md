@@ -51,3 +51,12 @@ Documenta los resultados de QA en la PR indicando:
 - Salida de Playwright (`map-visual.spec.js`).
 - Cambios relevantes en `data-max-volume-height` si se introducen nuevas alturas.
 - Evidencia visual (capturas o GIF) para superposiciones críticas.
+
+## 6. Etiquetas y chat
+
+1. Ajusta los offsets globales en `client/src/config/ui.js` y recarga la vista. Confirma que las etiquetas de nombre se reposicionan sin cortar sprites.
+2. Conecta al menos dos perfiles simultáneos. Envía mensajes consecutivos en distintos idiomas (español, inglés y uno sin espacios como japonés usando «テスト») para comprobar que:
+   - Cada burbuja aparece junto al nombre correspondiente durante ~2,5 s antes de volver al nombre estático.
+   - Los mensajes se envuelven o se truncan con elipsis sin desbordar el canvas.
+3. Repite la prueba con mensajes largos encadenados por varios jugadores para validar que múltiples burbujas coexisten sin superponerse con etiquetas ajenas.
+4. Anota en la PR el resultado de esta verificación visual, incluyendo capturas si se ajustaron offsets personalizados por jugador.

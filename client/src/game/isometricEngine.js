@@ -80,6 +80,31 @@ const DEFAULT_DEBUG_OPTIONS = {
   showTileOverlays: false
 };
 
+const DEFAULT_NAMEPLATE_STYLE = Object.freeze({
+  font: '12px "Inter", sans-serif',
+  paddingX: 8,
+  height: 18,
+  offset: { x: 0, y: 0 },
+  heightMultiplier: 1.4
+});
+
+const DEFAULT_CHAT_BUBBLE_STYLE = Object.freeze({
+  font: '12px "Inter", sans-serif',
+  paddingX: 10,
+  paddingY: 6,
+  lineHeight: 16,
+  maxWidthMultiplier: 2.2,
+  maxLines: 3,
+  duration: 2800,
+  fadeDuration: 500,
+  offset: { x: 12, y: 0 }
+});
+
+const DEFAULT_UI_CONFIG = Object.freeze({
+  nameplate: DEFAULT_NAMEPLATE_STYLE,
+  chatBubble: DEFAULT_CHAT_BUBBLE_STYLE
+});
+
 const MIN_ZOOM = 0.5;
 const MAX_ZOOM = 2;
 const DEFAULT_ZOOM = 1;
@@ -198,6 +223,111 @@ const createSeededRandom = (seedValue) => {
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
 };
+
+const cloneOffset = ({ x = 0, y = 0 } = {}) => ({ x, y });
+
+const normaliseUiOffset = (rawOffset, fallback = DEFAULT_NAMEPLATE_STYLE.offset) => {
+  if (Array.isArray(rawOffset) && rawOffset.length >= 2) {
+    return {
+      x: toFiniteNumber(rawOffset[0], fallback.x),
+      y: toFiniteNumber(rawOffset[1], fallback.y)
+    };
+  }
+
+  if (typeof rawOffset === 'number') {
+    return {
+      x: fallback.x,
+      y: toFiniteNumber(rawOffset, fallback.y)
+    };
+  }
+
+  if (rawOffset && typeof rawOffset === 'object') {
+    return {
+      x: toFiniteNumber(rawOffset.x, fallback.x),
+      y: toFiniteNumber(rawOffset.y, fallback.y)
+    };
+  }
+
+  return cloneOffset(fallback);
+};
+
+const mergeShallow = (target, source) => {
+  if (!source || typeof source !== 'object') {
+    return { ...target };
+  }
+
+  const result = { ...target };
+  Object.keys(source).forEach((key) => {
+    const value = source[key];
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+      result[key] = mergeShallow(target[key] ?? {}, value);
+    } else {
+      result[key] = value;
+    }
+  });
+  return result;
+};
+
+const normaliseUiConfig = (raw = {}) => {
+  const merged = mergeShallow(DEFAULT_UI_CONFIG, raw);
+
+  const nameplate = {
+    ...DEFAULT_UI_CONFIG.nameplate,
+    ...merged.nameplate
+  };
+  nameplate.offset = normaliseUiOffset(nameplate.offset, DEFAULT_NAMEPLATE_STYLE.offset);
+  nameplate.heightMultiplier = Number.isFinite(nameplate.heightMultiplier)
+    ? clamp(nameplate.heightMultiplier, 0.5, 3)
+    : DEFAULT_NAMEPLATE_STYLE.heightMultiplier;
+  nameplate.paddingX = Math.max(0, toFiniteNumber(nameplate.paddingX, DEFAULT_NAMEPLATE_STYLE.paddingX));
+  nameplate.height = Math.max(10, toFiniteNumber(nameplate.height, DEFAULT_NAMEPLATE_STYLE.height));
+  nameplate.font = typeof nameplate.font === 'string' && nameplate.font.trim()
+    ? nameplate.font.trim()
+    : DEFAULT_NAMEPLATE_STYLE.font;
+
+  const chatBubble = {
+    ...DEFAULT_UI_CONFIG.chatBubble,
+    ...merged.chatBubble,
+    ...(merged.nameplate?.bubble && typeof merged.nameplate.bubble === 'object'
+      ? merged.nameplate.bubble
+      : {})
+  };
+  chatBubble.offset = normaliseUiOffset(chatBubble.offset, DEFAULT_CHAT_BUBBLE_STYLE.offset);
+  chatBubble.duration = Math.max(500, toFiniteNumber(chatBubble.duration, DEFAULT_CHAT_BUBBLE_STYLE.duration));
+  chatBubble.fadeDuration = clamp(
+    toFiniteNumber(chatBubble.fadeDuration, DEFAULT_CHAT_BUBBLE_STYLE.fadeDuration),
+    0,
+    chatBubble.duration
+  );
+  chatBubble.paddingX = Math.max(0, toFiniteNumber(chatBubble.paddingX, DEFAULT_CHAT_BUBBLE_STYLE.paddingX));
+  chatBubble.paddingY = Math.max(0, toFiniteNumber(chatBubble.paddingY, DEFAULT_CHAT_BUBBLE_STYLE.paddingY));
+  chatBubble.lineHeight = Math.max(12, toFiniteNumber(chatBubble.lineHeight, DEFAULT_CHAT_BUBBLE_STYLE.lineHeight));
+  chatBubble.maxWidthMultiplier = Math.max(
+    1,
+    toFiniteNumber(chatBubble.maxWidthMultiplier, DEFAULT_CHAT_BUBBLE_STYLE.maxWidthMultiplier)
+  );
+  chatBubble.maxLines = Math.max(1, Math.floor(toFiniteNumber(chatBubble.maxLines, DEFAULT_CHAT_BUBBLE_STYLE.maxLines)));
+  chatBubble.font = typeof chatBubble.font === 'string' && chatBubble.font.trim()
+    ? chatBubble.font.trim()
+    : DEFAULT_CHAT_BUBBLE_STYLE.font;
+
+  return {
+    nameplate,
+    chatBubble
+  };
+};
+
+const sumOffsets = (...offsets) =>
+  offsets.reduce(
+    (acc, rawOffset) => {
+      const offset = normaliseUiOffset(rawOffset, { x: 0, y: 0 });
+      return {
+        x: acc.x + offset.x,
+        y: acc.y + offset.y
+      };
+    },
+    { x: 0, y: 0 }
+  );
 
 const DEFAULT_SPRITE_SCALE = { x: 1, y: 1 };
 const UNASSIGNED_LAYER_ID = '__unassigned__';
@@ -528,6 +658,7 @@ export class IsometricEngine {
     this.cameraConfig = { ...DEFAULT_CAMERA_CONFIG, ...options.camera };
     this.zoom = clampZoomValue(options.zoom ?? DEFAULT_ZOOM);
     this.debugConfig = { ...DEFAULT_DEBUG_OPTIONS, ...(options.debug ?? {}) };
+    this.uiConfig = normaliseUiConfig(options.ui);
 
     this.scene = {
       map: null,
@@ -1749,34 +1880,37 @@ export class IsometricEngine {
 
       this.drawPlayerAvatar(entity, screenX, screenY, time, scale, bob, tileWidth, tileHeight);
 
-      const nameY = this.computeNameplateY(screenY, entity.animation, time, scale, bob);
+      const baseNameY = this.computeNameplateY(screenY, entity.animation, time, scale, bob);
+      const anchor = this.resolveNameplateAnchor(entity, screenX, baseNameY);
+      const nameplateLayout = entity.name ? this.buildNameplateLayout(entity, anchor) : null;
+      const bubbleAnchor = nameplateLayout ?? this.buildBubbleAnchor(anchor);
 
       if (entity.id) {
         const bubble = chatBubbles.get(entity.id);
         if (bubble) {
-          const bubbleBottomY = nameY - 28;
-          this.drawChatBubble(bubble.content, screenX, bubbleBottomY, bubble.receivedAt);
+          this.drawChatBubble(bubble.content, bubbleAnchor, bubble.receivedAt, entity);
         }
       }
 
-      if (entity.name) {
-        this.drawNameplate(entity.name, screenX, nameY, entity.local);
+      if (nameplateLayout) {
+        this.drawNameplate(nameplateLayout);
       }
     });
   }
 
-  drawChatBubble(content, centerX, bottomY, receivedAt) {
+  drawChatBubble(content, anchor, receivedAt, entity) {
     if (!content) {
       return;
     }
 
     const now = Date.now();
-    if (!Number.isFinite(receivedAt) || now - receivedAt >= 2000) {
+    const chatConfig = this.resolveEntityChatBubbleConfig(entity);
+    const { duration, fadeDuration } = chatConfig;
+    if (!Number.isFinite(receivedAt) || now - receivedAt >= duration) {
       return;
     }
 
-    const fadeDuration = 500;
-    const lifetime = 2000;
+    const lifetime = duration;
     const elapsed = now - receivedAt;
     const fadeStart = lifetime - fadeDuration;
     const alpha =
@@ -1790,21 +1924,24 @@ export class IsometricEngine {
     }
 
     this.ctx.save();
-    this.ctx.font = '12px "Inter", sans-serif';
-    this.ctx.textAlign = 'center';
+    this.ctx.font = chatConfig.font;
+    this.ctx.textAlign = 'left';
     this.ctx.textBaseline = 'top';
 
-    const maxLineWidth = this.getTileWidth() * 2.2;
-    const lineHeight = 16;
-    const paddingX = 10;
-    const paddingY = 6;
+    const maxLineWidth = this.getTileWidth() * chatConfig.maxWidthMultiplier;
+    const lineHeight = chatConfig.lineHeight;
+    const paddingX = chatConfig.paddingX;
+    const paddingY = chatConfig.paddingY;
 
-    const words = sanitized.split(' ');
+    const hasWhitespace = sanitized.includes(' ');
+    const tokens = hasWhitespace ? sanitized.split(' ') : Array.from(sanitized);
+    const joiner = hasWhitespace ? ' ' : '';
+    const words = tokens.filter((token) => token);
     const lines = [];
     let currentLine = '';
 
     words.forEach((word) => {
-      const candidate = currentLine ? `${currentLine} ${word}` : word;
+      const candidate = currentLine ? `${currentLine}${joiner}${word}` : word;
       const width = this.ctx.measureText(candidate).width;
       if (width <= maxLineWidth || !currentLine) {
         currentLine = candidate;
@@ -1823,9 +1960,10 @@ export class IsometricEngine {
       return;
     }
 
-    if (lines.length > 3) {
-      const truncated = lines.slice(0, 3);
-      truncated[2] = `${truncated[2]}…`;
+    if (lines.length > chatConfig.maxLines) {
+      const truncated = lines.slice(0, chatConfig.maxLines);
+      const lastIndex = truncated.length - 1;
+      truncated[lastIndex] = `${truncated[lastIndex]}…`;
       lines.length = 0;
       truncated.forEach((line) => lines.push(line));
     }
@@ -1837,8 +1975,31 @@ export class IsometricEngine {
 
     const bubbleWidth = textWidth + paddingX * 2;
     const bubbleHeight = lines.length * lineHeight + paddingY * 2;
-    const rectX = centerX - bubbleWidth / 2;
-    const rectY = bottomY - bubbleHeight;
+
+    const offset = chatConfig.offset;
+
+    const preferredRightX = anchor.right + offset.x;
+    const preferredLeftX = anchor.left - offset.x - bubbleWidth;
+    const canvasWidth = this.canvas.width;
+    const margin = 4;
+
+    let orientation = 'right';
+    if (preferredRightX + bubbleWidth > canvasWidth - margin && preferredLeftX >= margin) {
+      orientation = 'left';
+    }
+
+    let rectX = orientation === 'right' ? preferredRightX : preferredLeftX;
+    rectX = clamp(rectX, margin, canvasWidth - bubbleWidth - margin);
+    const bubbleCenterX = rectX + bubbleWidth / 2;
+    if (bubbleCenterX + 1 < anchor.x) {
+      orientation = 'left';
+    } else if (bubbleCenterX - 1 > anchor.x) {
+      orientation = 'right';
+    }
+
+    const canvasHeight = this.canvas.height;
+    let rectY = anchor.y - bubbleHeight / 2 + offset.y;
+    rectY = clamp(rectY, margin, canvasHeight - bubbleHeight - margin);
 
     const backgroundAlpha = 0.85 * alpha;
     const strokeAlpha = 0.6 * alpha;
@@ -1853,19 +2014,26 @@ export class IsometricEngine {
 
     const tailWidth = 10;
     const tailHeight = 6;
-    const tailX = centerX;
-    const tailY = bottomY - 1;
+    const tailBaseY = clamp(anchor.y, rectY + tailHeight, rectY + bubbleHeight - tailHeight);
+    const tailBaseX = orientation === 'right' ? rectX : rectX + bubbleWidth;
     this.ctx.beginPath();
-    this.ctx.moveTo(tailX, tailY);
-    this.ctx.lineTo(tailX - tailWidth / 2, tailY - tailHeight);
-    this.ctx.lineTo(tailX + tailWidth / 2, tailY - tailHeight);
+    if (orientation === 'right') {
+      this.ctx.moveTo(tailBaseX, tailBaseY - tailHeight);
+      this.ctx.lineTo(anchor.x, anchor.y);
+      this.ctx.lineTo(tailBaseX, tailBaseY + tailHeight);
+    } else {
+      this.ctx.moveTo(tailBaseX, tailBaseY - tailHeight);
+      this.ctx.lineTo(anchor.x, anchor.y);
+      this.ctx.lineTo(tailBaseX, tailBaseY + tailHeight);
+    }
     this.ctx.closePath();
     this.ctx.fill();
 
     this.ctx.fillStyle = `rgba(240, 248, 255, ${alpha.toFixed(3)})`;
+    const textX = rectX + paddingX;
     let textY = rectY + paddingY;
     lines.forEach((line) => {
-      this.ctx.fillText(line, centerX, textY);
+      this.ctx.fillText(line, textX, textY);
       textY += lineHeight;
     });
 
@@ -1877,7 +2045,128 @@ export class IsometricEngine {
     const bob = Number.isFinite(bobOverride)
       ? bobOverride
       : this.resolveBobOffset(animation, time, scale);
-    return screenY - tileHeight * 1.4 * scale - bob;
+    const multiplier = this.uiConfig?.nameplate?.heightMultiplier ?? DEFAULT_NAMEPLATE_STYLE.heightMultiplier;
+    return screenY - tileHeight * multiplier * scale - bob;
+  }
+
+  resolveNameplateAnchor(entity, screenX, baseY) {
+    const offset = this.resolveEntityNameplateOffset(entity);
+    return {
+      x: screenX + offset.x,
+      y: baseY + offset.y
+    };
+  }
+
+  buildBubbleAnchor(anchor) {
+    const height = this.uiConfig?.nameplate?.height ?? DEFAULT_NAMEPLATE_STYLE.height;
+    const halfHeight = height / 2;
+    return {
+      x: anchor.x,
+      y: anchor.y,
+      left: anchor.x,
+      right: anchor.x,
+      top: anchor.y - halfHeight,
+      bottom: anchor.y + halfHeight,
+      height
+    };
+  }
+
+  buildNameplateLayout(entity, anchor) {
+    const name = `${entity.name}`;
+    const font = this.uiConfig?.nameplate?.font ?? DEFAULT_NAMEPLATE_STYLE.font;
+    const paddingX = this.uiConfig?.nameplate?.paddingX ?? DEFAULT_NAMEPLATE_STYLE.paddingX;
+    const height = this.uiConfig?.nameplate?.height ?? DEFAULT_NAMEPLATE_STYLE.height;
+
+    this.ctx.save();
+    this.ctx.font = font;
+    const metrics = this.ctx.measureText(name);
+    this.ctx.restore();
+
+    const width = metrics.width + paddingX * 2;
+    const halfWidth = width / 2;
+    const halfHeight = height / 2;
+
+    return {
+      entityId: entity.id ?? null,
+      name,
+      x: anchor.x,
+      y: anchor.y,
+      width,
+      height,
+      left: anchor.x - halfWidth,
+      right: anchor.x + halfWidth,
+      top: anchor.y - halfHeight,
+      bottom: anchor.y + halfHeight,
+      paddingX,
+      font,
+      local: entity.local === true
+    };
+  }
+
+  resolveEntityNameplateOffset(entity) {
+    return sumOffsets(
+      this.uiConfig?.nameplate?.offset,
+      entity?.nameplateOffset,
+      entity?.ui?.nameplate?.offset,
+      entity?.ui?.nameplateOffset,
+      entity?.appearance?.nameplateOffset,
+      entity?.appearance?.options?.nameplateOffset,
+      entity?.appearance?.options?.ui?.nameplate?.offset
+    );
+  }
+
+  resolveEntityChatBubbleConfig(entity) {
+    const base = { ...this.uiConfig?.chatBubble };
+    const overrides = entity?.ui?.chatBubble;
+
+    const mergeNumber = (key, transform, minimum) => {
+      if (overrides && Object.prototype.hasOwnProperty.call(overrides, key)) {
+        const value = toFiniteNumber(overrides[key], base[key]);
+        base[key] = transform(Math.max(minimum, value));
+      }
+    };
+
+    if (overrides && typeof overrides === 'object') {
+      mergeNumber('duration', (value) => value, 500);
+      mergeNumber('fadeDuration', (value) => value, 0);
+      mergeNumber('paddingX', (value) => value, 0);
+      mergeNumber('paddingY', (value) => value, 0);
+      mergeNumber('lineHeight', (value) => value, 12);
+      mergeNumber('maxWidthMultiplier', (value) => value, 1);
+      if (Object.prototype.hasOwnProperty.call(overrides, 'maxLines')) {
+        const value = Math.floor(Math.max(1, toFiniteNumber(overrides.maxLines, base.maxLines)));
+        base.maxLines = value;
+      }
+      if (typeof overrides.font === 'string' && overrides.font.trim()) {
+        base.font = overrides.font.trim();
+      }
+    }
+
+    base.offset = sumOffsets(
+      this.uiConfig?.chatBubble?.offset,
+      overrides?.offset,
+      overrides?.position,
+      entity?.chatBubbleOffset,
+      entity?.ui?.chatBubbleOffset
+    );
+
+    base.duration = Math.max(500, toFiniteNumber(base.duration, DEFAULT_CHAT_BUBBLE_STYLE.duration));
+    base.fadeDuration = clamp(
+      toFiniteNumber(base.fadeDuration, DEFAULT_CHAT_BUBBLE_STYLE.fadeDuration),
+      0,
+      base.duration
+    );
+    base.paddingX = Math.max(0, toFiniteNumber(base.paddingX, DEFAULT_CHAT_BUBBLE_STYLE.paddingX));
+    base.paddingY = Math.max(0, toFiniteNumber(base.paddingY, DEFAULT_CHAT_BUBBLE_STYLE.paddingY));
+    base.lineHeight = Math.max(12, toFiniteNumber(base.lineHeight, DEFAULT_CHAT_BUBBLE_STYLE.lineHeight));
+    base.maxWidthMultiplier = Math.max(
+      1,
+      toFiniteNumber(base.maxWidthMultiplier, DEFAULT_CHAT_BUBBLE_STYLE.maxWidthMultiplier)
+    );
+    base.maxLines = Math.max(1, Math.floor(toFiniteNumber(base.maxLines, DEFAULT_CHAT_BUBBLE_STYLE.maxLines)));
+    base.font = typeof base.font === 'string' && base.font.trim() ? base.font.trim() : DEFAULT_CHAT_BUBBLE_STYLE.font;
+
+    return base;
   }
 
   resolveBobOffset(animation, time, scale = 1) {
@@ -2039,27 +2328,28 @@ export class IsometricEngine {
     this.ctx.restore();
   }
 
-  drawNameplate(name, x, y, local) {
+  drawNameplate(layout) {
+    if (!layout) {
+      return;
+    }
+
     this.ctx.save();
-    this.ctx.font = '12px "Inter", sans-serif';
+    this.ctx.font = layout.font ?? DEFAULT_NAMEPLATE_STYLE.font;
     this.ctx.textAlign = 'center';
     this.ctx.textBaseline = 'middle';
 
-    const paddingX = 8;
-    const metrics = this.ctx.measureText(name);
-    const width = metrics.width + paddingX * 2;
-    const height = 18;
+    const radius = Math.min(8, layout.height / 2);
 
-    this.ctx.fillStyle = local ? 'rgba(41, 182, 246, 0.8)' : 'rgba(0, 0, 0, 0.7)';
-    this.ctx.strokeStyle = local ? 'rgba(128, 222, 234, 0.8)' : 'rgba(255, 255, 255, 0.25)';
+    this.ctx.fillStyle = layout.local ? 'rgba(41, 182, 246, 0.8)' : 'rgba(0, 0, 0, 0.7)';
+    this.ctx.strokeStyle = layout.local ? 'rgba(128, 222, 234, 0.8)' : 'rgba(255, 255, 255, 0.25)';
     this.ctx.lineWidth = 1;
     this.ctx.beginPath();
-    this.ctx.roundRect(x - width / 2, y - height / 2, width, height, 8);
+    this.ctx.roundRect(layout.left, layout.top, layout.width, layout.height, radius);
     this.ctx.fill();
     this.ctx.stroke();
 
-    this.ctx.fillStyle = local ? '#0d1f2d' : '#f0f4ff';
-    this.ctx.fillText(name, x, y + 1);
+    this.ctx.fillStyle = layout.local ? '#0d1f2d' : '#f0f4ff';
+    this.ctx.fillText(layout.name, layout.x, layout.y + 1);
     this.ctx.restore();
   }
 }
