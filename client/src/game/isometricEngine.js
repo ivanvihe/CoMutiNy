@@ -552,7 +552,19 @@ export class IsometricEngine {
       throw new Error('No se pudo obtener el contexto 2D del canvas.');
     }
 
-    this.tileConfig = { ...DEFAULT_TILESET_CONFIG, ...options.tileset };
+    const mergedTileset = { ...DEFAULT_TILESET_CONFIG, ...options.tileset };
+    const widthCandidate = toFiniteNumber(mergedTileset.tileWidth, Number.NaN);
+    const heightCandidate = toFiniteNumber(mergedTileset.tileHeight, Number.NaN);
+    const resolvedTileSize = Number.isFinite(widthCandidate) && widthCandidate > 0
+      ? widthCandidate
+      : Number.isFinite(heightCandidate) && heightCandidate > 0
+        ? heightCandidate
+        : DEFAULT_TILESET_CONFIG.tileWidth;
+    this.tileConfig = {
+      ...mergedTileset,
+      tileWidth: resolvedTileSize,
+      tileHeight: resolvedTileSize
+    };
     this.spriteConfig = { ...DEFAULT_SPRITE_CONFIG, ...options.sprites };
     this.cameraConfig = { ...DEFAULT_CAMERA_CONFIG, ...options.camera };
     this.zoom = clampZoomValue(options.zoom ?? DEFAULT_ZOOM);

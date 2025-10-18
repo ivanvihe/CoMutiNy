@@ -16,7 +16,7 @@ Al inicializar el motor se puede sobrescribir la configuración por defecto:
 
 ```js
 const engine = new IsometricEngine(canvas, {
-  tileset: { tileWidth: 64, tileHeight: 32 },
+  tileset: { tileWidth: 64, tileHeight: 64 },
   sprites: {
     frameWidth: 48,
     frameHeight: 64,
@@ -28,7 +28,7 @@ const engine = new IsometricEngine(canvas, {
 });
 ```
 
-- **Tileset**: define el rombo base utilizado para pavimento y resaltado de portales. El motor asume tiles con ratio 2:1 (64×32 por defecto).
+- **Tileset**: define la celda base utilizada para pavimento y resaltado de portales. El motor asume tiles cuadrados (64×64 por defecto) y normaliza cualquier configuración para que `tileWidth` y `tileHeight` compartan el mismo valor.
 - **Sprites**: cada fila del atlas corresponde a una dirección y se recorren `framesPerDirection` columnas para animaciones en bucle. La velocidad se expresa en milisegundos por frame.
 - **Cámara**: ajusta la suavidad del seguimiento del jugador.
 
@@ -73,7 +73,7 @@ Para añadir nuevas animaciones consulta la guía en `docs/testing/multiplayer.m
 1. **Tileset**
    - Formato PNG sin transparencia premultiplicada.
    - Colores agrupados por caras (superior, lateral iluminada, lateral en sombra) para aprovechar los gradientes aplicados por `drawTile`.
-   - Tamaño base 64×32 px. El motor escala proporcionalmente, pero no aplica correcciones de perspectiva si las proporciones cambian.
+   - Tamaño base 64×64 px. El motor escala proporcionalmente, pero no aplica correcciones de perspectiva si las proporciones cambian.
 
 2. **Sprites**
    - Frames de 48×64 px colocados en horizontal.
