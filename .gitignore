@@ -31,3 +31,8 @@
 *.xls
 *.xlsx
 *.DS_Store
+# Node.js build artifacts
+node_modules/
+backend/dist/
+frontend/dist/
+*.log
