@@ -8,6 +8,8 @@ import {
   WorldSnapshot,
 } from './snapshots';
 
+export type ChatScope = 'global' | 'proximity';
+
 export interface ChatMessageEvent {
   id: string;
   authorId: string;
@@ -15,6 +17,7 @@ export interface ChatMessageEvent {
   message: string;
   timestamp: number;
   type: 'system' | 'player';
+  scope?: ChatScope;
 }
 
 export interface BlockPlacedEvent {
@@ -58,7 +61,17 @@ interface BlockRemovalMessage {
 
 export type MultiplayerSnapshotEvent = WorldSnapshot;
 
-type ConnectionState = 'desconectado' | 'conectando' | 'conectado' | 'error';
+export type ConnectionState = 'desconectado' | 'conectando' | 'conectado' | 'error';
+
+interface ConnectOptions {
+  displayName?: string;
+}
+
+interface ChatMessageOptions {
+  scope?: ChatScope;
+}
+
+const DISPLAY_NAME_KEY = 'comutiny:displayName';
 
 const INTERPOLATION_LAG_MS = 120;
 
@@ -81,9 +94,13 @@ export class MultiplayerClient extends EventTarget {
     this.updateStatus('desconectado');
   }
 
-  async connect(): Promise<void> {
+  async connect(options: ConnectOptions = {}): Promise<void> {
     if (this.room) {
       return;
+    }
+
+    if (options.displayName) {
+      this.setDisplayName(options.displayName);
     }
 
     this.updateStatus('conectando');
@@ -162,7 +179,7 @@ export class MultiplayerClient extends EventTarget {
     this.room.send('block:remove', payload);
   }
 
-  sendChatMessage(message: string): void {
+  sendChatMessage(message: string, options: ChatMessageOptions = {}): void {
     if (!this.room) {
       return;
     }
@@ -170,7 +187,25 @@ export class MultiplayerClient extends EventTarget {
     if (!trimmed) {
       return;
     }
-    this.room.send('chat:message', { message: trimmed });
+    const payload: { message: string; scope?: ChatScope } = { message: trimmed };
+    if (options.scope) {
+      payload.scope = options.scope;
+    }
+    this.room.send('chat:message', payload);
+  }
+
+  setDisplayName(name: string): void {
+    const sanitized = this.sanitizeDisplayName(name);
+    this.displayName = sanitized;
+    window.localStorage.setItem(DISPLAY_NAME_KEY, sanitized);
+  }
+
+  getDisplayName(): string {
+    return this.displayName;
+  }
+
+  getConnectionState(): ConnectionState {
+    return this.connectionState;
   }
 
   private registerRoomHandlers(room: Room<WorldState>): void {
@@ -265,8 +300,12 @@ export class MultiplayerClient extends EventTarget {
   }
 
   private updateStatus(state: ConnectionState): void {
+    const changed = this.connectionState !== state;
     this.connectionState = state;
     this.renderStatus();
+    if (changed) {
+      this.dispatchEvent(new CustomEvent<ConnectionState>('connectionstatechange', { detail: state }));
+    }
   }
 
   private getEndpoint(): string {
@@ -289,12 +328,20 @@ export class MultiplayerClient extends EventTarget {
   }
 
   private resolveDisplayName(): string {
-    const stored = window.localStorage.getItem('comutiny:displayName');
+    const stored = window.localStorage.getItem(DISPLAY_NAME_KEY);
     if (stored && stored.trim().length > 0) {
       return stored.trim();
     }
     const generated = `Tripulante ${Math.floor(Math.random() * 10_000)}`;
-    window.localStorage.setItem('comutiny:displayName', generated);
+    window.localStorage.setItem(DISPLAY_NAME_KEY, generated);
     return generated;
+  }
+
+  private sanitizeDisplayName(raw: string): string {
+    const trimmed = raw.trim().slice(0, 32);
+    if (trimmed.length > 0) {
+      return trimmed;
+    }
+    return this.displayName ?? this.resolveDisplayName();
   }
 }

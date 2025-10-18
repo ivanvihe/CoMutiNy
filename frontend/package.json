@@ -14,7 +14,11 @@
     "@babylonjs/core": "^7.24.0",
     "@babylonjs/materials": "^7.54.3",
     "@colyseus/schema": "^2.0.29",
+    "@types/react": "^19.2.2",
+    "@types/react-dom": "^19.2.2",
     "colyseus.js": "^0.15.18",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
     "serve": "^14.2.1"
   },
   "devDependencies": {
