@@ -1,15 +1,5 @@
-[meta]
-id: sandbox
-title: Sandbox experimental
-biome: Laboratorio
-description: Espacio pequeño para probar objetos y tiles.
-dimensions: 10x10
-starting_point: 5x5
-border colour: #3f51b5
-
 [tiles]
 . = floor; name=Suelo experimental; color=#9db4ff; transparent=true
-# = wall; name=Pared virtual; color=#6b4f3a; collides=true
 
 [layer ground]
 order: 0
@@ -24,22 +14,47 @@ order: 0
 ..........
 ..........
 
-[layer perimeter]
-order: 1
-##########
-#........#
-#........#
-#........#
-#........#
-#........#
-#........#
-#........#
-#........#
-##########
-
 [objects]
-!wall_01@2x2 | Bloque de pared A
-!wall_01@7x2 | Bloque de pared B
-!wall_01@2x7 | Bloque de pared C
-!wall_01@7x7 | Bloque de pared D
-plant_01@5x6 | Planta experimental
+!wall_01@0x0 | Muro perimetral
+!wall_01@1x0 | Muro perimetral
+!wall_01@2x0 | Muro perimetral
+!wall_01@3x0 | Muro perimetral
+!wall_01@4x0 | Muro perimetral
+!wall_01@5x0 | Muro perimetral
+!wall_01@6x0 | Muro perimetral
+!wall_01@7x0 | Muro perimetral
+!wall_01@8x0 | Muro perimetral
+!wall_01@9x0 | Muro perimetral
+!wall_01@0x1 | Muro perimetral
+!wall_01@9x1 | Muro perimetral
+!wall_01@0x2 | Muro perimetral
+!wall_01@9x2 | Muro perimetral
+!wall_01@0x3 | Muro perimetral
+!wall_01@9x3 | Muro perimetral
+!wall_01@0x4 | Muro perimetral
+!wall_01@9x4 | Muro perimetral
+!wall_01@0x5 | Muro perimetral
+!wall_01@9x5 | Muro perimetral
+!wall_01@0x6 | Muro perimetral
+!wall_01@9x6 | Muro perimetral
+!wall_01@0x7 | Muro perimetral
+!wall_01@9x7 | Muro perimetral
+!wall_01@0x8 | Muro perimetral
+!wall_01@9x8 | Muro perimetral
+!wall_01@0x9 | Muro perimetral
+!wall_01@1x9 | Muro perimetral
+!wall_01@2x9 | Muro perimetral
+!wall_01@3x9 | Muro perimetral
+!wall_01@4x9 | Muro perimetral
+!wall_01@5x9 | Muro perimetral
+!wall_01@6x9 | Muro perimetral
+!wall_01@7x9 | Muro perimetral
+!wall_01@8x9 | Muro perimetral
+!wall_01@9x9 | Muro perimetral
+plant_agave@2x2 | Agave experimental
+plant_palm@7x3 | Palmera ornamental
+plant_sansevieria@3x7 | Sansevieria decorativa
+storage_chest@5x5 | Cofre comunitario
+!table_round@6x6 | Mesa de encuentros
+!table_workbench@2x6 | Banco de prototipado
+plant_01@5x7 | Planta monstera

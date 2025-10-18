@@ -1,0 +1,21 @@
+{
+  "id": "table_round",
+  "type": "furniture",
+  "name": "Mesa redonda de reuniones",
+  "description": "Superficie circular para encuentros rápidos y dinámicos.",
+  "appearance": {
+    "generator": "roundTable",
+    "width": 2,
+    "height": 2,
+    "tileSize": 16,
+    "anchor": { "x": 0.5, "y": 1, "z": 0 },
+    "options": {
+      "topColor": "#d7c0a6",
+      "edgeColor": "#b58a68",
+      "legColor": "#5d4037"
+    }
+  },
+  "metadata": {
+    "tags": ["decorative", "furniture", "meeting"]
+  }
+}
