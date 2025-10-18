@@ -7,6 +7,7 @@ starting_point: 8x8
 door out: 8x0 -> comunidad-inicial@14x25
 door in: 8x15 -> comunidad-inicial
 floor colour: #8eb5ff
+ambient sound: welcome-hum
 
 [tiles]
 . = floor; name=Plataforma base; color=#8eb5ff; transparent=false; texture=plataforma

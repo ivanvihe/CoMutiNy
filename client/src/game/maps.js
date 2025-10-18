@@ -682,8 +682,25 @@ const normaliseTheme = (theme) => {
       : typeof candidate.borderColor === 'string' && candidate.borderColor.trim()
         ? candidate.borderColor.trim()
         : null;
+  const soundscapeCandidate = (() => {
+    if (typeof candidate.soundscape === 'string' && candidate.soundscape.trim()) {
+      return candidate.soundscape.trim();
+    }
+    if (typeof candidate.ambientSound === 'string' && candidate.ambientSound.trim()) {
+      return candidate.ambientSound.trim();
+    }
+    if (typeof candidate.soundtrack === 'string' && candidate.soundtrack.trim()) {
+      return candidate.soundtrack.trim();
+    }
+    if (typeof candidate.sound === 'string' && candidate.sound.trim()) {
+      return candidate.sound.trim();
+    }
+    return null;
+  })();
 
-  return { borderColour };
+  return soundscapeCandidate
+    ? { borderColour, soundscape: soundscapeCandidate }
+    : { borderColour };
 };
 
 const buildBlockedAreasFromServer = (areas) => {

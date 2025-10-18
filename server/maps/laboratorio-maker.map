@@ -6,5 +6,6 @@ dimensions: 40x28
 starting_point: 20x14
 border colour: #00838f
 floor colour: #b2ebf2
+ambient sound: maker-hum
 door in: 20x2 -> comunidad-inicial
 door out: 20x1 -> comunidad-inicial@2x14

@@ -111,6 +111,68 @@ const DEFAULT_ZOOM = 1;
 
 const KEY_SEPARATOR = ',';
 
+const MAX_SPRITE_CACHE_SIZE = 64;
+
+const stableStringify = (input, seen = new WeakSet()) => {
+  if (input === null || input === undefined) {
+    return 'null';
+  }
+
+  const valueType = typeof input;
+  if (valueType === 'number') {
+    if (!Number.isFinite(input)) {
+      return 'null';
+    }
+    return input.toString();
+  }
+
+  if (valueType === 'string') {
+    return JSON.stringify(input);
+  }
+
+  if (valueType === 'boolean') {
+    return input ? 'true' : 'false';
+  }
+
+  if (valueType === 'function') {
+    return 'null';
+  }
+
+  if (valueType !== 'object') {
+    return JSON.stringify(String(input));
+  }
+
+  if (seen.has(input)) {
+    return 'null';
+  }
+
+  seen.add(input);
+
+  if (Array.isArray(input)) {
+    const serialized = input.map((entry) => stableStringify(entry, seen));
+    return `[${serialized.join(',')}]`;
+  }
+
+  const keys = Object.keys(input)
+    .filter((key) => typeof input[key] !== 'function' && input[key] !== undefined)
+    .sort();
+
+  const parts = keys.map((key) => `${JSON.stringify(key)}:${stableStringify(input[key], seen)}`);
+  return `{${parts.join(',')}}`;
+};
+
+const buildSpriteCacheKey = ({ generator, width, height, tileSize, options }) => {
+  const payload = {
+    generator: typeof generator === 'string' ? generator : String(generator ?? 'unknown'),
+    width: Number.isFinite(width) ? width : Number(width) || 0,
+    height: Number.isFinite(height) ? height : Number(height) || 0,
+    tileSize: Number.isFinite(tileSize) ? tileSize : Number(tileSize) || 0,
+    options
+  };
+
+  return stableStringify(payload);
+};
+
 const directionFallback = (direction) => {
   switch (direction) {
     case 'left':
@@ -678,6 +740,7 @@ export class IsometricEngine {
     this.animator = new SpriteAnimator(this.spriteConfig);
     this.objectSprites = new Map();
     this.tileTextureCache = new Map();
+    this.spriteAssetCache = new Map();
 
     this.camera = { x: 0, y: 0 };
     this.cameraTarget = { x: 0, y: 0 };
@@ -733,7 +796,6 @@ export class IsometricEngine {
     }
     this.zoom = nextZoom;
     this.tileTextureCache.clear();
-    this.buildObjectSprites(this.scene?.objects ?? []);
   }
 
   setScene({ map, player, remotePlayers = [], chatBubbles = [] } = {}) {
@@ -1070,6 +1132,7 @@ export class IsometricEngine {
       objects: []
     };
     this.objectSprites = new Map();
+    this.spriteAssetCache.clear();
   }
 
   handleResize() {
@@ -1545,19 +1608,43 @@ export class IsometricEngine {
       const height = Math.max(1, appearance.height ?? object.size?.height ?? 1);
       const tileSize = appearance.tileSize ?? 16;
 
-      const asset = createSpriteCanvas({
+      const generatorOptions = {
+        ...(appearance.options ?? {}),
+        ...(appearance.variant ? { variant: appearance.variant } : {}),
+        palette: Array.isArray(object.palette) ? [...object.palette] : undefined,
+        metadata: object.metadata ?? {},
+        objectId: object.objectId ?? null
+      };
+
+      const cacheKey = buildSpriteCacheKey({
         generator: appearance.generator,
         width,
         height,
         tileSize,
-        options: {
-          ...(appearance.options ?? {}),
-          ...(appearance.variant ? { variant: appearance.variant } : {}),
-          palette: Array.isArray(object.palette) ? [...object.palette] : undefined,
-          metadata: object.metadata ?? {},
-          objectId: object.objectId ?? null
-        }
+        options: generatorOptions
       });
+
+      let asset = cacheKey ? this.spriteAssetCache.get(cacheKey) : null;
+
+      if (!asset) {
+        asset = createSpriteCanvas({
+          generator: appearance.generator,
+          width,
+          height,
+          tileSize,
+          options: generatorOptions
+        });
+
+        if (asset && cacheKey) {
+          this.spriteAssetCache.set(cacheKey, asset);
+          if (this.spriteAssetCache.size > MAX_SPRITE_CACHE_SIZE) {
+            const oldestKey = this.spriteAssetCache.keys().next().value;
+            if (oldestKey) {
+              this.spriteAssetCache.delete(oldestKey);
+            }
+          }
+        }
+      }
 
       if (!asset || !Array.isArray(asset.layers) || !asset.layers.length) {
         return;

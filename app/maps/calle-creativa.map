@@ -5,6 +5,7 @@ description: Tramo de calle con escaparates, mobiliario temporal y vegetación m
 dimensions: 26x16
 starting_point: 13x12
 border colour: #212121
+ambient sound: creative-street
 door in: 2x12 -> comunidad-inicial
 door out: 1x12 -> comunidad-inicial@6x18
 
