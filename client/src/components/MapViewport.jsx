@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useMap } from '../context/MapContext.jsx';
 import { useWorld } from '../context/WorldContext.jsx';
 import IsometricEngine from '../game/isometricEngine.js';
+import { normaliseCharacterAppearance } from '../game/characters/customization.js';
+import { ensureCharacterTexture } from '../game/characters/textureLoader.js';
 import Topbar from '../layout/Topbar.tsx';
 import {
   clampZoom,
@@ -49,7 +51,8 @@ export default function MapViewport({ onOpenSettings } = {}) {
     localPlayerId,
     connectionStatus,
     profile,
-    chatMessages
+    chatMessages,
+    appearance: localAppearance
   } = useWorld();
 
   const sceneMap = useMemo(() => {
@@ -125,15 +128,24 @@ export default function MapViewport({ onOpenSettings } = {}) {
   const remotePlayers = useMemo(() => {
     return worldPlayers
       .filter((player) => player.id && player.id !== localPlayerId)
-      .map((player) => ({
-        id: player.id,
-        name: player.alias ?? player.metadata?.alias ?? player.name ?? 'Usuario',
-        position: player.renderPosition ?? player.position ?? { x: 0, y: 0 },
-        direction: player.direction ?? player.metadata?.heading ?? 'down',
-        animation: player.animation ?? 'idle',
-        avatar: player.metadata?.avatar ?? null,
-        sprite: player.sprite ?? player.metadata?.avatar?.sprite ?? null
-      }));
+      .map((player) => {
+        const appearance = normaliseCharacterAppearance(
+          player.metadata?.appearance ?? player.metadata?.avatar ?? player.avatar ?? null
+        );
+        if (appearance?.texture) {
+          ensureCharacterTexture(appearance.texture);
+        }
+        return {
+          id: player.id,
+          name: player.alias ?? player.metadata?.alias ?? player.name ?? 'Usuario',
+          position: player.renderPosition ?? player.position ?? { x: 0, y: 0 },
+          direction: player.direction ?? player.metadata?.heading ?? 'down',
+          animation: player.animation ?? 'idle',
+          appearance,
+          avatar: player.metadata?.avatar ?? null,
+          sprite: player.sprite ?? player.metadata?.avatar?.sprite ?? null
+        };
+      });
   }, [localPlayerId, worldPlayers]);
 
   const chatBubbles = useMemo(() => {
@@ -205,12 +217,18 @@ export default function MapViewport({ onOpenSettings } = {}) {
       return;
     }
 
+    const appearance = normaliseCharacterAppearance(localAppearance);
+    if (appearance?.texture) {
+      ensureCharacterTexture(appearance.texture);
+    }
+
     const localPlayer = {
       id: localPlayerId ?? 'local-player',
       name: profile?.alias ?? 'Tú',
       position: playerRenderPosition ?? currentMap.spawn ?? { x: 0, y: 0 },
       direction: playerDirection ?? 'down',
-      animation: playerIsMoving ? 'walk' : 'idle'
+      animation: playerIsMoving ? 'walk' : 'idle',
+      appearance
     };
 
     engine.setScene({
@@ -222,6 +240,7 @@ export default function MapViewport({ onOpenSettings } = {}) {
   }, [
     sceneMap,
     localPlayerId,
+    localAppearance,
     playerDirection,
     playerIsMoving,
     playerRenderPosition,

@@ -1,4 +1,11 @@
 import createSpriteCanvas from './objects/canvasSprites.js';
+import {
+  CHARACTER_MESHES,
+  CHARACTER_TEXTURES,
+  DEFAULT_CHARACTER_APPEARANCE,
+  normaliseCharacterAppearance
+} from './characters/customization.js';
+import { ensureCharacterTexture } from './characters/textureLoader.js';
 
 const DEFAULT_TILESET_CONFIG = {
   tileWidth: 48,
@@ -162,6 +169,14 @@ const DEFAULT_PIXEL_OFFSET = { x: 0, y: 0, z: 0 };
 const DEFAULT_SPRITE_SCALE = { x: 1, y: 1 };
 const DEFAULT_VOLUME = { height: 1, anchor: DEFAULT_SPRITE_ANCHOR };
 const UNASSIGNED_LAYER_ID = '__unassigned__';
+const DEFAULT_MESH_ID = 'compact';
+
+const resolveMeshDefinition = (meshId) => {
+  if (typeof meshId === 'string' && CHARACTER_MESHES[meshId]) {
+    return CHARACTER_MESHES[meshId];
+  }
+  return CHARACTER_MESHES[DEFAULT_MESH_ID] ?? CHARACTER_MESHES.compact ?? {};
+};
 
 const normaliseLayerPlacement = (value) => {
   if (typeof value !== 'string') {
@@ -1870,50 +1885,110 @@ export class IsometricEngine {
     const tileWidth = Number.isFinite(baseTileWidth) ? baseTileWidth : this.getTileWidth();
     const tileHeight = Number.isFinite(baseTileHeight) ? baseTileHeight : this.getTileHeight();
 
-    this.ctx.save();
+    const appearanceSource =
+      entity.appearance ??
+      entity.avatarAppearance ??
+      entity.metadata?.appearance ??
+      entity.avatar ??
+      DEFAULT_CHARACTER_APPEARANCE;
 
-    // shadow
+    const appearance = normaliseCharacterAppearance({
+      ...DEFAULT_CHARACTER_APPEARANCE,
+      ...(appearanceSource && typeof appearanceSource === 'object' ? appearanceSource : {})
+    });
+
+    const mesh = resolveMeshDefinition(appearance.mesh);
+    const meshScale = scale * (mesh.scale ?? 1);
+
+    const baseY = screenY - tileHeight * 0.6 * meshScale;
+    const shadowWidth = tileWidth * 0.35 * meshScale * (mesh.shadow ?? 1);
+    const shadowHeight =
+      tileHeight * 0.18 * meshScale * (mesh.shadowHeight ?? mesh.shadow ?? 1);
+    const shadowOffsetY = tileHeight * 0.1 * meshScale * (mesh.shadowOffset ?? 1);
+
+    this.ctx.save();
     this.ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
     this.ctx.beginPath();
     this.ctx.ellipse(
       screenX,
-      screenY + tileHeight * 0.1 * scale,
-      tileWidth * 0.35 * scale,
-      tileHeight * 0.18 * scale,
+      screenY + shadowOffsetY,
+      Math.max(shadowWidth, 1),
+      Math.max(shadowHeight, 1),
       0,
       0,
       Math.PI * 2
     );
     this.ctx.fill();
+    this.ctx.restore();
 
-    const baseY = screenY - tileHeight * 0.6 * scale - bob;
-    const bodyWidth = tileWidth * 0.5;
-    const bodyHeight = tileHeight * 1.05;
-    const torsoHeight = bodyHeight * 0.58;
-    const headRadius = tileWidth * 0.2;
+    const textureEntry = appearance.texture ? ensureCharacterTexture(appearance.texture) : null;
+    const textureDefinition = appearance.texture
+      ? CHARACTER_TEXTURES[appearance.texture] ?? null
+      : null;
+    const textureImage =
+      textureEntry && textureEntry.status === 'loaded' && textureEntry.image
+        ? textureEntry.image
+        : null;
 
-    this.ctx.translate(screenX, baseY);
-    this.ctx.scale(scale, scale);
+    if (textureImage) {
+      const drawWidth = textureImage.width * meshScale * (mesh.textureScaleX ?? 1);
+      const drawHeight = textureImage.height * meshScale * (mesh.textureScaleY ?? 1);
+      const offsetY = (mesh.textureOffsetY ?? 0) * drawHeight;
 
-    // body
-    this.ctx.fillStyle = palette.body;
+      this.ctx.save();
+      this.ctx.drawImage(
+        textureImage,
+        screenX - drawWidth / 2,
+        baseY - drawHeight - bob + offsetY,
+        drawWidth,
+        drawHeight
+      );
+      this.ctx.restore();
+      return;
+    }
+
+    const bodyWidth = tileWidth * 0.5 * meshScale * (mesh.bodyWidth ?? 1);
+    const bodyHeight = tileHeight * 1.05 * meshScale * (mesh.bodyHeight ?? 1);
+    const torsoHeight = bodyHeight * 0.58 * (mesh.torsoHeight ?? 1);
+    const headRadius = tileWidth * 0.2 * meshScale * (mesh.headRadius ?? 1);
+
+    const texturePalette = textureDefinition?.palette ?? {};
+    const suitColor = texturePalette.suit ?? palette.body ?? '#4dd0e1';
+    const accentColor = appearance.accentColor ?? texturePalette.accent ?? palette.suit ?? '#0097a7';
+    const helmetColor = texturePalette.helmet ?? palette.head ?? '#ffe082';
+    const visorColor = appearance.visorColor ?? texturePalette.visor ?? palette.visor ?? '#b2ebf2';
+
+    this.ctx.save();
+    this.ctx.translate(screenX, baseY - bob);
+
+    // cuerpo principal
+    this.ctx.fillStyle = suitColor;
     this.ctx.beginPath();
     this.ctx.roundRect(-bodyWidth / 2, -torsoHeight, bodyWidth, torsoHeight, bodyWidth * 0.35);
     this.ctx.fill();
 
-    // suit accent
-    this.ctx.fillStyle = palette.suit;
+    // franja de acento
+    this.ctx.fillStyle = accentColor;
     this.ctx.beginPath();
-    this.ctx.roundRect(-bodyWidth * 0.3, -torsoHeight * 0.8, bodyWidth * 0.6, torsoHeight * 0.8, bodyWidth * 0.2);
+    this.ctx.roundRect(
+      -bodyWidth * 0.3,
+      -torsoHeight * 0.8,
+      bodyWidth * 0.6,
+      torsoHeight * 0.8,
+      bodyWidth * 0.2
+    );
     this.ctx.fill();
 
-    // head
-    this.ctx.fillStyle = palette.head;
+    // detalle central
+    this.ctx.fillStyle = accentColor;
+    this.ctx.fillRect(-bodyWidth * 0.05, -torsoHeight, bodyWidth * 0.1, torsoHeight * 0.95);
+
+    // casco
+    this.ctx.fillStyle = helmetColor;
     this.ctx.beginPath();
     this.ctx.arc(0, -torsoHeight - headRadius * 1.1, headRadius, 0, Math.PI * 2);
     this.ctx.fill();
 
-    // visor / direction indicator
     const angleMap = {
       up: -Math.PI / 2,
       down: Math.PI / 2,
@@ -1923,15 +1998,26 @@ export class IsometricEngine {
     const direction = directionFallback(entity.direction);
     const angle = angleMap[direction] ?? angleMap.down;
 
+    // visor orientado
     this.ctx.save();
     this.ctx.rotate(angle);
-    this.ctx.fillStyle = palette.visor;
+    this.ctx.fillStyle = visorColor;
     this.ctx.beginPath();
     this.ctx.moveTo(0, -headRadius * 0.3);
     this.ctx.quadraticCurveTo(headRadius * 1.2, 0, 0, headRadius * 0.3);
     this.ctx.closePath();
     this.ctx.fill();
     this.ctx.restore();
+
+    // detalles laterales
+    this.ctx.strokeStyle = accentColor;
+    this.ctx.lineWidth = Math.max(1, bodyWidth * 0.03);
+    this.ctx.beginPath();
+    this.ctx.moveTo(-bodyWidth * 0.45, -torsoHeight * 0.2);
+    this.ctx.lineTo(-bodyWidth * 0.6, bodyHeight * 0.1);
+    this.ctx.moveTo(bodyWidth * 0.45, -torsoHeight * 0.2);
+    this.ctx.lineTo(bodyWidth * 0.6, bodyHeight * 0.1);
+    this.ctx.stroke();
 
     this.ctx.restore();
   }

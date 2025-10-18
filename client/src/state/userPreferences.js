@@ -1,12 +1,14 @@
+import {
+  DEFAULT_CHARACTER_APPEARANCE,
+  normaliseCharacterAppearance
+} from '../game/characters/customization.js';
+
 const STORAGE_KEY = 'comutiny:user-preferences';
 
 export const DEFAULT_ZOOM_RANGE = { min: 0.5, max: 2 };
 
 export const DEFAULT_APPEARANCE = Object.freeze({
-  hair: 'Corto',
-  face: 'Clásica',
-  outfit: 'Casual',
-  shoes: 'Botas'
+  ...DEFAULT_CHARACTER_APPEARANCE
 });
 
 export const DEFAULT_PREFERENCES = Object.freeze({
@@ -28,19 +30,14 @@ const clamp = (value, min, max) => {
 };
 
 const sanitizeAppearance = (rawAppearance = {}) => {
-  const next = { ...DEFAULT_APPEARANCE };
   if (!rawAppearance || typeof rawAppearance !== 'object') {
-    return next;
+    return { ...DEFAULT_APPEARANCE };
   }
 
-  for (const key of Object.keys(DEFAULT_APPEARANCE)) {
-    const value = rawAppearance[key];
-    if (typeof value === 'string' && value.trim()) {
-      next[key] = value.trim();
-    }
-  }
-
-  return next;
+  return normaliseCharacterAppearance({
+    ...DEFAULT_APPEARANCE,
+    ...rawAppearance
+  });
 };
 
 const sanitizePreferences = (raw = {}) => {

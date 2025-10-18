@@ -8,10 +8,10 @@ from typing import Dict, Mapping
 import json
 
 DEFAULT_APPEARANCE: Mapping[str, str] = {
-    "hair": "Corto",
-    "face": "Clásica",
-    "outfit": "Casual",
-    "shoes": "Botas",
+    "texture": "astronaut/classic",
+    "mesh": "compact",
+    "visorColor": "#d7ecff",
+    "accentColor": "#1a202c",
 }
 
 DEFAULT_PREFERENCES: Mapping[str, object] = {
@@ -20,6 +20,58 @@ DEFAULT_PREFERENCES: Mapping[str, object] = {
 }
 
 ZOOM_RANGE = (0.5, 2.0)
+
+VALID_TEXTURES = {
+    "astronaut/classic",
+    "astronaut/engineer",
+    "astronaut/biologist",
+}
+
+LEGACY_TEXTURE_MAP = {
+    "explorer": "astronaut/classic",
+    "pilot": "astronaut/engineer",
+    "engineer": "astronaut/engineer",
+    "scientist": "astronaut/biologist",
+}
+
+VALID_MESHES = {"compact", "tall", "sturdy"}
+
+
+def _normalise_hex(value: object, fallback: str) -> str:
+    if not isinstance(value, str):
+        return fallback
+    candidate = value.strip()
+    if not candidate:
+        return fallback
+    stripped = candidate[1:] if candidate.startswith("#") else candidate
+    if len(stripped) not in (3, 6):
+        return fallback
+    try:
+        int(stripped, 16)
+    except ValueError:
+        return fallback
+    if len(stripped) == 3:
+        stripped = "".join(ch * 2 for ch in stripped)
+    return f"#{stripped.lower()}"
+
+
+def _normalise_texture(value: object) -> str:
+    if isinstance(value, str):
+        candidate = value.strip()
+        if candidate in VALID_TEXTURES:
+            return candidate
+        legacy = LEGACY_TEXTURE_MAP.get(candidate)
+        if legacy:
+            return legacy
+    return DEFAULT_APPEARANCE["texture"]
+
+
+def _normalise_mesh(value: object) -> str:
+    if isinstance(value, str):
+        candidate = value.strip()
+        if candidate in VALID_MESHES:
+            return candidate
+    return DEFAULT_APPEARANCE["mesh"]
 
 
 def _clamp(value: object, minimum: float, maximum: float) -> float:
@@ -53,9 +105,20 @@ class PlayerPreferences:
         appearance: Dict[str, str] = dict(DEFAULT_APPEARANCE)
         raw_appearance = payload.get("appearance")
         if isinstance(raw_appearance, Mapping):
-            for key, value in raw_appearance.items():
-                if key in appearance and isinstance(value, str) and value.strip():
-                    appearance[key] = value.strip()
+            appearance["texture"] = _normalise_texture(
+                raw_appearance.get("texture") or raw_appearance.get("sprite")
+            )
+            appearance["mesh"] = _normalise_mesh(raw_appearance.get("mesh"))
+            appearance["visorColor"] = _normalise_hex(
+                raw_appearance.get("visorColor") or raw_appearance.get("visor"),
+                appearance["visorColor"],
+            )
+            appearance["accentColor"] = _normalise_hex(
+                raw_appearance.get("accentColor")
+                or raw_appearance.get("accent")
+                or raw_appearance.get("color"),
+                appearance["accentColor"],
+            )
 
         return cls(map_zoom=map_zoom, appearance=appearance)
 

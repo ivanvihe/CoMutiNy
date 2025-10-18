@@ -14,7 +14,9 @@ import avatarRepository from './repositories/AvatarRepository.js'
 import spriteGenerationService from './sprites/spriteGenerationService.js'
 import spriteEvents, { SPRITE_EVENTS } from './sprites/events.js'
 import createSocketServer from './network/socketServer.js'
-import playerPreferencesService from './services/playerPreferencesService.js'
+import playerPreferencesService, {
+  DEFAULT_APPEARANCE as DEFAULT_PLAYER_APPEARANCE
+} from './services/playerPreferencesService.js'
 
 dotenv.config()
 
@@ -165,6 +167,10 @@ const enrichJoinPayloadWithAvatar = async (payload = {}) => {
     : {}
 
   const mergedAppearance = {
+    texture: payloadAppearance.texture ?? DEFAULT_PLAYER_APPEARANCE.texture,
+    mesh: payloadAppearance.mesh ?? DEFAULT_PLAYER_APPEARANCE.mesh,
+    visorColor: payloadAppearance.visorColor ?? DEFAULT_PLAYER_APPEARANCE.visorColor,
+    accentColor: payloadAppearance.accentColor ?? DEFAULT_PLAYER_APPEARANCE.accentColor,
     hair: payloadAppearance.hair ?? avatarAppearance.hair,
     face: payloadAppearance.face ?? avatarAppearance.face,
     outfit: payloadAppearance.outfit ?? avatarAppearance.outfit,

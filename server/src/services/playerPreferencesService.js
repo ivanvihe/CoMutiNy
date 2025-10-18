@@ -4,11 +4,70 @@ import path from 'node:path';
 const STORAGE_FILE = path.resolve(process.cwd(), 'server', 'data', 'player-preferences.json');
 
 export const DEFAULT_APPEARANCE = Object.freeze({
-  hair: 'Corto',
-  face: 'Clásica',
-  outfit: 'Casual',
-  shoes: 'Botas'
+  texture: 'astronaut/classic',
+  mesh: 'compact',
+  visorColor: '#d7ecff',
+  accentColor: '#1a202c'
 });
+
+const VALID_TEXTURES = new Set(['astronaut/classic', 'astronaut/engineer', 'astronaut/biologist']);
+const LEGACY_TEXTURE_MAP = {
+  explorer: 'astronaut/classic',
+  pilot: 'astronaut/engineer',
+  engineer: 'astronaut/engineer',
+  scientist: 'astronaut/biologist'
+};
+const VALID_MESHES = new Set(['compact', 'tall', 'sturdy']);
+
+const HEX_COLOR_REGEX = /^#?[0-9a-f]{3,8}$/i;
+
+const normaliseHex = (value, fallback) => {
+  if (typeof value !== 'string') {
+    return fallback;
+  }
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return fallback;
+  }
+  if (!HEX_COLOR_REGEX.test(trimmed)) {
+    return fallback;
+  }
+  const withoutHash = trimmed.startsWith('#') ? trimmed.slice(1) : trimmed;
+  const expanded = withoutHash.length === 3
+    ? withoutHash
+        .split('')
+        .map((char) => char + char)
+        .join('')
+        .toLowerCase()
+    : withoutHash.slice(0, 6).toLowerCase();
+  return `#${expanded}`;
+};
+
+const normaliseTexture = (candidate) => {
+  if (typeof candidate !== 'string') {
+    return DEFAULT_APPEARANCE.texture;
+  }
+  const trimmed = candidate.trim();
+  if (VALID_TEXTURES.has(trimmed)) {
+    return trimmed;
+  }
+  const legacy = LEGACY_TEXTURE_MAP[trimmed];
+  if (legacy) {
+    return legacy;
+  }
+  return DEFAULT_APPEARANCE.texture;
+};
+
+const normaliseMesh = (candidate) => {
+  if (typeof candidate !== 'string') {
+    return DEFAULT_APPEARANCE.mesh;
+  }
+  const trimmed = candidate.trim();
+  if (VALID_MESHES.has(trimmed)) {
+    return trimmed;
+  }
+  return DEFAULT_APPEARANCE.mesh;
+};
 
 export const DEFAULT_PREFERENCES = Object.freeze({
   mapZoom: 1,
@@ -33,12 +92,12 @@ const sanitiseAppearance = (raw = {}) => {
     return next;
   }
 
-  for (const key of Object.keys(DEFAULT_APPEARANCE)) {
-    const value = raw[key];
-    if (typeof value === 'string' && value.trim()) {
-      next[key] = value.trim();
-    }
-  }
+  next.texture = normaliseTexture(raw.texture ?? raw.sprite);
+  next.mesh = normaliseMesh(raw.mesh);
+  next.visorColor = normaliseHex(raw.visorColor ?? raw.visor, next.visorColor);
+  const accentSource = raw.accentColor ?? raw.accent ?? raw.color;
+  next.accentColor = normaliseHex(accentSource, next.accentColor);
+
   return next;
 };
 
