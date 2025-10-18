@@ -90,7 +90,9 @@ export interface EngineBootstrapContext {
 }
 
 export class EngineUnsupportedError extends Error {
-  constructor(message = 'El motor gráfico no es compatible con este navegador.') {
+  constructor(
+    message = 'El motor gráfico no es compatible con este navegador.',
+  ) {
     super(message);
     this.name = 'EngineUnsupportedError';
   }
@@ -120,14 +122,26 @@ export async function initializeEngine(
     container.appendChild(canvas);
   }
 
-  if (typeof Engine.isSupported === 'function' && !Engine.isSupported()) {
-    throw new EngineUnsupportedError('WebGL no es compatible con este dispositivo.');
+  if (!isWebglAvailable()) {
+    throw new EngineUnsupportedError(
+      'WebGL no es compatible con este dispositivo.',
+    );
   }
 
-  const engine = new Engine(canvas, options.antialias ?? true, {
-    preserveDrawingBuffer: false,
-    stencil: true,
-  });
+  let engine: Engine;
+  try {
+    engine = new Engine(canvas, options.antialias ?? true, {
+      preserveDrawingBuffer: false,
+      stencil: true,
+    });
+  } catch (error) {
+    if (isWebglInitializationError(error)) {
+      throw new EngineUnsupportedError(
+        'WebGL no es compatible con este dispositivo.',
+      );
+    }
+    throw error;
+  }
 
   if (options.adaptToDeviceRatio) {
     engine.adaptToDeviceRatio = true;
@@ -183,6 +197,49 @@ export async function initializeEngine(
   };
 
   return { engine, scene, camera, environment, dispose };
+}
+
+function isWebglAvailable(): boolean {
+  if (typeof document === 'undefined') {
+    return false;
+  }
+
+  try {
+    const testCanvas = document.createElement('canvas');
+    const context =
+      (testCanvas.getContext('webgl2') as WebGL2RenderingContext | null) ??
+      (testCanvas.getContext('webgl') as WebGLRenderingContext | null) ??
+      (testCanvas.getContext(
+        'experimental-webgl',
+      ) as WebGLRenderingContext | null);
+
+    if (!context) {
+      return false;
+    }
+
+    try {
+      context.getParameter(context.VERSION);
+    } catch {
+      return false;
+    } finally {
+      const loseContext = context.getExtension?.('WEBGL_lose_context');
+      loseContext?.loseContext?.();
+      loseContext?.restoreContext?.();
+    }
+
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function isWebglInitializationError(error: unknown): boolean {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+
+  const message = error.message.toLowerCase();
+  return message.includes('webgl') || message.includes('context');
 }
 
 function configureRenderingPipeline(
