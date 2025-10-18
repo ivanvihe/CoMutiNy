@@ -222,10 +222,6 @@ function isWebglAvailable(): boolean {
       context.getParameter(context.VERSION);
     } catch {
       return false;
-    } finally {
-      const loseContext = context.getExtension?.('WEBGL_lose_context');
-      loseContext?.loseContext?.();
-      loseContext?.restoreContext?.();
     }
 
     return true;
@@ -292,7 +288,7 @@ function configureRenderingPipeline(
       volumetricOptions.samples ?? 100,
       Texture.BILINEAR_SAMPLINGMODE,
       scene.getEngine(),
-      false,
+      true,
       scene,
     );
     volumetric.exposure = volumetricOptions.exposure ?? 0.6;

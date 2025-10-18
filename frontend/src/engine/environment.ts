@@ -1,6 +1,7 @@
 import { DirectionalLight } from '@babylonjs/core/Lights/directionalLight';
 import { HemisphericLight } from '@babylonjs/core/Lights/hemisphericLight';
 import { ShadowGenerator } from '@babylonjs/core/Lights/Shadows/shadowGenerator';
+import '@babylonjs/core/Lights/Shadows/shadowGeneratorSceneComponent';
 import { Color3, Color4 } from '@babylonjs/core/Maths/math.color';
 import { Scalar } from '@babylonjs/core/Maths/math.scalar';
 import { Vector3 } from '@babylonjs/core/Maths/math.vector';
