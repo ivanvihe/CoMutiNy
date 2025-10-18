@@ -6,6 +6,7 @@ import parseMapDefinition, {
 import { resolveObjectDefinition, registerObjectDefinitions } from './objects/definitions.js';
 import { registerSpriteGeneratorDefinitions } from './objects/spriteGenerators.js';
 import normaliseAppearance from './objects/appearance.js';
+import { getObjectCollisionPreset } from './entities/objects/collisions.js';
 
 const MAP_DIRECTORY = '../../../server/maps';
 const MAP_FILE_EXTENSION = '.map';
@@ -488,6 +489,16 @@ function normaliseServerObject(object, registry, options = {}) {
   }
 
   const size = normaliseObjectSize(object.size ?? { width: object.width, height: object.height });
+  const collisionPreset = getObjectCollisionPreset(objectId ?? definition?.id ?? null);
+  if (collisionPreset?.size) {
+    const presetSize = collisionPreset.size;
+    if (Number.isFinite(presetSize.width) && presetSize.width > 0) {
+      size.width = Math.max(1, Math.trunc(presetSize.width));
+    }
+    if (Number.isFinite(presetSize.height) && presetSize.height > 0) {
+      size.height = Math.max(1, Math.trunc(presetSize.height));
+    }
+  }
   const solid = Boolean(object.solid);
 
   const description =
@@ -531,8 +542,10 @@ function normaliseServerObject(object, registry, options = {}) {
     delete mergedMetadata.appearance;
   }
 
+  const presetVolume = collisionPreset?.volume ?? null;
+
   const defaultVolume = normaliseVolumeSpec(
-    definition?.volume,
+    presetVolume ?? definition?.volume,
     {
       height: Math.max(
         Number.isFinite(definition?.volume?.height) ? definition.volume.height : size.height ?? 1,

@@ -1,0 +1,27 @@
+{
+  "id": "collab_chairs",
+  "type": "furniture",
+  "name": "Sillas colaborativas",
+  "description": "Pareja de sillas acolchadas pensadas para zonas de reunión informal.",
+  "appearance": {
+    "generator": "collabChairs",
+    "width": 1,
+    "height": 1,
+    "tileSize": 32,
+    "anchor": { "x": 0.5, "y": 1, "z": 0 },
+    "options": {
+      "upholsteryColor": "#5a7da6",
+      "upholsteryHighlight": "#7ba0c8",
+      "frameColor": "#2e3944",
+      "feetColor": "#1f252b"
+    }
+  },
+  "volume": {
+    "height": 1,
+    "anchor": { "x": 0.5, "y": 1, "z": 0 }
+  },
+  "metadata": {
+    "tags": ["furniture", "seating", "phase3"],
+    "palette": "collabChairs"
+  }
+}
