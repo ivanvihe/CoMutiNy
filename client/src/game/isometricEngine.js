@@ -370,6 +370,32 @@ const combineScale = (base, override) => {
   return normaliseScaleValue(override, baseScale);
 };
 
+const enforceMinimumLayerScale = (scale, canvas, tileWidth, tileHeight) => {
+  if (!canvas) {
+    return scale;
+  }
+
+  const current = scale ?? DEFAULT_SPRITE_SCALE;
+  const width = Number.isFinite(canvas.width) ? canvas.width : 0;
+  const height = Number.isFinite(canvas.height) ? canvas.height : 0;
+
+  if (width <= 0 && height <= 0) {
+    return current;
+  }
+
+  const minScaleX = width > 0 ? tileWidth / width : current.x;
+  const minScaleY = height > 0 ? tileHeight / height : current.y;
+
+  const enforcedX = Math.max(current.x ?? 1, minScaleX || 0);
+  const enforcedY = Math.max(current.y ?? 1, minScaleY || 0);
+
+  if (enforcedX === current.x && enforcedY === current.y) {
+    return current;
+  }
+
+  return { x: enforcedX, y: enforcedY };
+};
+
 const normaliseVolumeValue = (value, fallback = DEFAULT_VOLUME) => {
   if (value === undefined || value === null) {
     return {
@@ -1492,31 +1518,79 @@ export class IsometricEngine {
     const originX = width / 2;
     const originY = height / 2;
     const zoom = this.getZoom();
+    const prepared = list
+      .map((object) => {
+        if (!object || object.layerVisible === false) {
+          return null;
+        }
 
-    list.forEach((object) => {
-      if (!object || object.layerVisible === false) {
-        return;
-      }
+        const sprite = this.objectSprites.get(object.id);
+        if (!sprite?.layers?.length) {
+          return null;
+        }
 
-      const sprite = this.objectSprites.get(object.id);
-      if (!sprite?.layers?.length) {
-        return;
-      }
+        const position = object.position ?? { x: 0, y: 0, z: 0 };
+        const size = object.size ?? {};
+        const spriteSize = sprite.appearanceSize ?? {};
+        const widthTiles = Number.isFinite(size.width)
+          ? size.width
+          : Number.isFinite(spriteSize.width)
+            ? spriteSize.width
+            : 1;
+        const heightTiles = Number.isFinite(size.height)
+          ? size.height
+          : Number.isFinite(spriteSize.height)
+            ? spriteSize.height
+            : 1;
 
+        const metrics = {
+          z: Number.isFinite(position.z) ? position.z : 0,
+          depthY: (position.y ?? 0) + Math.max(heightTiles, 1) - 1,
+          depthX: (position.x ?? 0) + Math.max(widthTiles, 1) - 1,
+          baseY: position.y ?? 0,
+          baseX: position.x ?? 0,
+          id: typeof object.id === 'string' ? object.id : ''
+        };
+
+        return {
+          object,
+          sprite,
+          widthTiles: Math.max(widthTiles, 0),
+          heightTiles: Math.max(heightTiles, 0),
+          metrics
+        };
+      })
+      .filter(Boolean)
+      .sort((a, b) => {
+        if (a.metrics.z !== b.metrics.z) {
+          return a.metrics.z - b.metrics.z;
+        }
+        if (a.metrics.depthY !== b.metrics.depthY) {
+          return a.metrics.depthY - b.metrics.depthY;
+        }
+        if (a.metrics.depthX !== b.metrics.depthX) {
+          return a.metrics.depthX - b.metrics.depthX;
+        }
+        if (a.metrics.baseY !== b.metrics.baseY) {
+          return a.metrics.baseY - b.metrics.baseY;
+        }
+        if (a.metrics.baseX !== b.metrics.baseX) {
+          return a.metrics.baseX - b.metrics.baseX;
+        }
+        return a.metrics.id.localeCompare(b.metrics.id);
+      });
+
+    if (!prepared.length) {
+      return;
+    }
+
+    prepared.forEach(({ object, sprite, widthTiles, heightTiles }) => {
       const position = object.position ?? { x: 0, y: 0 };
       const relX = position.x - camera.x;
       const relY = position.y - camera.y;
       const screen = gridToScreen(relX, relY, tileWidth, tileHeight);
       const baseX = originX + screen.x;
       const baseY = originY + screen.y;
-
-      const size = object.size ?? {};
-      const widthTiles = Number.isFinite(size.width)
-        ? size.width
-        : sprite.appearanceSize?.width ?? 1;
-      const heightTiles = Number.isFinite(size.height)
-        ? size.height
-        : sprite.appearanceSize?.height ?? 1;
 
       const coverageWidth = tileWidth * Math.max(0, widthTiles);
       const coverageHeight = tileHeight * Math.max(0, heightTiles);
@@ -1550,8 +1624,9 @@ export class IsometricEngine {
         const layerFootprintWidth = tileWidth * Math.max(0, layer.size?.width ?? widthTiles);
         const layerFootprintHeight = tileHeight * Math.max(0, layer.size?.height ?? heightTiles);
 
-        const drawWidth = layer.canvas.width * scale.x * zoom;
-        const drawHeight = layer.canvas.height * scale.y * zoom;
+        const layerScale = enforceMinimumLayerScale(scale, layer.canvas, tileWidth, tileHeight);
+        const drawWidth = layer.canvas.width * layerScale.x * zoom;
+        const drawHeight = layer.canvas.height * layerScale.y * zoom;
         if (drawWidth <= 0 || drawHeight <= 0) {
           return;
         }
@@ -1637,9 +1712,12 @@ export class IsometricEngine {
         delta
       );
 
-      this.drawPlayerAvatar(entity, screenX, screenY, time);
+      const scale = this.resolvePlayerScale(tileWidth, entity);
+      const bob = this.resolveBobOffset(entity.animation, time, scale);
 
-      const nameY = this.computeNameplateY(screenY, entity.animation, time);
+      this.drawPlayerAvatar(entity, screenX, screenY, time, scale, bob, tileWidth, tileHeight);
+
+      const nameY = this.computeNameplateY(screenY, entity.animation, time, scale, bob);
 
       if (entity.id) {
         const bubble = chatBubbles.get(entity.id);
@@ -1762,42 +1840,60 @@ export class IsometricEngine {
     this.ctx.restore();
   }
 
-  computeNameplateY(screenY, animation, time) {
+  computeNameplateY(screenY, animation, time, scale = 1, bobOverride) {
     const tileHeight = this.getTileHeight();
-    const bob = this.resolveBobOffset(animation, time);
-    return screenY - tileHeight * 1.4 - bob;
+    const bob = Number.isFinite(bobOverride)
+      ? bobOverride
+      : this.resolveBobOffset(animation, time, scale);
+    return screenY - tileHeight * 1.4 * scale - bob;
   }
 
-  resolveBobOffset(animation, time) {
+  resolveBobOffset(animation, time, scale = 1) {
     if (!time) {
       return 0;
     }
     const base = animation === 'walk' ? 5 : 2;
     const speed = animation === 'walk' ? 200 : 1200;
-    return Math.sin((time / speed) * Math.PI * 2) * base;
+    return Math.sin((time / speed) * Math.PI * 2) * base * scale;
   }
 
-  drawPlayerAvatar(entity, screenX, screenY, time) {
+  resolvePlayerScale(tileWidth, entity) {
+    const safeTileWidth = Number.isFinite(tileWidth) && tileWidth > 0 ? tileWidth : DEFAULT_TILESET_CONFIG.tileWidth;
+    const baseWidth = safeTileWidth * 0.5;
+    const minimum = baseWidth > 0 ? safeTileWidth / baseWidth : 1;
+    const candidate = Number.isFinite(entity?.scale) && entity.scale > 0 ? entity.scale : 1;
+    return Math.max(candidate, minimum);
+  }
+
+  drawPlayerAvatar(entity, screenX, screenY, time, scale = 1, bob = 0, baseTileWidth, baseTileHeight) {
     const palette = entity.local ? PLAYER_COLORS.local : PLAYER_COLORS.remote;
-    const tileWidth = this.getTileWidth();
-    const tileHeight = this.getTileHeight();
-    const bob = this.resolveBobOffset(entity.animation, time);
+    const tileWidth = Number.isFinite(baseTileWidth) ? baseTileWidth : this.getTileWidth();
+    const tileHeight = Number.isFinite(baseTileHeight) ? baseTileHeight : this.getTileHeight();
 
     this.ctx.save();
 
     // shadow
     this.ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
     this.ctx.beginPath();
-    this.ctx.ellipse(screenX, screenY + tileHeight * 0.1, tileWidth * 0.35, tileHeight * 0.18, 0, 0, Math.PI * 2);
+    this.ctx.ellipse(
+      screenX,
+      screenY + tileHeight * 0.1 * scale,
+      tileWidth * 0.35 * scale,
+      tileHeight * 0.18 * scale,
+      0,
+      0,
+      Math.PI * 2
+    );
     this.ctx.fill();
 
-    const baseY = screenY - tileHeight * 0.6 - bob;
+    const baseY = screenY - tileHeight * 0.6 * scale - bob;
     const bodyWidth = tileWidth * 0.5;
     const bodyHeight = tileHeight * 1.05;
     const torsoHeight = bodyHeight * 0.58;
     const headRadius = tileWidth * 0.2;
 
     this.ctx.translate(screenX, baseY);
+    this.ctx.scale(scale, scale);
 
     // body
     this.ctx.fillStyle = palette.body;
