@@ -39,7 +39,8 @@ const WorldContext = createContext({
   setAppearance: () => {},
   updateLocalPlayerState: () => {},
   interactWithObject: () => Promise.resolve({ ok: false }),
-  lastObjectEvent: null
+  lastObjectEvent: null,
+  getSocket: () => null
 });
 
 const sanitizePosition = (position) => {
@@ -1146,7 +1147,8 @@ export function WorldProvider({ children }) {
       setAppearance,
       updateLocalPlayerState,
       interactWithObject,
-      lastObjectEvent
+      lastObjectEvent,
+      getSocket: () => socketRef.current
     }),
     [
       connectionState.error,

@@ -11,7 +11,7 @@ export default function GameView() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const gameContainerRef = useRef(null);
   const gameRef = useRef(null);
-  const { connected, connectionStatus } = useWorld();
+  const { connected, connectionStatus, players, localPlayerId, profile, getSocket } = useWorld();
 
   const handleOpenSettings = useCallback(() => {
     setSettingsOpen(true);
@@ -54,6 +54,26 @@ export default function GameView() {
       status: connectionStatus
     });
   }, [connected, connectionStatus]);
+
+  useEffect(() => {
+    const game = gameRef.current;
+    if (!game) {
+      return;
+    }
+
+    const assignIfChanged = (key, value) => {
+      if (game.registry.get(key) !== value) {
+        game.registry.set(key, value);
+      }
+    };
+
+    const socket = typeof getSocket === 'function' ? getSocket() : null;
+
+    assignIfChanged('network:socket', socket);
+    assignIfChanged('player:localId', localPlayerId ?? null);
+    assignIfChanged('player:profile', profile ?? null);
+    assignIfChanged('world:players', Array.isArray(players) ? players : []);
+  }, [getSocket, localPlayerId, players, profile, connectionStatus, connected]);
 
   return (
     <div className="game-view">
