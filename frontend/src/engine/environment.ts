@@ -218,7 +218,9 @@ export const createDayNightEnvironment = (
 
   observer = scene.onBeforeRenderObservable.add(() => {
     const deltaTime = scene.getEngine().getDeltaTime();
-    cloudTexture.render();
+    if (cloudTexture.isReady()) {
+      cloudTexture.render();
+    }
     cloudDome.rotation.y += (deltaTime / 1000) * 0.02;
     updateEnvironment();
   });
