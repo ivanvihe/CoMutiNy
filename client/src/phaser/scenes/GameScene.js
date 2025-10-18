@@ -1,88 +1,12 @@
 import Phaser from 'phaser';
 import gameState from '../../game/state/index.js';
+import MapManager from '../managers/MapManager.js';
+import Player from '../entities/Player.js';
 
 const DEFAULT_TILE_SIZE = 64;
-const TILE_TEXTURE_PREFIX = 'tile/';
 const DEFAULT_CHARACTER_TEXTURE = 'astronaut/classic';
 const MOVEMENT_SPEED = 180;
-
-const toArray = (value) => (Array.isArray(value) ? value : []);
-
-const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
-
-const normaliseOffset = (offset, fallback = { x: 0, y: 0, z: 0 }) => {
-  if (Array.isArray(offset)) {
-    const [x = 0, y = 0, z = 0] = offset;
-    return { x, y, z };
-  }
-  if (!offset || typeof offset !== 'object') {
-    return { ...fallback };
-  }
-  return {
-    x: Number.isFinite(offset.x) ? offset.x : fallback.x,
-    y: Number.isFinite(offset.y) ? offset.y : fallback.y,
-    z: Number.isFinite(offset.z) ? offset.z : fallback.z
-  };
-};
-
-const normaliseScale = (scale, fallback = { x: 1, y: 1 }) => {
-  if (typeof scale === 'number' && Number.isFinite(scale)) {
-    return { x: scale, y: scale };
-  }
-  if (!scale || typeof scale !== 'object') {
-    return { ...fallback };
-  }
-  return {
-    x: Number.isFinite(scale.x) ? scale.x : fallback.x,
-    y: Number.isFinite(scale.y) ? scale.y : fallback.y
-  };
-};
-
-const sortLayers = (layers = []) =>
-  [...layers].sort((a, b) => {
-    const aOrder = Number.isFinite(a?.order) ? a.order : 0;
-    const bOrder = Number.isFinite(b?.order) ? b.order : 0;
-    if (aOrder === bOrder) {
-      return (a?.id ?? '').localeCompare(b?.id ?? '');
-    }
-    return aOrder - bOrder;
-  });
-
-const collectObjects = (map) => {
-  const standalone = toArray(map?.objects);
-  const layered = toArray(map?.objectLayers)
-    .filter((layer) => layer && layer.visible !== false)
-    .flatMap((layer) => toArray(layer.objects));
-  const merged = [...standalone];
-  layered.forEach((object) => {
-    if (!object || !object.id) {
-      return;
-    }
-    merged.push(object);
-  });
-  return merged;
-};
-
-const resolveObjectTextureId = (object) => {
-  if (!object) {
-    return null;
-  }
-  if (object.objectId) {
-    return object.objectId;
-  }
-  if (object.definitionId) {
-    return object.definitionId;
-  }
-  return object.id ?? null;
-};
-
-const resolveTileType = (map, tileId) => {
-  if (!map || !tileId) {
-    return null;
-  }
-  const lookup = map.tileTypes ?? {};
-  return lookup[tileId] ?? null;
-};
+const DEFAULT_BACKGROUND = '#10131a';
 
 const createKeyboardConfig = (scene) => {
   const cursors = scene.input.keyboard.createCursorKeys();
@@ -106,11 +30,13 @@ export default class GameScene extends Phaser.Scene {
     this.currentMap = null;
     this.layersContainer = null;
     this.objectsContainer = null;
-    this.collidableTiles = null;
-    this.solidObjects = null;
+    this.mapManager = null;
     this.player = null;
     this.keyboard = null;
     this.speed = MOVEMENT_SPEED;
+    this.playerColliders = [];
+    this.collidableTiles = null;
+    this.solidObjects = null;
   }
 
   init(data) {
@@ -130,13 +56,24 @@ export default class GameScene extends Phaser.Scene {
 
   create() {
     this.physics.world.setBounds(0, 0, this.tileSize, this.tileSize);
-    this.cameras.main.setBackgroundColor('#10131a');
+    this.cameras.main.setBackgroundColor(DEFAULT_BACKGROUND);
     this.cameras.main.setZoom(1);
 
     this.layersContainer = this.add.layer();
     this.objectsContainer = this.add.layer();
-    this.collidableTiles = this.physics.add.staticGroup();
-    this.solidObjects = this.physics.add.staticGroup();
+
+    this.mapManager = new MapManager(this, {
+      tileSize: this.tileSize,
+      tileTextures: this.tileTextures,
+      objectSprites: this.objectSprites,
+      containers: {
+        tileLayers: this.layersContainer,
+        objects: this.objectsContainer
+      }
+    });
+
+    this.collidableTiles = this.mapManager.collidableTiles;
+    this.solidObjects = this.mapManager.solidObjects;
 
     this.keyboard = createKeyboardConfig(this);
 
@@ -145,9 +82,17 @@ export default class GameScene extends Phaser.Scene {
     });
 
     this.events.once('shutdown', () => {
+      this.playerColliders.forEach((collider) => collider?.destroy());
+      this.playerColliders = [];
+
       if (typeof this.unsubscribe === 'function') {
         this.unsubscribe();
         this.unsubscribe = null;
+      }
+
+      if (this.mapManager) {
+        this.mapManager.destroy();
+        this.mapManager = null;
       }
     });
   }
@@ -164,107 +109,68 @@ export default class GameScene extends Phaser.Scene {
     this.currentMap = map;
     this.resetScene();
 
-    const width = Math.max(1, map?.size?.width ?? 1);
-    const height = Math.max(1, map?.size?.height ?? 1);
-    const pixelWidth = width * this.tileSize;
-    const pixelHeight = height * this.tileSize;
+    if (this.mapManager) {
+      this.mapManager.tileSize = this.tileSize;
+      this.mapManager.setResources({
+        tileTextures: this.tileTextures,
+        objectSprites: this.objectSprites
+      });
+    }
+
+    const result = this.mapManager?.load(map) ?? null;
+    const pixelWidth = result?.pixelWidth ?? this.tileSize;
+    const pixelHeight = result?.pixelHeight ?? this.tileSize;
+
+    this.collidableTiles = result?.collidableTiles ?? this.mapManager?.collidableTiles ?? null;
+    this.solidObjects = result?.solidObjects ?? this.mapManager?.solidObjects ?? null;
 
     this.physics.world.setBounds(0, 0, pixelWidth, pixelHeight);
     this.cameras.main.setBounds(0, 0, pixelWidth, pixelHeight);
 
     if (map?.theme?.borderColour) {
       this.cameras.main.setBackgroundColor(map.theme.borderColour);
+    } else {
+      this.cameras.main.setBackgroundColor(DEFAULT_BACKGROUND);
     }
 
-    this.buildTileLayers(map);
-    this.buildObjects(map);
     this.spawnPlayer(map);
+
+    this.attachPlayerColliders([
+      result?.collidableTiles ?? this.collidableTiles,
+      result?.solidObjects ?? this.solidObjects
+    ]);
   }
 
   resetScene() {
-    this.layersContainer.removeAll(true);
-    this.objectsContainer.removeAll(true);
-    this.collidableTiles?.clear(true, true);
-    this.solidObjects?.clear(true, true);
+    this.playerColliders.forEach((collider) => collider?.destroy());
+    this.playerColliders = [];
+
+    if (this.mapManager) {
+      this.mapManager.clear();
+    }
+
     if (this.player) {
+      this.cameras.main.stopFollow();
       this.player.destroy();
       this.player = null;
     }
   }
 
-  buildTileLayers(map) {
-    const layers = sortLayers(map?.layers);
-    layers.forEach((layer) => {
-      if (!layer || layer.visible === false) {
+  attachPlayerColliders(groups = []) {
+    if (!this.player) {
+      return;
+    }
+    const list = Array.isArray(groups) ? groups : [groups];
+    list.forEach((group) => {
+      if (!group || typeof group !== 'object') {
         return;
       }
-      const layerGroup = this.add.layer();
-      layer.tiles.forEach((row, y) => {
-        row.forEach((tileId, x) => {
-          if (!tileId) {
-            return;
-          }
-          const tileEntry = this.tileTextures.get(tileId);
-          const textureKey = tileEntry?.key ?? `${TILE_TEXTURE_PREFIX}${tileId}`;
-          if (!textureKey || !this.textures.exists(textureKey)) {
-            return;
-          }
-          const posX = x * this.tileSize + this.tileSize / 2;
-          const posY = y * this.tileSize + this.tileSize / 2;
-          const image = this.add.image(posX, posY, textureKey);
-          image.setDisplaySize(this.tileSize, this.tileSize);
-          layerGroup.add(image);
-
-          const tileType = resolveTileType(map, tileId);
-          if (tileType?.collides) {
-            this.physics.add.existing(image, true);
-            this.collidableTiles.add(image);
-          }
-        });
-      });
-      if (Number.isFinite(layer.opacity)) {
-        layerGroup.setAlpha(clamp(layer.opacity, 0, 1));
-      }
-      this.layersContainer.add(layerGroup);
-    });
-  }
-
-  buildObjects(map) {
-    const objects = collectObjects(map);
-    objects.forEach((object) => {
-      const textureId = resolveObjectTextureId(object);
-      if (!textureId) {
+      const children = typeof group.getChildren === 'function' ? group.getChildren() : null;
+      if (Array.isArray(children) && children.length === 0) {
         return;
       }
-      const spriteEntry = this.objectSprites.get(textureId);
-      if (!spriteEntry?.key || !this.textures.exists(spriteEntry.key)) {
-        return;
-      }
-
-      const size = object?.size ?? { width: 1, height: 1 };
-      const offset = normaliseOffset(spriteEntry.appearance?.offset);
-      const scale = normaliseScale(spriteEntry.appearance?.scale);
-      const origin = spriteEntry.composite?.origin ?? { x: 0.5, y: 1 };
-
-      const scaleFactor = this.tileSize / (spriteEntry.sprite?.tileSize ?? this.tileSize);
-      const displayScaleX = scaleFactor * scale.x;
-      const displayScaleY = scaleFactor * scale.y;
-
-      const baseX = (object.position?.x ?? 0) * this.tileSize;
-      const baseY = (object.position?.y ?? 0) * this.tileSize;
-      const centerX = baseX + (size.width ?? 1) * this.tileSize * 0.5 + offset.x * this.tileSize;
-      const bottomY = baseY + (size.height ?? 1) * this.tileSize + offset.y * this.tileSize;
-
-      const sprite = this.add.image(centerX, bottomY, spriteEntry.key);
-      sprite.setOrigin(origin.x, origin.y);
-      sprite.setScale(displayScaleX, displayScaleY);
-      sprite.setData('objectId', object.id);
-      this.objectsContainer.add(sprite);
-
-      if (object.solid) {
-        this.physics.add.existing(sprite, true);
-        this.solidObjects.add(sprite);
-      }
+      const collider = this.physics.add.collider(this.player, group);
+      this.playerColliders.push(collider);
     });
   }
 
@@ -283,36 +189,26 @@ export default class GameScene extends Phaser.Scene {
   spawnPlayer(map) {
     const spawn = map?.spawn ?? { x: 0, y: 0 };
     const textureEntry = this.resolveCharacterTexture();
-    const textureKey = textureEntry?.key ?? null;
 
     const x = (spawn.x + 0.5) * this.tileSize;
     const y = (spawn.y + 0.5) * this.tileSize;
 
-    if (textureKey && this.textures.exists(textureKey)) {
-      this.player = this.physics.add.sprite(x, y, textureKey);
-      const baseHeight = textureEntry?.height ?? this.tileSize * 2;
-      const scaleFactor = (this.tileSize * 1.2) / baseHeight;
-      this.player.setScale(scaleFactor);
-      this.player.setOrigin(0.5, 0.85);
-    } else {
-      this.player = this.physics.add.sprite(x, y, Phaser.Textures.Texture.DEFAULT);
-      this.player.setDisplaySize(this.tileSize * 0.6, this.tileSize * 0.6);
-    }
+    const avatarOptions = textureEntry
+      ? { key: textureEntry.key, width: textureEntry.width, height: textureEntry.height }
+      : {};
 
-    this.player.body.setCollideWorldBounds(true);
+    this.player = new Player(this, x, y, {
+      tileSize: this.tileSize,
+      avatar: avatarOptions
+    });
 
-    if (this.collidableTiles) {
-      this.physics.add.collider(this.player, this.collidableTiles);
-    }
-    if (this.solidObjects) {
-      this.physics.add.collider(this.player, this.solidObjects);
-    }
+    this.player.setMovementSpeed(this.speed);
 
     this.cameras.main.startFollow(this.player, true, 0.15, 0.15);
   }
 
   update() {
-    if (!this.player || !this.player.body) {
+    if (!this.player || !this.player.body || !this.keyboard) {
       return;
     }
 
@@ -332,8 +228,10 @@ export default class GameScene extends Phaser.Scene {
       velocity.y += 1;
     }
 
+    const speed = Number.isFinite(this.player.speed) ? this.player.speed : this.speed;
+
     if (velocity.lengthSq() > 0) {
-      velocity.normalize().scale(this.speed);
+      velocity.normalize().scale(speed);
       body.setVelocity(velocity.x, velocity.y);
     } else {
       body.setVelocity(0, 0);
