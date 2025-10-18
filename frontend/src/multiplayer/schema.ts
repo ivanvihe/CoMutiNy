@@ -1,6 +1,6 @@
 import { ArraySchema, MapSchema, Schema, type } from '@colyseus/schema';
 
-export class Vector3 extends Schema {
+export class Vector3State extends Schema {
   @type('number')
   x = 0;
 
@@ -10,16 +10,8 @@ export class Vector3 extends Schema {
   @type('number')
   z = 0;
 
-  copyFrom(other: Partial<Vector3>): void {
-    if (typeof other.x === 'number') {
-      this.x = other.x;
-    }
-    if (typeof other.y === 'number') {
-      this.y = other.y;
-    }
-    if (typeof other.z === 'number') {
-      this.z = other.z;
-    }
+  toJSON(): { x: number; y: number; z: number } {
+    return { x: this.x, y: this.y, z: this.z };
   }
 }
 
@@ -30,11 +22,11 @@ export class PlayerState extends Schema {
   @type('string')
   displayName = '';
 
-  @type(Vector3)
-  position = new Vector3();
+  @type(Vector3State)
+  position = new Vector3State();
 
-  @type(Vector3)
-  rotation = new Vector3();
+  @type(Vector3State)
+  rotation = new Vector3State();
 
   @type('number')
   lastUpdate = 0;
@@ -50,8 +42,8 @@ export class BlockState extends Schema {
   @type('string')
   type = '';
 
-  @type(Vector3)
-  position = new Vector3();
+  @type(Vector3State)
+  position = new Vector3State();
 
   @type('string')
   placedBy = '';
@@ -60,7 +52,7 @@ export class BlockState extends Schema {
   updatedAt = 0;
 }
 
-export class Chunk extends Schema {
+export class ChunkState extends Schema {
   @type('string')
   id = '';
 
@@ -69,8 +61,8 @@ export class Chunk extends Schema {
 }
 
 export class WorldState extends Schema {
-  @type([Chunk])
-  chunks = new ArraySchema<Chunk>();
+  @type([ChunkState])
+  chunks = new ArraySchema<ChunkState>();
 
   @type({ map: PlayerState })
   players = new MapSchema<PlayerState>();

@@ -13,6 +13,8 @@
   "dependencies": {
     "@babylonjs/core": "^7.24.0",
     "@babylonjs/materials": "^7.54.3",
+    "@colyseus/schema": "^2.0.29",
+    "colyseus.js": "^0.15.18",
     "serve": "^14.2.1"
   },
   "devDependencies": {
