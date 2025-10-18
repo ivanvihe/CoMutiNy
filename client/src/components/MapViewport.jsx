@@ -170,6 +170,30 @@ export default function MapViewport({ onOpenSettings } = {}) {
     return Array.from(latestByPlayer.values());
   }, [chatMessages]);
 
+  const layerDiagnostics = useMemo(() => {
+    const tileLayers = Array.isArray(currentMap?.layers) ? currentMap.layers : [];
+    const overlayCount = tileLayers.filter((layer) => {
+      const placement = (layer?.placement ?? layer?.mode ?? '').toString().toLowerCase();
+      return placement === 'overlay';
+    }).length;
+    const solidCount = Array.isArray(currentMap?.objects)
+      ? currentMap.objects.filter((object) => object?.solid).length
+      : 0;
+    const maxVolumeHeight = Array.isArray(currentMap?.objects)
+      ? currentMap.objects.reduce((max, object) => {
+          const height = Number.parseFloat(object?.volume?.height);
+          return Number.isFinite(height) ? Math.max(max, height) : max;
+        }, 0)
+      : 0;
+
+    return {
+      totalLayers: tileLayers.length,
+      overlayLayers: overlayCount,
+      solidObjects: solidCount,
+      maxVolumeHeight: Number.isFinite(maxVolumeHeight) ? maxVolumeHeight : 0
+    };
+  }, [currentMap]);
+
   useEffect(() => {
     const engine = engineRef.current;
     if (!engine) {
@@ -351,7 +375,14 @@ export default function MapViewport({ onOpenSettings } = {}) {
 
   return (
     <div className="map-viewport">
-      <canvas ref={canvasRef} className="map-viewport__canvas" />
+      <canvas
+        ref={canvasRef}
+        className="map-viewport__canvas"
+        data-layer-count={layerDiagnostics.totalLayers}
+        data-overlay-count={layerDiagnostics.overlayLayers}
+        data-solid-count={layerDiagnostics.solidObjects}
+        data-max-volume-height={layerDiagnostics.maxVolumeHeight.toFixed(2)}
+      />
 
       <Topbar
         alias={profile?.alias ?? null}

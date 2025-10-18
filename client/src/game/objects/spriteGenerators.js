@@ -399,6 +399,203 @@ const drawCommunityDoor = (ctx, { width, height, tileSize, options = {} }, helpe
   ctx.fill();
 };
 
+const drawTieredPlatform = (ctx, { width, height, tileSize, options = {} }, helpers = null) => {
+  const topColor = options.topColor ?? '#dbe4ff';
+  const sideColor = options.sideColor ?? '#8fa2c9';
+  const trimColor = options.trimColor ?? '#4a5f82';
+  const supportColor = options.supportColor ?? '#3b4c6b';
+  const glowColor = options.glowColor ?? 'rgba(198, 216, 255, 0.35)';
+
+  const pixelWidth = width * tileSize;
+  const pixelHeight = height * tileSize;
+
+  helpers?.setVolume?.({ height: Math.max(height * 1.6, 1.4), anchor: { x: 0.5, y: 1, z: 0 } });
+
+  if (helpers?.registerLayer) {
+    helpers.registerLayer(
+      'tiered-platform-shadow',
+      (shadowCtx) => {
+        shadowCtx.fillStyle = 'rgba(0, 0, 0, 0.28)';
+        shadowCtx.beginPath();
+        shadowCtx.ellipse(
+          pixelWidth / 2,
+          pixelHeight * 0.94,
+          (pixelWidth * 0.82) / 2,
+          tileSize * 0.28,
+          0,
+          0,
+          Math.PI * 2
+        );
+        shadowCtx.fill();
+      },
+      {
+        width,
+        height: Math.min(1, height * 0.6),
+        anchor: { x: 0.5, y: 1, z: 0 },
+        offset: { z: -0.06 },
+        pixelOffset: { y: -tileSize * 0.12 },
+        alpha: 0.85,
+        order: -25
+      }
+    );
+  }
+
+  const baseHeight = pixelHeight * 0.55;
+  const baseTop = pixelHeight - baseHeight;
+
+  ctx.fillStyle = sideColor;
+  ctx.fillRect(pixelWidth * 0.2, baseTop, pixelWidth * 0.6, baseHeight);
+
+  ctx.fillStyle = supportColor;
+  ctx.fillRect(pixelWidth * 0.32, baseTop, pixelWidth * 0.1, baseHeight);
+  ctx.fillRect(pixelWidth * 0.58, baseTop, pixelWidth * 0.1, baseHeight);
+
+  const topHeight = tileSize * 0.45;
+  ctx.fillStyle = topColor;
+  ctx.fillRect(pixelWidth * 0.1, baseTop - topHeight, pixelWidth * 0.8, topHeight);
+
+  ctx.strokeStyle = trimColor;
+  ctx.lineWidth = 2;
+  ctx.strokeRect(pixelWidth * 0.1, baseTop - topHeight, pixelWidth * 0.8, topHeight);
+
+  ctx.strokeStyle = 'rgba(0, 0, 0, 0.22)';
+  ctx.lineWidth = 1;
+  for (let i = 1; i <= 3; i += 1) {
+    const y = baseTop + (i * baseHeight) / 4;
+    ctx.beginPath();
+    ctx.moveTo(pixelWidth * 0.2, y);
+    ctx.lineTo(pixelWidth * 0.8, y);
+    ctx.stroke();
+  }
+
+  if (helpers?.registerLayer) {
+    helpers.registerLayer(
+      'tiered-platform-glow',
+      (layerCtx) => {
+        const gradient = layerCtx.createLinearGradient(0, 0, 0, topHeight);
+        gradient.addColorStop(0, glowColor);
+        gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
+        layerCtx.fillStyle = gradient;
+        layerCtx.fillRect(pixelWidth * 0.1, 0, pixelWidth * 0.8, topHeight);
+      },
+      {
+        width,
+        height: Math.max(1, height),
+        anchor: { x: 0.5, y: 1, z: 0 },
+        offset: { z: 0.18 },
+        pixelOffset: { y: -baseHeight - topHeight },
+        alpha: 0.75,
+        order: 6
+      }
+    );
+  }
+};
+
+const drawObservationTower = (ctx, { width, height, tileSize, options = {} }, helpers = null) => {
+  const bodyColor = options.bodyColor ?? '#6c7ba0';
+  const platformColor = options.platformColor ?? '#d6dee8';
+  const lightColor = options.lightColor ?? '#ffcc66';
+  const supportColor = options.supportColor ?? '#47516f';
+  const railingColor = options.railingColor ?? '#3f4a62';
+  const shadowColor = options.shadowColor ?? 'rgba(0, 0, 0, 0.28)';
+
+  const pixelWidth = width * tileSize;
+  const pixelHeight = height * tileSize;
+
+  helpers?.setVolume?.({ height: Math.max(height * 1.1, 3.4), anchor: { x: 0.5, y: 1, z: 0 } });
+
+  if (helpers?.registerLayer) {
+    helpers.registerLayer(
+      'tower-shadow',
+      (shadowCtx) => {
+        shadowCtx.fillStyle = shadowColor;
+        shadowCtx.beginPath();
+        shadowCtx.ellipse(
+          pixelWidth / 2,
+          pixelHeight * 0.98,
+          (pixelWidth * 0.9) / 2,
+          tileSize * 0.32,
+          0,
+          0,
+          Math.PI * 2
+        );
+        shadowCtx.fill();
+      },
+      {
+        width,
+        height: Math.min(1, height * 0.5),
+        anchor: { x: 0.5, y: 1, z: 0 },
+        offset: { z: -0.08 },
+        pixelOffset: { y: -tileSize * 0.15 },
+        alpha: 0.9,
+        order: -32
+      }
+    );
+  }
+
+  const columnWidth = pixelWidth * 0.28;
+  const columnX = (pixelWidth - columnWidth) / 2;
+  ctx.fillStyle = bodyColor;
+  ctx.fillRect(columnX, pixelHeight * 0.2, columnWidth, pixelHeight * 0.8);
+
+  const gradient = ctx.createLinearGradient(columnX, 0, columnX + columnWidth, 0);
+  gradient.addColorStop(0, 'rgba(0, 0, 0, 0.25)');
+  gradient.addColorStop(0.5, 'rgba(255, 255, 255, 0)');
+  gradient.addColorStop(1, 'rgba(255, 255, 255, 0.22)');
+  ctx.fillStyle = gradient;
+  ctx.fillRect(columnX, pixelHeight * 0.2, columnWidth, pixelHeight * 0.8);
+
+  const deckHeight = tileSize * 0.38;
+  const deckY = pixelHeight * 0.05;
+  ctx.fillStyle = platformColor;
+  ctx.fillRect(pixelWidth * 0.15, deckY, pixelWidth * 0.7, deckHeight);
+
+  ctx.strokeStyle = railingColor;
+  ctx.lineWidth = 2;
+  ctx.strokeRect(pixelWidth * 0.15, deckY, pixelWidth * 0.7, deckHeight);
+
+  ctx.beginPath();
+  ctx.moveTo(pixelWidth * 0.2, deckY + deckHeight * 0.3);
+  ctx.lineTo(pixelWidth * 0.8, deckY + deckHeight * 0.3);
+  ctx.moveTo(pixelWidth * 0.25, deckY + deckHeight * 0.6);
+  ctx.lineTo(pixelWidth * 0.75, deckY + deckHeight * 0.6);
+  ctx.stroke();
+
+  ctx.strokeStyle = supportColor;
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(pixelWidth * 0.2, deckY + deckHeight);
+  ctx.lineTo(pixelWidth * 0.35, pixelHeight * 0.55);
+  ctx.moveTo(pixelWidth * 0.8, deckY + deckHeight);
+  ctx.lineTo(pixelWidth * 0.65, pixelHeight * 0.55);
+  ctx.stroke();
+
+  if (helpers?.registerLayer) {
+    helpers.registerLayer(
+      'tower-lights',
+      (layerCtx) => {
+        layerCtx.fillStyle = lightColor;
+        const radius = tileSize * 0.12;
+        const lightY = deckY + deckHeight * 0.25;
+        [pixelWidth * 0.3, pixelWidth * 0.5, pixelWidth * 0.7].forEach((x) => {
+          layerCtx.beginPath();
+          layerCtx.arc(x, lightY, radius, 0, Math.PI * 2);
+          layerCtx.fill();
+        });
+      },
+      {
+        width,
+        height: Math.max(1, height),
+        anchor: { x: 0.5, y: 1, z: 0 },
+        offset: { z: 0.65 },
+        pixelOffset: { y: -pixelHeight * 0.78 },
+        alpha: 0.9,
+        order: 28
+      }
+    );
+  }
+};
+
 const BUILTIN_SPRITE_GENERATORS = {
   brickWall: drawBrickWall,
   monstera: drawMonstera,
@@ -407,7 +604,9 @@ const BUILTIN_SPRITE_GENERATORS = {
   grass: drawGrass,
   chest: drawChest,
   terminalPanel: drawTerminalPanel,
-  communityDoor: drawCommunityDoor
+  communityDoor: drawCommunityDoor,
+  tieredPlatform: drawTieredPlatform,
+  observationTower: drawObservationTower
 };
 
 const CUSTOM_SPRITE_GENERATORS = new Map();

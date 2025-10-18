@@ -317,6 +317,49 @@ const toFiniteNumber = (value, fallback = 0) => {
   return Number.isFinite(parsed) ? parsed : fallback;
 };
 
+const normaliseLayerPlacement = (value) => {
+  if (typeof value !== 'string') {
+    return 'ground';
+  }
+
+  const trimmed = value.trim().toLowerCase();
+  if (!trimmed) {
+    return 'ground';
+  }
+
+  if (['overlay', 'ceiling', 'upper', 'canopy', 'above'].includes(trimmed)) {
+    return 'overlay';
+  }
+
+  if (['elevated', 'raised', 'mid', 'detail'].includes(trimmed)) {
+    return 'elevated';
+  }
+
+  return 'ground';
+};
+
+const normaliseLayerOpacity = (value) => {
+  if (value === null || value === undefined) {
+    return null;
+  }
+
+  const numeric = Number.parseFloat(value);
+  if (!Number.isFinite(numeric)) {
+    return null;
+  }
+
+  return clamp(numeric, 0, 1);
+};
+
+const normaliseLayerElevation = (value) => {
+  if (value === null || value === undefined) {
+    return 0;
+  }
+
+  const numeric = Number.parseFloat(value);
+  return Number.isFinite(numeric) ? numeric : 0;
+};
+
 const normaliseAnchor3D = (value, fallback = { x: 0.5, y: 1, z: 0 }) => {
   if (value === undefined || value === null) {
     return { ...fallback };
@@ -713,6 +756,92 @@ const normaliseServerMap = (definition) => {
         })
     : [];
 
+  const tileLayers = Array.isArray(definition.layers)
+    ? definition.layers
+        .map((layer, index) => {
+          if (!layer || !Array.isArray(layer.tiles)) {
+            return null;
+          }
+          const identifier =
+            typeof layer.id === 'string' && layer.id.trim() ? layer.id.trim() : `layer-${index + 1}`;
+          const name =
+            typeof layer.name === 'string' && layer.name.trim() ? layer.name.trim() : identifier;
+          const order = Number.isFinite(layer.order) ? layer.order : index;
+          const visible = resolveBoolean(layer.visible, true);
+          const placement = normaliseLayerPlacement(layer.placement ?? layer.mode ?? layer.type);
+          const elevation = Number.isFinite(layer.elevation)
+            ? layer.elevation
+            : normaliseLayerElevation(layer.height ?? layer.level ?? layer.offset);
+          const opacity = normaliseLayerOpacity(layer.opacity ?? layer.alpha);
+          const tiles = Array.isArray(layer.tiles)
+            ? layer.tiles.map((row) =>
+                Array.isArray(row) ? row.map((tile) => (tile === undefined ? null : tile)) : []
+              )
+            : [];
+          if (!tiles.length) {
+            return null;
+          }
+          return {
+            id: identifier,
+            name,
+            order,
+            visible,
+            placement,
+            elevation,
+            ...(opacity !== null ? { opacity } : {}),
+            tiles
+          };
+        })
+        .filter(Boolean)
+        .sort((a, b) => (a.order === b.order ? a.id.localeCompare(b.id) : a.order - b.order))
+    : [];
+
+  const tileTypes = (() => {
+    if (!definition.tileTypes || typeof definition.tileTypes !== 'object') {
+      return {};
+    }
+
+    const result = {};
+    Object.entries(definition.tileTypes).forEach(([key, value]) => {
+      if (!value || typeof value !== 'object') {
+        return;
+      }
+      const payload = {
+        id: value.id ?? key,
+        name: value.name ?? value.label ?? key,
+        collides: resolveBoolean(value.collides, false),
+        transparent: resolveBoolean(value.transparent, true)
+      };
+      if (value.symbol) {
+        payload.symbol = value.symbol;
+      }
+      if (value.color) {
+        payload.color = value.color;
+      }
+      if (value.metadata && typeof value.metadata === 'object' && !Array.isArray(value.metadata)) {
+        payload.metadata = { ...value.metadata };
+      }
+      result[key] = payload;
+    });
+    return result;
+  })();
+
+  const collidableTiles = Array.isArray(definition.collidableTiles)
+    ? definition.collidableTiles
+        .map((position) => {
+          if (!position || typeof position !== 'object') {
+            return null;
+          }
+          const x = Number.parseInt(position.x ?? position.col, 10);
+          const y = Number.parseInt(position.y ?? position.row, 10);
+          if (!Number.isFinite(x) || !Number.isFinite(y)) {
+            return null;
+          }
+          return { x, y };
+        })
+        .filter(Boolean)
+    : [];
+
   const playerLayerOrderCandidate = Number.parseFloat(
     definition.playerLayerOrder ?? definition.playerLayer?.order
   );
@@ -730,6 +859,9 @@ const normaliseServerMap = (definition) => {
     blockedAreas: buildBlockedAreasFromServer(definition.blockedAreas),
     objects,
     objectLayers,
+    layers: tileLayers,
+    tileTypes,
+    collidableTiles,
     doors: normaliseDoorCollection(definition.doors),
     portals: Array.isArray(definition.portals) ? definition.portals : [],
     theme: normaliseTheme(definition.theme),

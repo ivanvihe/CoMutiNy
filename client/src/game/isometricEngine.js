@@ -163,6 +163,49 @@ const DEFAULT_SPRITE_SCALE = { x: 1, y: 1 };
 const DEFAULT_VOLUME = { height: 1, anchor: DEFAULT_SPRITE_ANCHOR };
 const UNASSIGNED_LAYER_ID = '__unassigned__';
 
+const normaliseLayerPlacement = (value) => {
+  if (typeof value !== 'string') {
+    return 'ground';
+  }
+
+  const trimmed = value.trim().toLowerCase();
+  if (!trimmed) {
+    return 'ground';
+  }
+
+  if (['overlay', 'ceiling', 'upper', 'canopy', 'above'].includes(trimmed)) {
+    return 'overlay';
+  }
+
+  if (['elevated', 'raised', 'mid', 'detail'].includes(trimmed)) {
+    return 'elevated';
+  }
+
+  return 'ground';
+};
+
+const normaliseLayerOpacity = (value) => {
+  if (value === null || value === undefined) {
+    return null;
+  }
+
+  const numeric = Number.parseFloat(value);
+  if (!Number.isFinite(numeric)) {
+    return null;
+  }
+
+  return clamp(numeric, 0, 1);
+};
+
+const normaliseLayerElevation = (value) => {
+  if (value === null || value === undefined) {
+    return 0;
+  }
+
+  const numeric = Number.parseFloat(value);
+  return Number.isFinite(numeric) ? numeric : 0;
+};
+
 const normaliseAnchorValue = (value, fallback = DEFAULT_SPRITE_ANCHOR) => {
   if (value === undefined || value === null) {
     return { ...fallback };
@@ -521,6 +564,7 @@ export class IsometricEngine {
       collisionTiles: new Set(),
       portalTiles: new Set(),
       layers: [],
+      tileLayerGroups: { all: [], ground: [], overlay: [] },
       tileTypes: new Map(),
       player: null,
       remotePlayers: [],
@@ -589,6 +633,7 @@ export class IsometricEngine {
         collisionTiles: new Set(),
         portalTiles: new Set(),
         layers: [],
+        tileLayerGroups: { all: [], ground: [], overlay: [] },
         tileTypes: new Map(),
         player: null,
         remotePlayers: [],
@@ -743,20 +788,47 @@ export class IsometricEngine {
       tileTypes.set(DEFAULT_TILE_TYPE.id, { ...DEFAULT_TILE_TYPE });
     }
 
-    const layers = Array.isArray(map.layers)
-      ? map.layers
-          .filter((layer) => Array.isArray(layer?.tiles))
-          .map((layer) => ({
-            id: layer.id ?? layer.name ?? `layer-${Math.random().toString(16).slice(2)}`,
-            name: layer.name ?? layer.id ?? 'Layer',
-            order: Number.isFinite(layer.order) ? layer.order : 0,
-            visible: layer.visible !== false,
-            tiles: layer.tiles.map((row) =>
-              Array.isArray(row) ? row.map((tile) => (tile === undefined ? null : tile)) : []
-            )
-          }))
-          .sort((a, b) => (a.order === b.order ? a.id.localeCompare(b.id) : a.order - b.order))
+    const layerCandidates = Array.isArray(map.layers)
+      ? map.layers.filter((layer) => Array.isArray(layer?.tiles))
       : [];
+
+    const layers = layerCandidates
+      .map((layer) => {
+        const identifier =
+          layer.id ?? layer.name ?? `layer-${Math.random().toString(16).slice(2)}`;
+        const placement = normaliseLayerPlacement(layer.placement ?? layer.mode ?? layer.type);
+        const elevation = Number.isFinite(layer.elevation)
+          ? layer.elevation
+          : normaliseLayerElevation(layer.height ?? layer.level ?? layer.offset);
+        const opacity = normaliseLayerOpacity(layer.opacity ?? layer.alpha);
+        return {
+          id: identifier,
+          name: layer.name ?? layer.id ?? 'Layer',
+          order: Number.isFinite(layer.order) ? layer.order : 0,
+          visible: layer.visible !== false,
+          placement,
+          elevation,
+          ...(opacity !== null ? { opacity } : {}),
+          tiles: layer.tiles.map((row) =>
+            Array.isArray(row) ? row.map((tile) => (tile === undefined ? null : tile)) : []
+          )
+        };
+      })
+      .sort((a, b) => (a.order === b.order ? a.id.localeCompare(b.id) : a.order - b.order));
+
+    const tileLayerGroups = {
+      all: layers,
+      ground: [],
+      overlay: []
+    };
+
+    layers.forEach((layer) => {
+      if (layer.placement === 'overlay') {
+        tileLayerGroups.overlay.push(layer);
+      } else {
+        tileLayerGroups.ground.push(layer);
+      }
+    });
 
     const renderableLookup = new Map(sortedObjects.map((object) => [object.id, object]));
     const sceneObjectLayers = objectLayers.map((layer) => ({
@@ -811,6 +883,7 @@ export class IsometricEngine {
       collisionTiles,
       portalTiles,
       layers,
+      tileLayerGroups,
       tileTypes,
       player: player ?? null,
       remotePlayers: Array.isArray(remotePlayers) ? remotePlayers : [],
@@ -877,6 +950,7 @@ export class IsometricEngine {
       collisionTiles: new Set(),
       portalTiles: new Set(),
       layers: [],
+      tileLayerGroups: { all: [], ground: [], overlay: [] },
       tileTypes: new Map(),
       player: null,
       remotePlayers: [],
@@ -956,35 +1030,35 @@ export class IsometricEngine {
     const originY = height / 2;
     const camera = this.camera ?? { x: 0, y: 0 };
 
-    const layers = Array.isArray(this.scene.layers) ? this.scene.layers : [];
-    const hasLayers = layers.length > 0;
+    const tileLayerGroups = this.scene?.tileLayerGroups ?? {
+      all: [],
+      ground: [],
+      overlay: []
+    };
+    const hasTileLayers = Array.isArray(tileLayerGroups.all) && tileLayerGroups.all.length > 0;
 
-    for (let y = 0; y < map.size.height; y += 1) {
-      for (let x = 0; x < map.size.width; x += 1) {
-        const relX = x - camera.x;
-        const relY = y - camera.y;
-        const screen = gridToScreen(relX, relY, tileWidth, tileHeight);
-        const drawX = originX + screen.x - tileWidth / 2;
-        const drawY = originY + screen.y - tileHeight / 2;
-        const key = toKey(x, y);
+    if (hasTileLayers) {
+      const groundLayers = tileLayerGroups.ground?.length
+        ? tileLayerGroups.ground
+        : tileLayerGroups.all;
+      this.drawTileLayerCollection(groundLayers, {
+        originX,
+        originY,
+        tileWidth,
+        tileHeight,
+        camera,
+        includeDebug: true
+      });
+    } else {
+      for (let y = 0; y < map.size.height; y += 1) {
+        for (let x = 0; x < map.size.width; x += 1) {
+          const relX = x - camera.x;
+          const relY = y - camera.y;
+          const screen = gridToScreen(relX, relY, tileWidth, tileHeight);
+          const drawX = originX + screen.x - tileWidth / 2;
+          const drawY = originY + screen.y - tileHeight / 2;
+          const key = toKey(x, y);
 
-        if (hasLayers) {
-          layers.forEach((layer) => {
-            if (!layer?.visible) {
-              return;
-            }
-            const row = Array.isArray(layer.tiles) ? layer.tiles[y] : null;
-            if (!row) {
-              return;
-            }
-            const tileId = row[x];
-            if (tileId === null || tileId === undefined) {
-              return;
-            }
-            const tileType = this.resolveTileType(tileId);
-            this.drawTileType(tileType, drawX, drawY);
-          });
-        } else {
           let tileIndex = 0;
           if (this.scene.blockedTiles.has(key)) {
             tileIndex = 1;
@@ -992,25 +1066,36 @@ export class IsometricEngine {
             tileIndex = 2;
           }
           this.drawTile(tileIndex, drawX, drawY);
-        }
 
-        if (this.scene.collisionTiles?.has?.(key)) {
-          this.drawCollisionOverlay(drawX, drawY);
-        } else if (this.scene.blockedTiles.has(key) && hasLayers) {
-          this.drawHighlightOverlay(drawX, drawY, 'rgba(100, 181, 246, 0.18)');
-        }
+          if (this.scene.collisionTiles?.has?.(key)) {
+            this.drawCollisionOverlay(drawX, drawY);
+          } else if (this.scene.blockedTiles.has(key)) {
+            this.drawHighlightOverlay(drawX, drawY, 'rgba(100, 181, 246, 0.18)');
+          }
 
-        if (this.scene.objectTiles.has(key)) {
-          this.drawHighlightOverlay(drawX, drawY, 'rgba(255, 213, 79, 0.22)');
-        }
+          if (this.scene.objectTiles.has(key)) {
+            this.drawHighlightOverlay(drawX, drawY, 'rgba(255, 213, 79, 0.22)');
+          }
 
-        if (this.scene.portalTiles.has(key)) {
-          this.drawPortalMarker(drawX + tileWidth / 2, drawY + tileHeight / 2);
+          if (this.scene.portalTiles.has(key)) {
+            this.drawPortalMarker(drawX + tileWidth / 2, drawY + tileHeight / 2);
+          }
         }
       }
     }
 
     this.drawLayeredObjects(delta, width, height);
+
+    if (hasTileLayers && tileLayerGroups.overlay?.length) {
+      this.drawTileLayerCollection(tileLayerGroups.overlay, {
+        originX,
+        originY,
+        tileWidth,
+        tileHeight,
+        camera,
+        includeDebug: false
+      });
+    }
   }
 
   drawTile(tileIndex, x, y) {
@@ -1041,9 +1126,10 @@ export class IsometricEngine {
     this.ctx.restore();
   }
 
-  drawTileType(tileType, x, y) {
+  drawTileType(tileType, x, y, { alphaOverride } = {}) {
     const palette = derivePaletteFromColor(tileType?.color);
-    const alpha = tileType?.transparent === false ? 1 : 0.92;
+    const baseAlpha = tileType?.transparent === false ? 1 : 0.92;
+    const alpha = Number.isFinite(alphaOverride) ? clamp(alphaOverride, 0, 1) : baseAlpha;
     this.drawStyledTile(palette, x, y, alpha);
   }
 
@@ -1086,6 +1172,76 @@ export class IsometricEngine {
     this.ctx.arc(x, y - 4 * this.zoom, radius * 1.2, 0, Math.PI * 2);
     this.ctx.fill();
     this.ctx.restore();
+  }
+
+  drawTileLayerCollection(
+    layers,
+    { originX, originY, tileWidth, tileHeight, camera, includeDebug = false } = {}
+  ) {
+    if (!Array.isArray(layers) || !layers.length) {
+      return;
+    }
+
+    const map = this.scene?.map;
+    if (!map) {
+      return;
+    }
+
+    const visibleLayers = layers.filter((layer) => layer?.visible !== false);
+    if (!visibleLayers.length) {
+      return;
+    }
+
+    const hasTileLayers = Array.isArray(this.scene?.tileLayerGroups?.all)
+      ? this.scene.tileLayerGroups.all.length > 0
+      : true;
+
+    for (let y = 0; y < map.size.height; y += 1) {
+      for (let x = 0; x < map.size.width; x += 1) {
+        const relX = x - camera.x;
+        const relY = y - camera.y;
+        const screen = gridToScreen(relX, relY, tileWidth, tileHeight);
+        const baseX = originX + screen.x - tileWidth / 2;
+        const baseY = originY + screen.y - tileHeight / 2;
+
+        visibleLayers.forEach((layer) => {
+          const row = Array.isArray(layer.tiles) ? layer.tiles[y] : null;
+          if (!row) {
+            return;
+          }
+          const tileId = row[x];
+          if (tileId === null || tileId === undefined) {
+            return;
+          }
+          const tileType = this.resolveTileType(tileId);
+          const elevation = Number.isFinite(layer.elevation) ? layer.elevation : 0;
+          const drawY = baseY - elevation * tileHeight;
+          const alpha =
+            layer.opacity !== undefined && layer.opacity !== null ? layer.opacity : undefined;
+          this.drawTileType(tileType, baseX, drawY, { alphaOverride: alpha });
+        });
+
+        if (!includeDebug) {
+          continue;
+        }
+
+        const key = toKey(x, y);
+
+        if (this.scene.collisionTiles?.has?.(key)) {
+          this.drawCollisionOverlay(baseX, baseY);
+        } else if (this.scene.blockedTiles.has(key) && hasTileLayers) {
+          this.drawHighlightOverlay(baseX, baseY, 'rgba(100, 181, 246, 0.18)');
+        }
+
+        if (this.scene.objectTiles.has(key)) {
+          this.drawHighlightOverlay(baseX, baseY, 'rgba(255, 213, 79, 0.22)');
+        }
+
+        if (this.scene.portalTiles.has(key)) {
+          this.drawPortalMarker(baseX + tileWidth / 2, baseY + tileHeight / 2);
+        }
+      }
+    }
   }
 
   buildObjectSprites(objects) {
