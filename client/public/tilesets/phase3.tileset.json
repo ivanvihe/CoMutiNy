@@ -1,0 +1,146 @@
+{
+  "type": "tileset",
+  "name": "phase3_structural",
+  "tilewidth": 64,
+  "tileheight": 64,
+  "tilecount": 6,
+  "columns": 0,
+  "grid": { "orientation": "isometric", "width": 64, "height": 64 },
+  "properties": [
+    { "name": "phase3:generatedAt", "type": "string", "value": "2025-01-15T00:00:00Z" }
+  ],
+  "tiles": [
+    {
+      "id": 0,
+      "type": "floor",
+      "properties": [
+        { "name": "phase3:id", "type": "string", "value": "floor" },
+        { "name": "phase3:generator", "type": "string", "value": "FloorGenerator.generateTiledFloor" },
+        {
+          "name": "phase3:options",
+          "type": "string",
+          "value": "{\"tileSize\":16,\"tileColors\":[\"#9dc6ff\",\"#7faee6\"],\"groutColor\":\"#dfe8f8\"}"
+        },
+        {
+          "name": "phase3:palette",
+          "type": "string",
+          "value": "{\"top\":\"#8eb5ff\",\"bottom\":\"#5b7fc2\",\"stroke\":\"#1f356b\"}"
+        },
+        { "name": "phase3:transparent", "type": "bool", "value": true },
+        { "name": "phase3:collides", "type": "bool", "value": false },
+        { "name": "phase3:category", "type": "string", "value": "floor" },
+        { "name": "phase3:color", "type": "color", "value": "#8eb5ff" }
+      ]
+    },
+    {
+      "id": 1,
+      "type": "floor",
+      "properties": [
+        { "name": "phase3:id", "type": "string", "value": "walkway" },
+        { "name": "phase3:generator", "type": "string", "value": "FloorGenerator.generateTiledFloor" },
+        {
+          "name": "phase3:options",
+          "type": "string",
+          "value": "{\"tileSize\":16,\"tileColors\":[\"#b9d5ff\",\"#90b8ff\"],\"groutColor\":\"#31446b\"}"
+        },
+        {
+          "name": "phase3:palette",
+          "type": "string",
+          "value": "{\"top\":\"#c4dcff\",\"bottom\":\"#6f8fcf\",\"stroke\":\"#1d2a44\"}"
+        },
+        { "name": "phase3:transparent", "type": "bool", "value": true },
+        { "name": "phase3:collides", "type": "bool", "value": false },
+        { "name": "phase3:category", "type": "string", "value": "floor" },
+        { "name": "phase3:color", "type": "color", "value": "#a9c8ff" }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "wall",
+      "properties": [
+        { "name": "phase3:id", "type": "string", "value": "barrier" },
+        { "name": "phase3:generator", "type": "string", "value": "WallGenerator.generateModularWall" },
+        {
+          "name": "phase3:options",
+          "type": "string",
+          "value": "{\"baseColor\":\"#7083a3\",\"highlightColor\":\"#9fb4d6\",\"shadowColor\":\"#46526b\",\"frameColor\":\"#1f2633\",\"panelCount\":3,\"frameWidth\":5}"
+        },
+        {
+          "name": "phase3:palette",
+          "type": "string",
+          "value": "{\"top\":\"#a8b7d2\",\"bottom\":\"#4c586f\",\"stroke\":\"#151c28\"}"
+        },
+        { "name": "phase3:transparent", "type": "bool", "value": false },
+        { "name": "phase3:collides", "type": "bool", "value": true },
+        { "name": "phase3:category", "type": "string", "value": "wall" },
+        { "name": "phase3:color", "type": "color", "value": "#8193b6" }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "overlay",
+      "properties": [
+        { "name": "phase3:id", "type": "string", "value": "canopy" },
+        { "name": "phase3:generator", "type": "string", "value": "FloorGenerator.generateTiledFloor" },
+        {
+          "name": "phase3:options",
+          "type": "string",
+          "value": "{\"tileSize\":12,\"tileColors\":[\"#3e7a4d\",\"#2f5a39\",\"#4e9a63\"],\"groutColor\":\"#1a2f20\"}"
+        },
+        {
+          "name": "phase3:palette",
+          "type": "string",
+          "value": "{\"top\":\"#5cbf7a\",\"bottom\":\"#1f3f29\",\"stroke\":\"#0e1c12\"}"
+        },
+        { "name": "phase3:transparent", "type": "bool", "value": true },
+        { "name": "phase3:collides", "type": "bool", "value": false },
+        { "name": "phase3:category", "type": "string", "value": "overlay" },
+        { "name": "phase3:color", "type": "color", "value": "#3e7a4d" }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "wall",
+      "properties": [
+        { "name": "phase3:id", "type": "string", "value": "wall_window" },
+        { "name": "phase3:generator", "type": "string", "value": "WallGenerator.generateWindowWall" },
+        {
+          "name": "phase3:options",
+          "type": "string",
+          "value": "{\"baseColor\":\"#7d8fb0\",\"highlightColor\":\"#b7c4e0\",\"shadowColor\":\"#48526b\",\"frameColor\":\"#202838\",\"glassTop\":\"#a9e7ff\",\"glassBottom\":\"#3687c2\",\"mullionColor\":\"#e2f3ff\"}"
+        },
+        {
+          "name": "phase3:palette",
+          "type": "string",
+          "value": "{\"top\":\"#b7c4e0\",\"bottom\":\"#4f5973\",\"stroke\":\"#161d28\"}"
+        },
+        { "name": "phase3:transparent", "type": "bool", "value": false },
+        { "name": "phase3:collides", "type": "bool", "value": true },
+        { "name": "phase3:category", "type": "string", "value": "wall" },
+        { "name": "phase3:color", "type": "color", "value": "#8fa3c6" }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "wall",
+      "properties": [
+        { "name": "phase3:id", "type": "string", "value": "door" },
+        { "name": "phase3:generator", "type": "string", "value": "WallGenerator.generateDoorWall" },
+        {
+          "name": "phase3:options",
+          "type": "string",
+          "value": "{\"baseColor\":\"#6d7a96\",\"highlightColor\":\"#aab5cf\",\"shadowColor\":\"#424a5f\",\"frameColor\":\"#1d2330\",\"doorTop\":\"#d49b6a\",\"doorBottom\":\"#7a4e2c\",\"accentColor\":\"#ffd7a3\"}"
+        },
+        {
+          "name": "phase3:palette",
+          "type": "string",
+          "value": "{\"top\":\"#aab5cf\",\"bottom\":\"#454d62\",\"stroke\":\"#151b26\"}"
+        },
+        { "name": "phase3:transparent", "type": "bool", "value": false },
+        { "name": "phase3:collides", "type": "bool", "value": false },
+        { "name": "phase3:category", "type": "string", "value": "door" },
+        { "name": "phase3:color", "type": "color", "value": "#9ba6c2" }
+      ]
+    }
+  ]
+}
