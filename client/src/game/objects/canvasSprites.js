@@ -2,133 +2,18 @@ import {
   resolveSpriteGenerator,
   registerSpriteGeneratorDefinitions
 } from './spriteGenerators.js';
-
-const DEFAULT_ANCHOR = { x: 0.5, y: 1, z: 0 };
-const DEFAULT_OFFSET = { x: 0, y: 0, z: 0 };
-const DEFAULT_PIXEL_OFFSET = { x: 0, y: 0, z: 0 };
-
-const clamp = (value, min, max) => {
-  if (!Number.isFinite(value)) {
-    return min;
-  }
-  return Math.min(Math.max(value, min), max);
-};
-
-const toFiniteNumber = (value, fallback = 0) => {
-  const parsed = Number.parseFloat(value);
-  return Number.isFinite(parsed) ? parsed : fallback;
-};
-
-const normaliseAnchor = (value, fallback = DEFAULT_ANCHOR) => {
-  if (value === undefined || value === null) {
-    return { ...fallback };
-  }
-
-  if (typeof value === 'number') {
-    const numeric = clamp(toFiniteNumber(value, fallback.x), 0, 1);
-    return { x: numeric, y: numeric, z: fallback.z ?? 0 };
-  }
-
-  if (Array.isArray(value) && value.length) {
-    const x = clamp(toFiniteNumber(value[0], fallback.x), 0, 1);
-    const y = clamp(toFiniteNumber(value[1] ?? value[0], fallback.y), 0, 1.5);
-    const z = clamp(toFiniteNumber(value[2] ?? fallback.z ?? 0, fallback.z ?? 0), -8, 8);
-    return { x, y, z };
-  }
-
-  if (typeof value === 'object') {
-    const x = clamp(toFiniteNumber(value.x ?? value[0], fallback.x), 0, 1);
-    const y = clamp(toFiniteNumber(value.y ?? value[1], fallback.y), 0, 1.5);
-    const z = clamp(toFiniteNumber(value.z ?? value[2] ?? fallback.z ?? 0, fallback.z ?? 0), -8, 8);
-    return { x, y, z };
-  }
-
-  return { ...fallback };
-};
-
-const normaliseOffset = (value, fallback = DEFAULT_OFFSET) => {
-  if (value === undefined || value === null) {
-    return { ...fallback };
-  }
-
-  if (typeof value === 'number') {
-    const numeric = toFiniteNumber(value, fallback.x);
-    return { x: numeric, y: numeric, z: fallback.z ?? 0 };
-  }
-
-  if (Array.isArray(value) && value.length) {
-    const x = toFiniteNumber(value[0], fallback.x);
-    const y = toFiniteNumber(value[1] ?? value[0], fallback.y);
-    const z = toFiniteNumber(value[2] ?? fallback.z ?? 0, fallback.z ?? 0);
-    return { x, y, z };
-  }
-
-  if (typeof value === 'object') {
-    const x = toFiniteNumber(value.x ?? value[0], fallback.x);
-    const y = toFiniteNumber(value.y ?? value[1], fallback.y);
-    const z = toFiniteNumber(value.z ?? value[2] ?? fallback.z ?? 0, fallback.z ?? 0);
-    return { x, y, z };
-  }
-
-  return { ...fallback };
-};
-
-const normalisePixelOffset = (value, fallback = DEFAULT_PIXEL_OFFSET) => {
-  if (value === undefined || value === null) {
-    return { ...fallback };
-  }
-
-  if (typeof value === 'number') {
-    const numeric = toFiniteNumber(value, fallback.x);
-    return { x: numeric, y: numeric, z: fallback.z ?? 0 };
-  }
-
-  if (Array.isArray(value) && value.length) {
-    const x = toFiniteNumber(value[0], fallback.x);
-    const y = toFiniteNumber(value[1] ?? value[0], fallback.y);
-    const z = toFiniteNumber(value[2] ?? fallback.z ?? 0, fallback.z ?? 0);
-    return { x, y, z };
-  }
-
-  if (typeof value === 'object') {
-    const x = toFiniteNumber(value.x ?? value[0], fallback.x);
-    const y = toFiniteNumber(value.y ?? value[1], fallback.y);
-    const z = toFiniteNumber(value.z ?? value[2] ?? fallback.z ?? 0, fallback.z ?? 0);
-    return { x, y, z };
-  }
-
-  return { ...fallback };
-};
-
-const normaliseVolume = (value, fallback = { height: 1, anchor: DEFAULT_ANCHOR }) => {
-  const baseAnchor = fallback?.anchor ?? DEFAULT_ANCHOR;
-  const fallbackHeight = Number.isFinite(fallback?.height) ? Math.max(fallback.height, 0) : 0;
-
-  if (value === undefined || value === null) {
-    return { height: fallbackHeight, anchor: { ...baseAnchor } };
-  }
-
-  if (typeof value === 'number') {
-    const height = Math.max(toFiniteNumber(value, fallbackHeight), 0);
-    return { height, anchor: { ...baseAnchor } };
-  }
-
-  if (Array.isArray(value) && value.length) {
-    const height = Math.max(toFiniteNumber(value[0], fallbackHeight), 0);
-    const anchor = normaliseAnchor(value[1], baseAnchor);
-    return { height, anchor };
-  }
-
-  if (typeof value === 'object') {
-    const heightCandidate =
-      value.height ?? value.z ?? value.depth ?? value.levels ?? value.size ?? fallbackHeight;
-    const height = Math.max(toFiniteNumber(heightCandidate, fallbackHeight), 0);
-    const anchor = normaliseAnchor(value.anchor ?? value.pivot ?? value.origin, baseAnchor);
-    return { height, anchor };
-  }
-
-  return { height: fallbackHeight, anchor: { ...baseAnchor } };
-};
+import {
+  DEFAULT_PIXEL_OFFSET,
+  DEFAULT_SPRITE_ANCHOR,
+  DEFAULT_SPRITE_OFFSET,
+  DEFAULT_VOLUME,
+  clamp,
+  normaliseAnchor,
+  normaliseOffset,
+  normalisePixelOffset,
+  normaliseVolume,
+  toFiniteNumber
+} from '../graphics/spritePlacement.js';
 
 export const getSpriteGenerator = (id) => {
   return resolveSpriteGenerator(id);
@@ -164,10 +49,10 @@ export const createSpriteCanvas = ({ generator, width, height, tileSize, options
   };
 
   const meta = {
-    anchor: { ...DEFAULT_ANCHOR },
-    offset: { ...DEFAULT_OFFSET },
+    anchor: { ...DEFAULT_SPRITE_ANCHOR },
+    offset: { ...DEFAULT_SPRITE_OFFSET },
     pixelOffset: { ...DEFAULT_PIXEL_OFFSET },
-    volume: { height: Math.max(1, height), anchor: { ...DEFAULT_ANCHOR } }
+    volume: normaliseVolume(Math.max(1, height), DEFAULT_VOLUME)
   };
 
   const layers = [];
@@ -190,7 +75,7 @@ export const createSpriteCanvas = ({ generator, width, height, tileSize, options
     }
 
     const anchor = normaliseAnchor(config.anchor, meta.anchor);
-    const offset = normaliseOffset(config.offset, DEFAULT_OFFSET);
+    const offset = normaliseOffset(config.offset, DEFAULT_SPRITE_OFFSET);
     const pixelOffset = normalisePixelOffset(config.pixelOffset, DEFAULT_PIXEL_OFFSET);
     const alpha = clamp(toFiniteNumber(config.alpha, 1), 0, 1);
     const composite =

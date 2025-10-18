@@ -3,75 +3,14 @@ import {
   registerSpriteGeneratorSource,
   registerSpriteGeneratorDefinitions
 } from './spriteGenerators.js';
-
-const clamp = (value, min, max) => {
-  if (!Number.isFinite(value)) {
-    return min;
-  }
-  return Math.min(Math.max(value, min), max);
-};
-
-const toFiniteNumber = (value, fallback = 0) => {
-  const parsed = Number.parseFloat(value);
-  return Number.isFinite(parsed) ? parsed : fallback;
-};
-
-const normaliseAnchor3D = (value, fallback = { x: 0.5, y: 1, z: 0 }) => {
-  if (value === undefined || value === null) {
-    return { ...fallback };
-  }
-
-  if (typeof value === 'number') {
-    const numeric = clamp(toFiniteNumber(value, fallback.x), 0, 1);
-    return { x: numeric, y: numeric, z: fallback.z ?? 0 };
-  }
-
-  if (Array.isArray(value) && value.length) {
-    const x = clamp(toFiniteNumber(value[0], fallback.x), 0, 1);
-    const y = clamp(toFiniteNumber(value[1] ?? value[0], fallback.y), 0, 1.5);
-    const z = clamp(toFiniteNumber(value[2] ?? fallback.z ?? 0, fallback.z ?? 0), -8, 8);
-    return { x, y, z };
-  }
-
-  if (typeof value === 'object') {
-    const x = clamp(toFiniteNumber(value.x ?? value[0], fallback.x), 0, 1);
-    const y = clamp(toFiniteNumber(value.y ?? value[1], fallback.y), 0, 1.5);
-    const z = clamp(toFiniteNumber(value.z ?? value[2] ?? fallback.z ?? 0, fallback.z ?? 0), -8, 8);
-    return { x, y, z };
-  }
-
-  return { ...fallback };
-};
-
-const normaliseVolume = (value, fallback = { height: 1, anchor: { x: 0.5, y: 1, z: 0 } }) => {
-  const fallbackHeight = Number.isFinite(fallback?.height) ? Math.max(fallback.height, 0) : 0;
-  const fallbackAnchor = fallback?.anchor ?? { x: 0.5, y: 1, z: 0 };
-
-  if (value === undefined || value === null) {
-    return { height: fallbackHeight, anchor: { ...fallbackAnchor } };
-  }
-
-  if (typeof value === 'number') {
-    const height = Math.max(toFiniteNumber(value, fallbackHeight), 0);
-    return { height, anchor: { ...fallbackAnchor } };
-  }
-
-  if (Array.isArray(value) && value.length) {
-    const height = Math.max(toFiniteNumber(value[0], fallbackHeight), 0);
-    const anchor = normaliseAnchor3D(value[1], fallbackAnchor);
-    return { height, anchor };
-  }
-
-  if (typeof value === 'object') {
-    const heightCandidate =
-      value.height ?? value.z ?? value.depth ?? value.levels ?? value.size ?? fallbackHeight;
-    const height = Math.max(toFiniteNumber(heightCandidate, fallbackHeight), 0);
-    const anchor = normaliseAnchor3D(value.anchor ?? value.pivot ?? value.origin, fallbackAnchor);
-    return { height, anchor };
-  }
-
-  return { height: fallbackHeight, anchor: { ...fallbackAnchor } };
-};
+import {
+  DEFAULT_SPRITE_ANCHOR,
+  DEFAULT_VOLUME,
+  clamp,
+  normaliseAnchor,
+  normaliseVolume,
+  toFiniteNumber
+} from '../graphics/spritePlacement.js';
 
 const collectCanvasGeneratorCollections = (rawDefinition) => {
   if (!rawDefinition || typeof rawDefinition !== 'object') {
@@ -259,7 +198,7 @@ const normaliseDefinition = (raw, { sourcePath } = {}) => {
 
   const fallbackVolume = {
     height: Math.max(appearance?.height ?? 1, 1),
-    anchor: normaliseAnchor3D(appearance?.anchor, { x: 0.5, y: 1, z: 0 })
+    anchor: normaliseAnchor(appearance?.anchor, DEFAULT_SPRITE_ANCHOR)
   };
 
   const volumeSource =

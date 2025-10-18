@@ -6,15 +6,33 @@ import {
   normaliseCharacterAppearance
 } from './characters/customization.js';
 import { ensureCharacterTexture } from './characters/textureLoader.js';
+import {
+  DEFAULT_PIXEL_OFFSET,
+  DEFAULT_SPRITE_ANCHOR,
+  DEFAULT_SPRITE_OFFSET,
+  DEFAULT_VOLUME,
+  SPRITE_METRICS,
+  clamp,
+  normaliseAnchor,
+  normaliseOffset,
+  normalisePixelOffset,
+  normaliseVolume,
+  toFiniteNumber
+} from './graphics/spritePlacement.js';
+import {
+  fillIsometricTile,
+  getIsometricDiamondPoints,
+  strokeIsometricTile
+} from './graphics/isometricTile.js';
 
 const DEFAULT_TILESET_CONFIG = {
-  tileWidth: 48,
-  tileHeight: 48
+  tileWidth: SPRITE_METRICS.tile.pixelWidth,
+  tileHeight: SPRITE_METRICS.tile.pixelHeight
 };
 
 const DEFAULT_SPRITE_CONFIG = {
-  frameWidth: 48,
-  frameHeight: 64,
+  frameWidth: SPRITE_METRICS.character.frame.width,
+  frameHeight: SPRITE_METRICS.character.frame.height,
   framesPerDirection: 4,
   directions: {
     down: 0,
@@ -88,13 +106,6 @@ const expandArea = ({ x = 0, y = 0, width = 1, height = 1 }) => {
   return tiles;
 };
 
-const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
-
-const toFiniteNumber = (value, fallback = 0) => {
-  const parsed = Number.parseFloat(value);
-  return Number.isFinite(parsed) ? parsed : fallback;
-};
-
 const clampZoomValue = (value) => {
   const numeric = Number(value);
   if (!Number.isFinite(numeric)) {
@@ -163,11 +174,7 @@ const derivePaletteFromColor = (color) => {
 
 const DEFAULT_TILE_PALETTE = derivePaletteFromColor(DEFAULT_TILE_TYPE.color);
 
-const DEFAULT_SPRITE_ANCHOR = { x: 0.5, y: 1, z: 0 };
-const DEFAULT_SPRITE_OFFSET = { x: 0, y: 0, z: 0 };
-const DEFAULT_PIXEL_OFFSET = { x: 0, y: 0, z: 0 };
 const DEFAULT_SPRITE_SCALE = { x: 1, y: 1 };
-const DEFAULT_VOLUME = { height: 1, anchor: DEFAULT_SPRITE_ANCHOR };
 const UNASSIGNED_LAYER_ID = '__unassigned__';
 const DEFAULT_MESH_ID = 'compact';
 
@@ -221,95 +228,14 @@ const normaliseLayerElevation = (value) => {
   return Number.isFinite(numeric) ? numeric : 0;
 };
 
-const normaliseAnchorValue = (value, fallback = DEFAULT_SPRITE_ANCHOR) => {
-  if (value === undefined || value === null) {
-    return { ...fallback };
-  }
+const normaliseAnchorValue = (value, fallback = DEFAULT_SPRITE_ANCHOR) =>
+  normaliseAnchor(value, fallback);
 
-  if (typeof value === 'number') {
-    const numeric = clamp(toFiniteNumber(value, fallback.x), 0, 1);
-    return { x: numeric, y: numeric, z: fallback.z ?? 0 };
-  }
+const normaliseOffsetValue = (value, fallback = DEFAULT_SPRITE_OFFSET) =>
+  normaliseOffset(value, fallback);
 
-  if (Array.isArray(value) && value.length) {
-    const x = clamp(toFiniteNumber(value[0], fallback.x), 0, 1);
-    const y = clamp(toFiniteNumber(value[1] ?? value[0], fallback.y), 0, 1.5);
-    const z = clamp(toFiniteNumber(value[2] ?? fallback.z ?? 0, fallback.z ?? 0), -8, 8);
-    return { x, y, z };
-  }
-
-  if (value && typeof value === 'object') {
-    const rawX = value.x ?? value[0];
-    const rawY = value.y ?? value[1];
-    const rawZ = value.z ?? value[2];
-    const x = clamp(toFiniteNumber(rawX, fallback.x), 0, 1);
-    const y = clamp(toFiniteNumber(rawY, fallback.y), 0, 1.5);
-    const z = clamp(toFiniteNumber(rawZ ?? fallback.z ?? 0, fallback.z ?? 0), -8, 8);
-    return { x, y, z };
-  }
-
-  return { ...fallback };
-};
-
-const normaliseOffsetValue = (value, fallback = DEFAULT_SPRITE_OFFSET) => {
-  if (value === undefined || value === null) {
-    return { ...fallback };
-  }
-
-  if (typeof value === 'number') {
-    const numeric = toFiniteNumber(value, fallback.x);
-    return { x: numeric, y: numeric, z: fallback.z ?? 0 };
-  }
-
-  if (Array.isArray(value) && value.length) {
-    const x = toFiniteNumber(value[0], fallback.x);
-    const y = toFiniteNumber(value[1] ?? value[0], fallback.y);
-    const z = toFiniteNumber(value[2] ?? fallback.z ?? 0, fallback.z ?? 0);
-    return { x, y, z };
-  }
-
-  if (value && typeof value === 'object') {
-    const rawX = value.x ?? value[0];
-    const rawY = value.y ?? value[1];
-    const rawZ = value.z ?? value[2];
-    const x = toFiniteNumber(rawX, fallback.x);
-    const y = toFiniteNumber(rawY, fallback.y);
-    const z = toFiniteNumber(rawZ ?? fallback.z ?? 0, fallback.z ?? 0);
-    return { x, y, z };
-  }
-
-  return { ...fallback };
-};
-
-const normalisePixelOffsetValue = (value, fallback = DEFAULT_PIXEL_OFFSET) => {
-  if (value === undefined || value === null) {
-    return { ...fallback };
-  }
-
-  if (typeof value === 'number') {
-    const numeric = toFiniteNumber(value, fallback.x);
-    return { x: numeric, y: numeric, z: fallback.z ?? 0 };
-  }
-
-  if (Array.isArray(value) && value.length) {
-    const x = toFiniteNumber(value[0], fallback.x);
-    const y = toFiniteNumber(value[1] ?? value[0], fallback.y);
-    const z = toFiniteNumber(value[2] ?? fallback.z ?? 0, fallback.z ?? 0);
-    return { x, y, z };
-  }
-
-  if (value && typeof value === 'object') {
-    const rawX = value.x ?? value[0];
-    const rawY = value.y ?? value[1];
-    const rawZ = value.z ?? value[2];
-    const x = toFiniteNumber(rawX, fallback.x);
-    const y = toFiniteNumber(rawY, fallback.y);
-    const z = toFiniteNumber(rawZ ?? fallback.z ?? 0, fallback.z ?? 0);
-    return { x, y, z };
-  }
-
-  return { ...fallback };
-};
+const normalisePixelOffsetValue = (value, fallback = DEFAULT_PIXEL_OFFSET) =>
+  normalisePixelOffset(value, fallback);
 
 const normaliseScaleValue = (value, fallback = DEFAULT_SPRITE_SCALE) => {
   if (typeof value === 'number') {
@@ -411,40 +337,7 @@ const enforceMinimumLayerScale = (scale, canvas, tileWidth, tileHeight) => {
   return { x: enforcedX, y: enforcedY };
 };
 
-const normaliseVolumeValue = (value, fallback = DEFAULT_VOLUME) => {
-  if (value === undefined || value === null) {
-    return {
-      height: Math.max(fallback?.height ?? 0, 0),
-      anchor: normaliseAnchorValue(fallback?.anchor ?? DEFAULT_SPRITE_ANCHOR, DEFAULT_SPRITE_ANCHOR)
-    };
-  }
-
-  if (typeof value === 'number') {
-    return {
-      height: Math.max(toFiniteNumber(value, fallback?.height ?? 0), 0),
-      anchor: normaliseAnchorValue(fallback?.anchor ?? DEFAULT_SPRITE_ANCHOR, DEFAULT_SPRITE_ANCHOR)
-    };
-  }
-
-  if (Array.isArray(value) && value.length) {
-    const height = Math.max(toFiniteNumber(value[0], fallback?.height ?? 0), 0);
-    const anchor = normaliseAnchorValue(value[1], fallback?.anchor ?? DEFAULT_SPRITE_ANCHOR);
-    return { height, anchor };
-  }
-
-  if (value && typeof value === 'object') {
-    const heightCandidate =
-      value.height ?? value.z ?? value.depth ?? value.levels ?? value.size ?? fallback?.height ?? 0;
-    const height = Math.max(toFiniteNumber(heightCandidate, fallback?.height ?? 0), 0);
-    const anchor = normaliseAnchorValue(value.anchor ?? value.pivot ?? value.origin, fallback?.anchor ?? DEFAULT_SPRITE_ANCHOR);
-    return { height, anchor };
-  }
-
-  return {
-    height: Math.max(fallback?.height ?? 0, 0),
-    anchor: normaliseAnchorValue(fallback?.anchor ?? DEFAULT_SPRITE_ANCHOR, DEFAULT_SPRITE_ANCHOR)
-  };
-};
+const normaliseVolumeValue = (value, fallback = DEFAULT_VOLUME) => normaliseVolume(value, fallback);
 
 const combineVolume = (base, override) => {
   const baseVolume = normaliseVolumeValue(base, DEFAULT_VOLUME);
@@ -1235,9 +1128,14 @@ export class IsometricEngine {
     const drawHeight = tileHeight + padding * 2;
 
     const fillWithStyle = (style, alphaValue) => {
-      this.ctx.globalAlpha = clamp(alphaValue, 0, 1);
-      this.ctx.fillStyle = style;
-      this.ctx.fillRect(drawX, drawY, drawWidth, drawHeight);
+      fillIsometricTile(this.ctx, {
+        x: drawX,
+        y: drawY,
+        width: drawWidth,
+        height: drawHeight,
+        style,
+        alpha: clamp(alphaValue, 0, 1)
+      });
     };
 
     this.ctx.save();
@@ -1273,16 +1171,31 @@ export class IsometricEngine {
     const tileWidth = this.getTileWidth();
     const tileHeight = this.getTileHeight();
     this.ctx.save();
-    this.ctx.fillStyle = 'rgba(244, 67, 54, 0.18)';
-    this.ctx.fillRect(x, y, tileWidth, tileHeight);
-    this.ctx.strokeStyle = 'rgba(211, 47, 47, 0.85)';
-    this.ctx.lineWidth = 2;
-    this.ctx.strokeRect(x + 1, y + 1, tileWidth - 2, tileHeight - 2);
+    fillIsometricTile(this.ctx, {
+      x,
+      y,
+      width: tileWidth,
+      height: tileHeight,
+      style: 'rgba(244, 67, 54, 0.18)'
+    });
+    strokeIsometricTile(this.ctx, {
+      x,
+      y,
+      width: tileWidth,
+      height: tileHeight,
+      style: 'rgba(211, 47, 47, 0.85)',
+      lineWidth: 2,
+      alpha: 1,
+      inset: 1
+    });
+    const points = getIsometricDiamondPoints(tileWidth, tileHeight, { inset: 1 });
     this.ctx.beginPath();
-    this.ctx.moveTo(x + 2, y + 2);
-    this.ctx.lineTo(x + tileWidth - 2, y + tileHeight - 2);
-    this.ctx.moveTo(x + tileWidth - 2, y + 2);
-    this.ctx.lineTo(x + 2, y + tileHeight - 2);
+    this.ctx.moveTo(x + points[0].x, y + points[0].y);
+    this.ctx.lineTo(x + points[2].x, y + points[2].y);
+    this.ctx.moveTo(x + points[1].x, y + points[1].y);
+    this.ctx.lineTo(x + points[3].x, y + points[3].y);
+    this.ctx.strokeStyle = 'rgba(211, 47, 47, 0.85)';
+    this.ctx.lineWidth = 1.5;
     this.ctx.stroke();
     this.ctx.restore();
   }
@@ -1291,8 +1204,14 @@ export class IsometricEngine {
     const tileWidth = this.getTileWidth();
     const tileHeight = this.getTileHeight();
     this.ctx.save();
-    this.ctx.fillStyle = color;
-    this.ctx.fillRect(x, y, tileWidth, tileHeight);
+    fillIsometricTile(this.ctx, {
+      x,
+      y,
+      width: tileWidth,
+      height: tileHeight,
+      style: color,
+      alpha: 1
+    });
     this.ctx.restore();
   }
 

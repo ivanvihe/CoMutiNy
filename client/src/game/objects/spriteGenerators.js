@@ -1,3 +1,5 @@
+import { registerShadowLayer } from '../graphics/spriteLayers.js';
+
 const withRandom = (seed) => {
   if (!Number.isFinite(seed)) {
     return Math.random;
@@ -72,26 +74,20 @@ const drawMonstera = (ctx, { width, height, tileSize, options = {} }, helpers = 
   const leafColor = options.leafColor ?? '#3a7d2c';
   const darkLeaf = options.darkLeaf ?? '#2d6022';
 
-  if (helpers?.registerLayer) {
-    helpers.registerLayer(
-      'shadow',
-      (shadowCtx) => {
-        shadowCtx.fillStyle = 'rgba(0, 0, 0, 0.28)';
-        shadowCtx.beginPath();
-        shadowCtx.ellipse(centerX, height * tileSize * 0.95, (width * tileSize) / 2.3, tileSize * 0.3, 0, 0, Math.PI * 2);
-        shadowCtx.fill();
-      },
-      {
-        width,
-        height: Math.min(1, height * 0.6),
-        anchor: { x: 0.5, y: 1, z: 0 },
-        offset: { x: 0, y: 0, z: -0.05 },
-        pixelOffset: { y: -tileSize * 0.15 },
-        alpha: 0.8,
-        order: -20
-      }
-    );
-  }
+  registerShadowLayer(helpers, {
+    id: 'shadow',
+    width,
+    height,
+    tileSize,
+    color: 'rgba(0, 0, 0, 0.28)',
+    radiusX: (width * tileSize) / 2.3,
+    radiusY: tileSize * 0.3,
+    centerYOffset: 0.05,
+    pixelOffsetY: -tileSize * 0.15,
+    alpha: 0.8,
+    order: -20,
+    offset: { z: -0.05 }
+  });
 
   helpers?.setVolume?.({ height: Math.max(height * 1.6, 1.4), anchor: { x: 0.5, y: 1, z: 0 } });
 
@@ -154,24 +150,20 @@ const drawAgavePlant = (ctx, { width, height, tileSize, options = {} }, helpers 
   const veinColor = options.veinColor ?? 'rgba(255,255,255,0.28)';
   const random = withRandom(options.seed);
 
-  helpers?.registerLayer?.(
-    'shadow',
-    (shadowCtx) => {
-      shadowCtx.fillStyle = 'rgba(0, 0, 0, 0.25)';
-      shadowCtx.beginPath();
-      shadowCtx.ellipse(centerX, pixelHeight - tileSize * 0.2, potWidth * 0.75, tileSize * 0.22, 0, 0, Math.PI * 2);
-      shadowCtx.fill();
-    },
-    {
-      width,
-      height: Math.min(1, height * 0.6),
-      anchor: { x: 0.5, y: 1, z: 0 },
-      offset: { z: -0.05 },
-      pixelOffset: { y: -tileSize * 0.1 },
-      alpha: 0.7,
-      order: -18
-    }
-  );
+  registerShadowLayer(helpers, {
+    id: 'shadow',
+    width,
+    height,
+    tileSize,
+    color: 'rgba(0, 0, 0, 0.25)',
+    radiusX: potWidth * 0.75,
+    radiusY: tileSize * 0.22,
+    centerYOffset: 0.2,
+    pixelOffsetY: -tileSize * 0.1,
+    alpha: 0.7,
+    order: -18,
+    offset: { z: -0.05 }
+  });
 
   helpers?.setVolume?.({ height: Math.max(height * 1.4, 1.4), anchor: { x: 0.5, y: 1, z: 0 } });
 
@@ -229,24 +221,20 @@ const drawPalmPlant = (ctx, { width, height, tileSize, options = {} }, helpers =
   const potHighlight = options.potHighlight ?? '#90a4ae';
   const random = withRandom(options.seed ?? 42);
 
-  helpers?.registerLayer?.(
-    'shadow',
-    (shadowCtx) => {
-      shadowCtx.fillStyle = 'rgba(0, 0, 0, 0.22)';
-      shadowCtx.beginPath();
-      shadowCtx.ellipse(centerX, pixelHeight - tileSize * 0.25, tileSize * 0.6, tileSize * 0.28, 0, 0, Math.PI * 2);
-      shadowCtx.fill();
-    },
-    {
-      width,
-      height: Math.min(1, height * 0.5),
-      anchor: { x: 0.5, y: 1, z: 0 },
-      offset: { z: -0.05 },
-      pixelOffset: { y: -tileSize * 0.15 },
-      alpha: 0.8,
-      order: -16
-    }
-  );
+  registerShadowLayer(helpers, {
+    id: 'shadow',
+    width,
+    height,
+    tileSize,
+    color: 'rgba(0, 0, 0, 0.22)',
+    radiusX: tileSize * 0.6,
+    radiusY: tileSize * 0.28,
+    centerYOffset: 0.25,
+    pixelOffsetY: -tileSize * 0.15,
+    alpha: 0.8,
+    order: -16,
+    offset: { z: -0.05 }
+  });
 
   helpers?.setVolume?.({ height: Math.max(height * 2.2, 1.8), anchor: { x: 0.5, y: 1, z: 0 } });
 
@@ -323,24 +311,20 @@ const drawSansevieriaPlant = (ctx, { width, height, tileSize, options = {} }, he
   const accent = options.accent ?? '#9ccc65';
   const random = withRandom(options.seed ?? 7);
 
-  helpers?.registerLayer?.(
-    'shadow',
-    (shadowCtx) => {
-      shadowCtx.fillStyle = 'rgba(0, 0, 0, 0.25)';
-      shadowCtx.beginPath();
-      shadowCtx.ellipse(centerX, pixelHeight - tileSize * 0.18, tileSize * 0.55, tileSize * 0.2, 0, 0, Math.PI * 2);
-      shadowCtx.fill();
-    },
-    {
-      width,
-      height: Math.min(1, height * 0.6),
-      anchor: { x: 0.5, y: 1, z: 0 },
-      offset: { z: -0.05 },
-      pixelOffset: { y: -tileSize * 0.08 },
-      alpha: 0.7,
-      order: -14
-    }
-  );
+  registerShadowLayer(helpers, {
+    id: 'shadow',
+    width,
+    height,
+    tileSize,
+    color: 'rgba(0, 0, 0, 0.25)',
+    radiusX: tileSize * 0.55,
+    radiusY: tileSize * 0.2,
+    centerYOffset: 0.18,
+    pixelOffsetY: -tileSize * 0.08,
+    alpha: 0.7,
+    order: -14,
+    offset: { z: -0.05 }
+  });
 
   helpers?.setVolume?.({ height: Math.max(height * 1.8, 1.6), anchor: { x: 0.5, y: 1, z: 0 } });
 
@@ -430,28 +414,21 @@ const drawTree = (ctx, { width, height, tileSize, options = {} }, helpers = null
   const leafColor = options.leafColor ?? '#2E7D32';
   const darkLeaf = options.darkLeaf ?? '#1B5E20';
 
-  if (helpers?.registerLayer) {
-    helpers.registerLayer(
-      'shadow',
-      (shadowCtx) => {
-        const ellipseWidth = width * tileSize * 0.9;
-        const ellipseHeight = tileSize * 0.35;
-        shadowCtx.fillStyle = 'rgba(0, 0, 0, 0.32)';
-        shadowCtx.beginPath();
-        shadowCtx.ellipse(centerX, height * tileSize - tileSize * 0.2, ellipseWidth / 2, ellipseHeight / 2, 0, 0, Math.PI * 2);
-        shadowCtx.fill();
-      },
-      {
-        width,
-        height: Math.min(1, height * 0.5),
-        anchor: { x: 0.5, y: 1, z: 0 },
-        offset: { z: -0.08 },
-        pixelOffset: { y: -tileSize * 0.15 },
-        alpha: 0.9,
-        order: -30
-      }
-    );
-  }
+  registerShadowLayer(helpers, {
+    id: 'shadow',
+    width,
+    height,
+    tileSize,
+    color: 'rgba(0, 0, 0, 0.32)',
+    radiusX: width * tileSize * 0.45,
+    radiusY: tileSize * 0.175,
+    centerYOffset: 0.2,
+    pixelOffsetY: -tileSize * 0.15,
+    alpha: 0.9,
+    order: -30,
+    offset: { z: -0.08 },
+    heightFactor: 0.5
+  });
 
   helpers?.setVolume?.({ height: Math.max(height * 2.2, 2), anchor: { x: 0.5, y: 1, z: 0 } });
 
@@ -551,24 +528,21 @@ const drawRoundTable = (ctx, { width, height, tileSize, options = {} }, helpers 
   const highlight = options.highlight ?? 'rgba(255, 255, 255, 0.22)';
   const legColor = options.legColor ?? '#5d4037';
 
-  helpers?.registerLayer?.(
-    'shadow',
-    (shadowCtx) => {
-      shadowCtx.fillStyle = 'rgba(0, 0, 0, 0.24)';
-      shadowCtx.beginPath();
-      shadowCtx.ellipse(centerX, pixelHeight - tileSize * 0.15, radius, tileSize * 0.22, 0, 0, Math.PI * 2);
-      shadowCtx.fill();
-    },
-    {
-      width,
-      height: Math.min(1, height * 0.5),
-      anchor: { x: 0.5, y: 1, z: 0 },
-      offset: { z: -0.05 },
-      pixelOffset: { y: -tileSize * 0.08 },
-      alpha: 0.75,
-      order: -22
-    }
-  );
+  registerShadowLayer(helpers, {
+    id: 'shadow',
+    width,
+    height,
+    tileSize,
+    color: 'rgba(0, 0, 0, 0.24)',
+    radiusX: radius,
+    radiusY: tileSize * 0.22,
+    centerYOffset: 0.15,
+    pixelOffsetY: -tileSize * 0.08,
+    alpha: 0.75,
+    order: -22,
+    offset: { z: -0.05 },
+    heightFactor: 0.5
+  });
 
   helpers?.setVolume?.({ height: Math.max(height * 0.8, 0.9), anchor: { x: 0.5, y: 1, z: 0 } });
 
@@ -617,24 +591,21 @@ const drawWorkbenchTable = (ctx, { width, height, tileSize, options = {} }, help
   const frameColor = options.frameColor ?? '#6d4c41';
   const accentColor = options.accentColor ?? '#8d6e63';
 
-  helpers?.registerLayer?.(
-    'shadow',
-    (shadowCtx) => {
-      shadowCtx.fillStyle = 'rgba(0, 0, 0, 0.22)';
-      shadowCtx.beginPath();
-      shadowCtx.ellipse(pixelWidth / 2, pixelHeight - tileSize * 0.12, pixelWidth * 0.45, tileSize * 0.18, 0, 0, Math.PI * 2);
-      shadowCtx.fill();
-    },
-    {
-      width,
-      height: Math.min(1, height * 0.5),
-      anchor: { x: 0.5, y: 1, z: 0 },
-      offset: { z: -0.05 },
-      pixelOffset: { y: -tileSize * 0.05 },
-      alpha: 0.75,
-      order: -20
-    }
-  );
+  registerShadowLayer(helpers, {
+    id: 'shadow',
+    width,
+    height,
+    tileSize,
+    color: 'rgba(0, 0, 0, 0.22)',
+    radiusX: pixelWidth * 0.45,
+    radiusY: tileSize * 0.18,
+    centerYOffset: 0.12,
+    pixelOffsetY: -tileSize * 0.05,
+    alpha: 0.75,
+    order: -20,
+    offset: { z: -0.05 },
+    heightFactor: 0.5
+  });
 
   helpers?.setVolume?.({ height: Math.max(height * 0.9, 1), anchor: { x: 0.5, y: 1, z: 0 } });
 
@@ -744,26 +715,21 @@ const drawCommunityDoor = (ctx, { width, height, tileSize, options = {} }, helpe
   const accentColor = options.accentColor ?? '#ffca28';
   const glowColor = options.glowColor ?? 'rgba(255, 202, 40, 0.4)';
 
-  helpers?.registerLayer?.(
-    'shadow',
-    (shadowCtx) => {
-      const ellipseWidth = width * tileSize * 0.9;
-      const ellipseHeight = tileSize * 0.3;
-      shadowCtx.fillStyle = 'rgba(0, 0, 0, 0.22)';
-      shadowCtx.beginPath();
-      shadowCtx.ellipse(width * tileSize * 0.5, height * tileSize * 0.98, ellipseWidth / 2, ellipseHeight / 2, 0, 0, Math.PI * 2);
-      shadowCtx.fill();
-    },
-    {
-      width,
-      height: Math.min(1, height * 0.4),
-      anchor: { x: 0.5, y: 1, z: 0 },
-      offset: { z: -0.05 },
-      pixelOffset: { y: -tileSize * 0.1 },
-      alpha: 0.75,
-      order: -10
-    }
-  );
+  registerShadowLayer(helpers, {
+    id: 'shadow',
+    width,
+    height,
+    tileSize,
+    color: 'rgba(0, 0, 0, 0.22)',
+    radiusX: width * tileSize * 0.45,
+    radiusY: tileSize * 0.15,
+    centerYOffset: 0.02,
+    pixelOffsetY: -tileSize * 0.1,
+    alpha: 0.75,
+    order: -10,
+    offset: { z: -0.05 },
+    heightFactor: 0.4
+  });
 
   helpers?.setVolume?.({ height: Math.max(height * 1.4, 1.25), anchor: { x: 0.5, y: 1, z: 0 } });
 
@@ -821,34 +787,21 @@ const drawTieredPlatform = (ctx, { width, height, tileSize, options = {} }, help
 
   helpers?.setVolume?.({ height: Math.max(height * 1.6, 1.4), anchor: { x: 0.5, y: 1, z: 0 } });
 
-  if (helpers?.registerLayer) {
-    helpers.registerLayer(
-      'tiered-platform-shadow',
-      (shadowCtx) => {
-        shadowCtx.fillStyle = 'rgba(0, 0, 0, 0.28)';
-        shadowCtx.beginPath();
-        shadowCtx.ellipse(
-          pixelWidth / 2,
-          pixelHeight * 0.94,
-          (pixelWidth * 0.82) / 2,
-          tileSize * 0.28,
-          0,
-          0,
-          Math.PI * 2
-        );
-        shadowCtx.fill();
-      },
-      {
-        width,
-        height: Math.min(1, height * 0.6),
-        anchor: { x: 0.5, y: 1, z: 0 },
-        offset: { z: -0.06 },
-        pixelOffset: { y: -tileSize * 0.12 },
-        alpha: 0.85,
-        order: -25
-      }
-    );
-  }
+  registerShadowLayer(helpers, {
+    id: 'tiered-platform-shadow',
+    width,
+    height,
+    tileSize,
+    color: 'rgba(0, 0, 0, 0.28)',
+    radiusX: (pixelWidth * 0.82) / 2,
+    radiusY: tileSize * 0.28,
+    centerYOffset: 0.06,
+    pixelOffsetY: -tileSize * 0.12,
+    alpha: 0.85,
+    order: -25,
+    offset: { z: -0.06 },
+    heightFactor: 0.6
+  });
 
   const baseHeight = pixelHeight * 0.55;
   const baseTop = pixelHeight - baseHeight;
@@ -914,34 +867,21 @@ const drawObservationTower = (ctx, { width, height, tileSize, options = {} }, he
 
   helpers?.setVolume?.({ height: Math.max(height * 1.1, 3.4), anchor: { x: 0.5, y: 1, z: 0 } });
 
-  if (helpers?.registerLayer) {
-    helpers.registerLayer(
-      'tower-shadow',
-      (shadowCtx) => {
-        shadowCtx.fillStyle = shadowColor;
-        shadowCtx.beginPath();
-        shadowCtx.ellipse(
-          pixelWidth / 2,
-          pixelHeight * 0.98,
-          (pixelWidth * 0.9) / 2,
-          tileSize * 0.32,
-          0,
-          0,
-          Math.PI * 2
-        );
-        shadowCtx.fill();
-      },
-      {
-        width,
-        height: Math.min(1, height * 0.5),
-        anchor: { x: 0.5, y: 1, z: 0 },
-        offset: { z: -0.08 },
-        pixelOffset: { y: -tileSize * 0.15 },
-        alpha: 0.9,
-        order: -32
-      }
-    );
-  }
+  registerShadowLayer(helpers, {
+    id: 'tower-shadow',
+    width,
+    height,
+    tileSize,
+    color: shadowColor,
+    radiusX: (pixelWidth * 0.9) / 2,
+    radiusY: tileSize * 0.32,
+    centerYOffset: 0.02,
+    pixelOffsetY: -tileSize * 0.15,
+    alpha: 0.9,
+    order: -32,
+    offset: { z: -0.08 },
+    heightFactor: 0.5
+  });
 
   const columnWidth = pixelWidth * 0.28;
   const columnX = (pixelWidth - columnWidth) / 2;
