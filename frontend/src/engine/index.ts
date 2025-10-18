@@ -9,6 +9,7 @@ import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder';
 import { NoiseProceduralTexture } from '@babylonjs/core/Materials/Textures/Procedurals/noiseProceduralTexture';
 import { PBRMaterial } from '@babylonjs/core/Materials/PBR/pbrMaterial';
 import { Scene } from '@babylonjs/core/scene';
+import '@babylonjs/core/Rendering/prePassRendererSceneComponent';
 import { Texture } from '@babylonjs/core/Materials/Textures/texture';
 import {
   createDayNightEnvironment,
