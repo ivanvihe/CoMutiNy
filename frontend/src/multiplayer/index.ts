@@ -1,13 +1,27 @@
-export function bootstrapMultiplayer(statusSelector: string): void {
+import { MultiplayerClient } from './client';
+
+export type {
+  MultiplayerClient,
+  ChatMessageEvent,
+  BlockPlacedEvent,
+  BlockRemovedEvent,
+  PlayerJoinEvent,
+  PlayerLeaveEvent,
+  MultiplayerSnapshotEvent,
+} from './client';
+
+export { SnapshotBuffer } from './snapshots';
+
+export function bootstrapMultiplayer(statusSelector: string): MultiplayerClient {
   const status = document.querySelector(statusSelector);
   if (!(status instanceof HTMLElement)) {
     throw new Error('No se encontró el contenedor de estado.');
   }
 
-  status.innerHTML = `
-    <p>
-      Cliente Colyseus pendiente de implementar. Esta área mostrará el estado de la
-      conexión.
-    </p>
-  `;
+  const client = new MultiplayerClient(status);
+  client.connect().catch((error) => {
+    console.error('Error conectando el cliente de Colyseus:', error);
+  });
+
+  return client;
 }

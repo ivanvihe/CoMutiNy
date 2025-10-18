@@ -18,8 +18,8 @@ document.addEventListener('DOMContentLoaded', () => {
     </main>
   `;
 
-  registerUi(app);
-  bootstrapMultiplayer('#status');
+  const multiplayer = bootstrapMultiplayer('#status');
+  registerUi(app, multiplayer);
 
   const bootstrap = async () => {
     const engine = await initializeEngine('#world');
