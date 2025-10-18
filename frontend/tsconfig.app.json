@@ -6,6 +6,10 @@
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "module": "ESNext",
     "types": ["vite/client"],
+    "paths": {
+      "phaser": ["./node_modules/phaser/types/phaser"],
+      "phaser/*": ["./node_modules/phaser/types/*"]
+    },
     "skipLibCheck": true,
 
     /* Bundler mode */
