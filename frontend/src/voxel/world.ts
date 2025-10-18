@@ -163,7 +163,32 @@ export class VoxelWorld {
     const meshData = this.mesher.generate(chunk);
     const key = getChunkKey(chunk.chunkX, chunk.chunkY, chunk.chunkZ);
     const existing = this.chunkMeshes.get(key);
-    existing?.dispose();
+    const hasGeometry =
+      meshData.positions.length > 0 && meshData.indices.length > 0;
+
+    if (!hasGeometry) {
+      if (existing) {
+        if (this.shadowGenerators.length > 0) {
+          for (const generator of this.shadowGenerators) {
+            generator.removeShadowCaster(existing);
+          }
+        }
+        existing.dispose();
+        this.chunkMeshes.delete(key);
+      }
+      chunk.needsRemesh = false;
+      return;
+    }
+
+    if (existing) {
+      if (this.shadowGenerators.length > 0) {
+        for (const generator of this.shadowGenerators) {
+          generator.removeShadowCaster(existing);
+        }
+      }
+      existing.dispose();
+    }
+
     const mesh = this.renderer.buildMesh(key, meshData);
     if (this.shadowGenerators.length > 0) {
       mesh.receiveShadows = true;

@@ -177,7 +177,10 @@ export async function initializeEngine(
   const textureMaterial = await createTexturePreview(scene, options.texture);
 
   const renderLoop = () => {
-    if (textureMaterial?.albedoTexture instanceof NoiseProceduralTexture) {
+    if (
+      textureMaterial?.albedoTexture instanceof NoiseProceduralTexture &&
+      textureMaterial.albedoTexture.isReady()
+    ) {
       textureMaterial.albedoTexture.render();
     }
     scene.render();
@@ -273,6 +276,7 @@ function configureRenderingPipeline(
     scene.postProcessRenderPipelineManager.attachCamerasToRenderPipeline(
       'ssao2',
       camera,
+      true,
     );
   }
 

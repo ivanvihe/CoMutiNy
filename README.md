@@ -76,3 +76,5 @@ CoMutiNy/
 ## Notas sobre texturas
 
 Para mantener el repositorio libre de binarios se utilizan materiales PBR generados por código y entornos HDR alojados externamente. Esto facilita iterar sin añadir archivos pesados al control de versiones.
+
+Si necesitas texturas de ejemplo para los bloques vóxel, sigue la guía de [docs/texture-assets.md](docs/texture-assets.md), donde se listan enlaces de descarga CC0 y las rutas de destino esperadas por el frontend.
