@@ -24,6 +24,10 @@ import {
   updateUserPreferences
 } from '../state/userPreferences.js';
 import { fetchPreferences, savePreferences } from '../api/preferences.js';
+import {
+  DEFAULT_CHARACTER_APPEARANCE,
+  normaliseCharacterAppearance
+} from '../game/characters/customization.js';
 
 const clamp = (value: number, min: number, max: number) => {
   if (!Number.isFinite(value)) {
@@ -49,11 +53,11 @@ const ZOOM_STEP = 0.1;
 const createDraftFromPreferences = (raw: Partial<PreferencesDraft> | null | undefined): PreferencesDraft => {
   const base = raw && typeof raw === 'object' ? raw : {};
   const local = getUserPreferences();
-  const appearance = {
-    ...DEFAULT_PREFERENCES.appearance,
+  const appearance = normaliseCharacterAppearance({
+    ...DEFAULT_CHARACTER_APPEARANCE,
     ...(local.appearance ?? {}),
     ...(base.appearance ?? {})
-  } as Record<string, string>;
+  }) as Record<string, string>;
 
   return {
     mapZoom: clamp(base.mapZoom ?? local.mapZoom ?? DEFAULT_PREFERENCES.mapZoom, ZOOM_MIN, ZOOM_MAX),
@@ -121,13 +125,22 @@ export default function SettingsModal({ open, onClose }: SettingsModalProps) {
     }
     setDraft((current) => ({
       ...current,
-      appearance: { ...current.appearance, ...appearance }
+      appearance: normaliseCharacterAppearance({
+        ...current.appearance,
+        ...appearance
+      }) as Record<string, string>
     }));
   }, [appearance, open]);
 
   const handleAppearanceChange = useCallback(
     (nextAppearance: Record<string, string>) => {
-      setDraft((current) => ({ ...current, appearance: { ...current.appearance, ...nextAppearance } }));
+      setDraft((current) => ({
+        ...current,
+        appearance: normaliseCharacterAppearance({
+          ...current.appearance,
+          ...nextAppearance
+        }) as Record<string, string>
+      }));
       setDirty(true);
     },
     []

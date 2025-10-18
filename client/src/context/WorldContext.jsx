@@ -8,8 +8,19 @@ import {
   getUserPreferences as getStoredPreferences,
   updateUserPreferences as persistUserPreferences
 } from '../state/userPreferences.js';
+import {
+  DEFAULT_CHARACTER_APPEARANCE,
+  listAvailableAccentColors,
+  listAvailableMeshes,
+  listAvailableTextures,
+  listAvailableVisorColors,
+  normaliseCharacterAppearance
+} from '../game/characters/customization.js';
 
-const DEFAULT_APPEARANCE = { ...STORED_DEFAULT_APPEARANCE };
+const DEFAULT_APPEARANCE = normaliseCharacterAppearance({
+  ...DEFAULT_CHARACTER_APPEARANCE,
+  ...STORED_DEFAULT_APPEARANCE
+});
 
 const WorldContext = createContext({
   connected: false,
@@ -67,9 +78,10 @@ const mergeMetadata = (current = {}, incoming = {}) => {
 
 const DEFAULT_ANIMATION = 'idle';
 
-const SPRITE_IDS = ['explorer', 'pilot', 'engineer', 'scientist'];
-const SPRITE_COLORS = ['#ff7043', '#29b6f6', '#66bb6a', '#ab47bc', '#ffca28', '#8d6e63'];
-const ACCENT_COLORS = ['#212121', '#f5f5f5', '#37474f', '#cfd8dc'];
+const TEXTURE_IDS = listAvailableTextures().map((item) => item.id);
+const MESH_IDS = listAvailableMeshes().map((item) => item.id);
+const VISOR_COLORS = listAvailableVisorColors();
+const ACCENT_COLORS = listAvailableAccentColors();
 
 const pickRandom = (items) => {
   if (!Array.isArray(items) || items.length === 0) {
@@ -79,11 +91,24 @@ const pickRandom = (items) => {
   return items[index];
 };
 
-const generateRandomAvatar = () => ({
-  sprite: pickRandom(SPRITE_IDS) ?? 'explorer',
-  color: pickRandom(SPRITE_COLORS) ?? '#ff7043',
-  accent: pickRandom(ACCENT_COLORS) ?? '#212121'
-});
+const generateRandomAppearance = () =>
+  normaliseCharacterAppearance({
+    texture: pickRandom(TEXTURE_IDS) ?? DEFAULT_APPEARANCE.texture,
+    mesh: pickRandom(MESH_IDS) ?? DEFAULT_APPEARANCE.mesh,
+    visorColor: pickRandom(VISOR_COLORS) ?? DEFAULT_APPEARANCE.visorColor,
+    accentColor: pickRandom(ACCENT_COLORS) ?? DEFAULT_APPEARANCE.accentColor
+  });
+
+const generateRandomAvatar = () => {
+  const appearance = generateRandomAppearance();
+  return {
+    sprite: appearance.texture,
+    texture: appearance.texture,
+    mesh: appearance.mesh,
+    visorColor: appearance.visorColor,
+    accentColor: appearance.accentColor
+  };
+};
 
 const generateClientPlayerId = () => {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -162,7 +187,10 @@ export function WorldProvider({ children }) {
   );
   const [appearanceState, setAppearanceState] = useState(() => {
     const stored = getStoredPreferences();
-    return { ...DEFAULT_APPEARANCE, ...(stored.appearance ?? {}) };
+    return normaliseCharacterAppearance({
+      ...DEFAULT_APPEARANCE,
+      ...(stored.appearance ?? {})
+    });
   });
   const [lastObjectEvent, setLastObjectEvent] = useState(null);
 
@@ -1078,7 +1106,11 @@ export function WorldProvider({ children }) {
         return previous;
       }
 
-      return { ...DEFAULT_APPEARANCE, ...previous, ...resolved };
+      return normaliseCharacterAppearance({
+        ...DEFAULT_APPEARANCE,
+        ...previous,
+        ...resolved
+      });
     });
   }, []);
 

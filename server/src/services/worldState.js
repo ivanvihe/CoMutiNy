@@ -8,7 +8,16 @@ const DEFAULT_POSITION = Object.freeze({
 
 const DEFAULT_ANIMATION = 'idle'
 const MAX_CHAT_HISTORY = 50
-const APPEARANCE_KEYS = Object.freeze(['hair', 'face', 'outfit', 'shoes'])
+const APPEARANCE_KEYS = Object.freeze([
+  'texture',
+  'mesh',
+  'visorColor',
+  'accentColor',
+  'hair',
+  'face',
+  'outfit',
+  'shoes'
+])
 const VALID_DIRECTIONS = new Set(['up', 'down', 'left', 'right'])
 
 const DEFAULT_SIZE = Object.freeze({
