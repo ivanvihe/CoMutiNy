@@ -116,3 +116,18 @@ Tras la generación, el manifest almacena `frames`, `frameWidth`, `frameHeight` 
 - `STABILITY_API_KEY`: habilita el generador `stable-diffusion`.
 
 Sin estas variables, el sistema seguirá funcionando mediante el generador procedimental incorporado.
+
+## Generadores procedimentales en el cliente
+
+El cliente dispone de una librería modular en `client/src/game/graphics/generators/` con los siguientes componentes:
+
+- `ProceduralGenerator`: clase base que provee utilidades para crear y limpiar canvas, gestionar degradados y cachear texturas.
+- `WallGenerator`, `FurnitureGenerator`, `PlantGenerator`, `FloorGenerator`, `AvatarGenerator`: implementaciones específicas que generan sprites parametrizables a partir de figuras básicas.
+
+### Dependencias
+
+Estos generadores requieren un entorno con soporte para `document.createElement('canvas')` y el contexto 2D del API de Canvas. En navegadores modernos no es necesario configurar nada adicional. Para renderizados fuera del navegador (por ejemplo, pruebas en Node.js) debe inyectarse una implementación compatible, como el paquete [`canvas`](https://www.npmjs.com/package/canvas).
+
+### Cache de texturas
+
+Cada generador utiliza `ProceduralGenerator` para crear claves únicas basadas en los parámetros y evitar regenerar texturas ya existentes. Si se invoca un método con los mismos argumentos, la librería reutiliza el canvas cacheado en memoria.
