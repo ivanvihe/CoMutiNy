@@ -174,15 +174,29 @@ const normaliseMap = (mapDefinition) => {
 
 const INITIAL_MAPS = MAPS.map((map) => normaliseMap(map)).filter(Boolean);
 const INITIAL_DEFAULT_MAP_ID = resolveDefaultMapId(MAPS);
+const INITIAL_CURRENT_MAP_ID = (() => {
+  if (INITIAL_DEFAULT_MAP_ID && INITIAL_DEFAULT_MAP_ID !== 'empty-map') {
+    return INITIAL_DEFAULT_MAP_ID;
+  }
+
+  if (DEFAULT_MAP_ID && DEFAULT_MAP_ID !== 'empty-map') {
+    return DEFAULT_MAP_ID;
+  }
+
+  const firstAvailable = INITIAL_MAPS.find((map) => map.id && map.id !== 'empty-map');
+  if (firstAvailable) {
+    return firstAvailable.id;
+  }
+
+  return INITIAL_DEFAULT_MAP_ID ?? DEFAULT_MAP_ID ?? 'empty-map';
+})();
 const INITIAL_DEFAULT_MAP =
-  INITIAL_MAPS.find((map) => map.id === INITIAL_DEFAULT_MAP_ID) ?? INITIAL_MAPS[0] ?? null;
+  INITIAL_MAPS.find((map) => map.id === INITIAL_CURRENT_MAP_ID) ?? INITIAL_MAPS[0] ?? null;
 const INITIAL_SPAWN = INITIAL_DEFAULT_MAP?.spawn ?? { x: 0, y: 0 };
 
 export function MapProvider({ children }) {
   const [maps, setMaps] = useState(INITIAL_MAPS);
-  const [currentMapId, setCurrentMapId] = useState(
-    INITIAL_DEFAULT_MAP_ID ?? DEFAULT_MAP_ID ?? 'empty-map'
-  );
+  const [currentMapId, setCurrentMapId] = useState(INITIAL_CURRENT_MAP_ID);
   const [playerPosition, setPlayerPosition] = useState(INITIAL_SPAWN);
   const [playerRenderPosition, setPlayerRenderPosition] = useState(INITIAL_SPAWN);
   const [playerDirection, setPlayerDirection] = useState(DEFAULT_DIRECTION);
@@ -263,7 +277,26 @@ export function MapProvider({ children }) {
 
         setMaps((existing) => {
           const normalised = remoteMaps.map((map) => normaliseMap(map)).filter(Boolean);
-          return normalised.length ? normalised : existing;
+          if (!normalised.length) {
+            return existing;
+          }
+
+          setCurrentMapId((previous) => {
+            if (previous && normalised.some((map) => map.id === previous)) {
+              return previous;
+            }
+
+            const fallback =
+              resolveDefaultMapId(normalised) ??
+              DEFAULT_MAP_ID ??
+              normalised[0]?.id ??
+              previous ??
+              '';
+
+            return fallback;
+          });
+
+          return normalised;
         });
       })
       .catch(() => {});
