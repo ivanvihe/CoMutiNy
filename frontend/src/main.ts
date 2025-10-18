@@ -11,14 +11,19 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   app.innerHTML = `
-    <main>
-      <h1>CoMutiNy</h1>
-      <section id="status"></section>
-      <section id="world"></section>
+    <main class="game-shell">
+      <section id="world" class="game-shell__world" aria-label="Mundo"></section>
+      <section
+        id="status"
+        class="game-shell__status sr-only"
+        aria-live="polite"
+        aria-atomic="true"
+      ></section>
+      <div id="ui-overlay" class="game-shell__overlay" aria-hidden="true"></div>
     </main>
   `;
 
-  const multiplayer = bootstrapMultiplayer('#status');
+  const multiplayer = bootstrapMultiplayer('#status', { autoConnect: false });
   registerUi(app, multiplayer);
 
   const bootstrap = async () => {

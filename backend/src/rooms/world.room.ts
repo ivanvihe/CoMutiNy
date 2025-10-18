@@ -26,6 +26,7 @@ interface BlockRemovalMessage {
 
 interface ChatMessagePayload {
   message: string;
+  scope?: 'global' | 'proximity';
 }
 
 type ChatBroadcastPayload = {
@@ -35,6 +36,7 @@ type ChatBroadcastPayload = {
   message: string;
   timestamp: number;
   type: 'system' | 'player';
+  scope?: 'global' | 'proximity';
 };
 
 type AuthContext = {
@@ -121,6 +123,7 @@ export class WorldRoom extends Room<WorldState> {
       message: `${player.displayName} se ha unido al servidor`,
       timestamp: Date.now(),
       type: 'system',
+      scope: 'global',
     });
 
     console.log(`Cliente ${client.sessionId} se unió a la sala world.`);
@@ -138,6 +141,7 @@ export class WorldRoom extends Room<WorldState> {
         message: `${name} abandonó la sala`,
         timestamp: Date.now(),
         type: 'system',
+        scope: 'global',
       });
     }
 
@@ -269,6 +273,8 @@ export class WorldRoom extends Room<WorldState> {
     }
 
     const player = this.state.players.get(client.sessionId);
+    const scope = message.scope === 'proximity' ? 'proximity' : 'global';
+
     const payload: ChatBroadcastPayload = {
       id: this.createChatId(),
       authorId: client.sessionId,
@@ -276,13 +282,18 @@ export class WorldRoom extends Room<WorldState> {
       message: trimmed.slice(0, 500),
       timestamp: Date.now(),
       type: 'player',
+      scope,
     };
 
     this.broadcastChat(payload);
   }
 
   private broadcastChat(payload: ChatBroadcastPayload): void {
-    this.broadcast('chat:message', payload);
+    const normalized: ChatBroadcastPayload = {
+      ...payload,
+      scope: payload.scope ?? 'global',
+    };
+    this.broadcast('chat:message', normalized);
   }
 
   private createChatId(): string {
