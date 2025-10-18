@@ -3,23 +3,17 @@ import {
   normalizeTerrainParameters,
   type TerrainParameters,
 } from './parameters';
+import { getBackendBaseUrl, sanitizeBackendUrl } from '../../config/backend';
 
 export interface WorldConfigResponse {
   terrain?: Partial<TerrainParameters> | TerrainParameters;
 }
 
-const sanitizeBackendUrl = (raw: string | undefined): string => {
-  if (!raw || raw.trim().length === 0) {
-    return 'http://localhost:2567';
-  }
-  return raw.replace(/\/$/, '');
-};
-
 const isObject = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null;
 
 export const fetchTerrainParameters = async (
-  baseUrl: string = sanitizeBackendUrl(import.meta.env.VITE_BACKEND_URL),
+  baseUrl: string = getBackendBaseUrl(),
 ): Promise<TerrainParameters> => {
   const url = `${sanitizeBackendUrl(baseUrl)}/world/config`;
   try {
@@ -35,7 +29,9 @@ export const fetchTerrainParameters = async (
     if (!terrainCandidate || !isObject(terrainCandidate)) {
       throw new Error('Terrain configuration missing in response');
     }
-    return normalizeTerrainParameters(terrainCandidate as Partial<TerrainParameters>);
+    return normalizeTerrainParameters(
+      terrainCandidate as Partial<TerrainParameters>,
+    );
   } catch (error) {
     console.warn('Falling back to default terrain parameters:', error);
     return normalizeTerrainParameters(DEFAULT_TERRAIN_PARAMETERS);

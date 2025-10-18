@@ -5,12 +5,15 @@ import { DefaultRenderingPipeline } from '@babylonjs/core/PostProcesses/RenderPi
 import { SSAO2RenderingPipeline } from '@babylonjs/core/PostProcesses/RenderPipeline/Pipelines/ssao2RenderingPipeline';
 import { VolumetricLightScatteringPostProcess } from '@babylonjs/core/PostProcesses/volumetricLightScatteringPostProcess';
 import { Engine } from '@babylonjs/core/Engines/engine';
-import { HemisphericLight } from '@babylonjs/core/Lights/hemisphericLight';
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder';
 import { NoiseProceduralTexture } from '@babylonjs/core/Materials/Textures/Procedurals/noiseProceduralTexture';
 import { PBRMaterial } from '@babylonjs/core/Materials/PBR/pbrMaterial';
 import { Scene } from '@babylonjs/core/scene';
 import { Texture } from '@babylonjs/core/Materials/Textures/texture';
+import {
+  createDayNightEnvironment,
+  type DayNightEnvironment,
+} from './environment';
 
 export type TextureSource =
   | {
@@ -82,6 +85,7 @@ export interface EngineBootstrapContext {
   engine: Engine;
   scene: Scene;
   camera: ArcRotateCamera;
+  environment: DayNightEnvironment;
   dispose: () => void;
 }
 
@@ -142,14 +146,8 @@ export async function initializeEngine(
   camera.wheelPrecision = 40;
   camera.attachControl(canvas, true);
 
-  const hemisphericLight = new HemisphericLight(
-    'hemiLight',
-    new Vector3(0.2, 1, 0.2),
-    scene,
-  );
-  hemisphericLight.intensity = 0.8;
-
   const pipeline = configureRenderingPipeline(scene, camera, options.effects);
+  const environment = createDayNightEnvironment(scene, pipeline);
   const textureMaterial = await createTexturePreview(scene, options.texture);
 
   const renderLoop = () => {
@@ -168,11 +166,12 @@ export async function initializeEngine(
   const dispose = () => {
     window.removeEventListener('resize', handleResize);
     pipeline?.dispose();
+    environment.dispose();
     scene.dispose();
     engine.dispose();
   };
 
-  return { engine, scene, camera, dispose };
+  return { engine, scene, camera, environment, dispose };
 }
 
 function configureRenderingPipeline(
