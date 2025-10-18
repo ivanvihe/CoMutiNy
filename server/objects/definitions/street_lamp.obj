@@ -1,0 +1,26 @@
+{
+  "id": "street_lamp",
+  "type": "decorative",
+  "name": "Farola modular",
+  "description": "Una farola estilizada que ilumina los accesos principales con luz cálida.",
+  "appearance": {
+    "generator": "streetLamp",
+    "width": 1,
+    "height": 2,
+    "tileSize": 32,
+    "anchor": { "x": 0.5, "y": 1, "z": 0 },
+    "options": {
+      "poleColor": "#546e7a",
+      "baseColor": "#263238",
+      "lampColor": "#ffe082",
+      "glowColor": "rgba(255,224,130,0.72)"
+    }
+  },
+  "volume": {
+    "height": 2.2,
+    "anchor": { "x": 0.5, "y": 1, "z": 0 }
+  },
+  "metadata": {
+    "tags": ["decorative", "street", "lighting", "phase3"]
+  }
+}

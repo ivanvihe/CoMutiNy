@@ -4,6 +4,7 @@ import worldState from './worldState.js'
 import { getRedisClient, getRedisPubSub } from '../config/redis.js'
 import loadStaticMapDefinitions from '../utils/staticMapLoader.js'
 import { attachObjectDefinitions, createInteractionResult, ensureDefinitionsLoaded } from '../objects/objectRegistry.js'
+import { registerWorldEventHandlers } from '../world/events/index.js'
 
 const SNAPSHOT_KEY = 'comutiny:world:snapshot'
 const EVENT_CHANNEL = 'comutiny:world:events'
@@ -617,6 +618,8 @@ class SessionManager extends EventEmitter {
 }
 
 const sessionManager = new SessionManager(worldState)
+
+registerWorldEventHandlers(sessionManager)
 
 export { EVENT_TYPES, SessionManager }
 export default sessionManager

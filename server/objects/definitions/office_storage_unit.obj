@@ -1,0 +1,26 @@
+{
+  "id": "office_storage_unit",
+  "type": "furniture",
+  "name": "Armario modular",
+  "description": "Módulo de almacenamiento para material creativo y documentación de proyectos.",
+  "appearance": {
+    "generator": "officeStorageUnit",
+    "width": 1,
+    "height": 2,
+    "tileSize": 32,
+    "anchor": { "x": 0.5, "y": 1, "z": 0 },
+    "options": {
+      "bodyColor": "#cfd8dc",
+      "sideColor": "#90a4ae",
+      "handleColor": "#37474f",
+      "shelfColor": "#b0bec5"
+    }
+  },
+  "volume": {
+    "height": 1.8,
+    "anchor": { "x": 0.5, "y": 1, "z": 0 }
+  },
+  "metadata": {
+    "tags": ["furniture", "storage", "office", "phase3"]
+  }
+}
