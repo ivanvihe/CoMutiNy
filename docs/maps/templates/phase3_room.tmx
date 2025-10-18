@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<map version="1.10" tiledversion="1.10.2" orientation="isometric" renderorder="right-down" width="6" height="6" tilewidth="64" tileheight="64" infinite="0" nextlayerid="3" nextobjectid="1">
+ <tileset firstgid="1" source="../../client/public/tilesheets/phase3.tileset.json"/>
+ <layer id="1" name="ground" width="6" height="6">
+  <data encoding="csv">
+1,1,1,1,1,1,
+1,2,2,2,2,1,
+1,2,1,1,2,1,
+1,2,1,1,2,1,
+1,2,2,2,2,1,
+1,1,1,1,1,1
+  </data>
+ </layer>
+ <layer id="2" name="walls" width="6" height="6">
+  <data encoding="csv">
+3,3,3,3,3,3,
+3,0,0,0,0,3,
+3,0,5,5,0,3,
+3,0,5,5,0,3,
+3,0,0,0,0,3,
+3,3,6,6,3,3
+  </data>
+ </layer>
+</map>

@@ -24,6 +24,7 @@ import {
   getIsometricDiamondPoints,
   strokeIsometricTile
 } from './graphics/isometricTile.js';
+import TileRenderer from './map/TileRenderer';
 
 const DEFAULT_TILESET_CONFIG = {
   tileWidth: SPRITE_METRICS.tile.pixelWidth,
@@ -741,6 +742,10 @@ export class IsometricEngine {
     this.objectSprites = new Map();
     this.tileTextureCache = new Map();
     this.spriteAssetCache = new Map();
+    this.tileRenderer = new TileRenderer({
+      tileWidth: this.tileConfig.tileWidth,
+      tileHeight: this.tileConfig.tileHeight
+    });
 
     this.camera = { x: 0, y: 0 };
     this.cameraTarget = { x: 0, y: 0 };
@@ -819,6 +824,9 @@ export class IsometricEngine {
         objectsAfterPlayers: []
       };
       this.objectSprites = new Map();
+      if (this.tileRenderer) {
+        this.tileRenderer.updateTileTypes(new Map());
+      }
       return;
     }
 
@@ -960,6 +968,10 @@ export class IsometricEngine {
     }
     if (!tileTypes.size) {
       tileTypes.set(DEFAULT_TILE_TYPE.id, { ...DEFAULT_TILE_TYPE });
+    }
+
+    if (this.tileRenderer) {
+      this.tileRenderer.updateTileTypes(tileTypes);
     }
 
     const layerCandidates = Array.isArray(map.layers)
@@ -1376,7 +1388,12 @@ export class IsometricEngine {
     return textureId === 'floor' || textureId === 'floor_texture';
   }
 
-  drawStyledTile(palette, x, y, { alpha = 1, useTexture = false } = {}) {
+  drawStyledTile(
+    palette,
+    x,
+    y,
+    { alpha = 1, useTexture = false, pattern = null, patternSize = null } = {}
+  ) {
     const tileWidth = this.getTileWidth();
     const tileHeight = this.getTileHeight();
     const top = palette?.top ?? DEFAULT_TILE_PALETTE.top;
@@ -1406,42 +1423,49 @@ export class IsometricEngine {
     this.ctx.save();
     const resolvedAlpha = clamp(alpha, 0, 1);
     if (useTexture) {
-      const textureCanvas = this.buildFloorTextureCanvas({ top, bottom });
-      if (textureCanvas) {
-        const pattern = this.ctx.createPattern(textureCanvas, 'repeat');
-        if (pattern) {
-          if (typeof pattern.setTransform === 'function') {
-            const baseWidth = textureCanvas.width || this.getBaseTileWidth();
-            const baseHeight = textureCanvas.height || this.getBaseTileHeight();
-            const scaleX = baseWidth > 0 ? tileWidth / baseWidth : 1;
-            const scaleY = baseHeight > 0 ? tileHeight / baseHeight : 1;
-            const matrix = {
-              a: scaleX,
-              b: 0,
-              c: 0,
-              d: scaleY,
-              e: 0,
-              f: 0
-            };
-            try {
-              pattern.setTransform(matrix);
-            } catch (error) {
-              if (typeof window !== 'undefined' && typeof window.DOMMatrix === 'function') {
-                const domMatrix = new window.DOMMatrix();
-                domMatrix.a = matrix.a;
-                domMatrix.d = matrix.d;
-                domMatrix.e = matrix.e;
-                domMatrix.f = matrix.f;
-                pattern.setTransform(domMatrix);
-              }
+      let patternInstance = pattern;
+      let baseWidth = patternSize?.width ?? null;
+      let baseHeight = patternSize?.height ?? null;
+
+      if (!patternInstance) {
+        const textureCanvas = this.buildFloorTextureCanvas({ top, bottom });
+        if (textureCanvas) {
+          patternInstance = this.ctx.createPattern(textureCanvas, 'repeat');
+          baseWidth = textureCanvas.width || this.getBaseTileWidth();
+          baseHeight = textureCanvas.height || this.getBaseTileHeight();
+        }
+      }
+
+      if (patternInstance) {
+        if (typeof patternInstance.setTransform === 'function') {
+          const referenceWidth = baseWidth ?? this.getBaseTileWidth();
+          const referenceHeight = baseHeight ?? this.getBaseTileHeight();
+          const scaleX = referenceWidth > 0 ? tileWidth / referenceWidth : 1;
+          const scaleY = referenceHeight > 0 ? tileHeight / referenceHeight : 1;
+          const matrix = {
+            a: scaleX,
+            b: 0,
+            c: 0,
+            d: scaleY,
+            e: 0,
+            f: 0
+          };
+          try {
+            patternInstance.setTransform(matrix);
+          } catch (error) {
+            if (typeof window !== 'undefined' && typeof window.DOMMatrix === 'function') {
+              const domMatrix = new window.DOMMatrix();
+              domMatrix.a = matrix.a;
+              domMatrix.d = matrix.d;
+              domMatrix.e = matrix.e;
+              domMatrix.f = matrix.f;
+              patternInstance.setTransform(domMatrix);
             }
           }
-          fillWithStyle(pattern, resolvedAlpha);
-          const depthAlpha = resolvedAlpha * 0.45;
-          fillWithStyle(gradient, depthAlpha);
-        } else {
-          fillWithStyle(gradient, resolvedAlpha);
         }
+        fillWithStyle(patternInstance, resolvedAlpha);
+        const depthAlpha = resolvedAlpha * 0.45;
+        fillWithStyle(gradient, depthAlpha);
       } else {
         fillWithStyle(gradient, resolvedAlpha);
       }
@@ -1452,11 +1476,23 @@ export class IsometricEngine {
   }
 
   drawTileType(tileType, x, y, { alphaOverride } = {}) {
-    const palette = derivePaletteFromColor(tileType?.color);
-    const baseAlpha = tileType?.transparent === false ? 1 : 0.92;
+    const appearance = this.tileRenderer?.getAppearance(tileType, this.ctx) ?? null;
+    const palette = appearance?.palette
+      ?? (appearance?.color ? derivePaletteFromColor(appearance.color) : derivePaletteFromColor(tileType?.color));
+    const transparency =
+      appearance?.transparent !== null && appearance?.transparent !== undefined
+        ? appearance.transparent
+        : tileType?.transparent;
+    const baseAlpha = transparency === false ? 1 : 0.92;
     const alpha = Number.isFinite(alphaOverride) ? clamp(alphaOverride, 0, 1) : baseAlpha;
-    const useTexture = this.shouldUseTextureForTile(tileType);
-    this.drawStyledTile(palette, x, y, { alpha, useTexture });
+    const hasPattern = Boolean(appearance?.pattern);
+    const useTexture = hasPattern || this.shouldUseTextureForTile(tileType);
+    this.drawStyledTile(palette, x, y, {
+      alpha,
+      useTexture,
+      pattern: appearance?.pattern ?? null,
+      patternSize: appearance?.patternSize ?? null
+    });
   }
 
   drawCollisionOverlay(x, y) {

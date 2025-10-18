@@ -1,3 +1,5 @@
+import tilemapConfig from '../../../config/tilemap.json';
+
 const SECTION_PATTERN = /^\[(?<name>[^\]]+)]$/;
 const OBJECT_PATTERN = new RegExp(
   String.raw`^(?:-\s*)?(?<solid>!)?(?<reference>[A-Za-z0-9_.-]+(?:#[A-Za-z0-9_.-]+)?)\s*(?:@|:)?\s*(?<x>\d+)(?:\s*(?:[x,]\s*|\s+)(?<y>\d+))(?:\s*\|\s*(?<label>.+))?$`
@@ -352,6 +354,83 @@ const parseLayerOpacity = (value) => {
   return Math.min(Math.max(numeric, 0), 1);
 };
 
+const buildBaseTileDefinitions = () => {
+  const tileTypes = new Map();
+  const symbolMap = new Map();
+
+  const tiles = Array.isArray(tilemapConfig?.tiles) ? tilemapConfig.tiles : [];
+  tiles.forEach((tile) => {
+    if (!tile || typeof tile !== 'object') {
+      return;
+    }
+
+    const id = typeof tile.id === 'string' ? tile.id.trim() : '';
+    if (!id) {
+      return;
+    }
+
+    const symbol = typeof tile.symbol === 'string' ? tile.symbol.trim() : null;
+    const name = typeof tile.name === 'string' && tile.name.trim() ? tile.name.trim() : id;
+    const collides = tile.collides === true;
+    const transparent = tile.transparent !== false;
+    const color = typeof tile.color === 'string' && tile.color.trim() ? tile.color.trim() : null;
+    const category = typeof tile.category === 'string' && tile.category.trim() ? tile.category.trim() : null;
+
+    const metadata =
+      tile.metadata && typeof tile.metadata === 'object' && !Array.isArray(tile.metadata)
+        ? { ...tile.metadata }
+        : {};
+
+    if (typeof tile.tileset === 'string' && !metadata.tilesetId) {
+      metadata.tilesetId = tile.tileset;
+    }
+    if (typeof tile.tilesetTile === 'string' && !metadata.tilesetTile) {
+      metadata.tilesetTile = tile.tilesetTile;
+    }
+    if (category && !metadata.category) {
+      metadata.category = category;
+    }
+
+    tileTypes.set(id, {
+      id,
+      symbol,
+      name,
+      collides,
+      transparent,
+      ...(color ? { color } : {}),
+      metadata
+    });
+
+    if (symbol) {
+      if (!symbolMap.has(symbol)) {
+        symbolMap.set(symbol, id);
+      }
+    }
+  });
+
+  return { tileTypes, symbolMap };
+};
+
+const BASE_TILE_DEFINITIONS = buildBaseTileDefinitions();
+
+const cloneBaseTileDefinitions = () => {
+  const tileTypes = new Map();
+  const symbolMap = new Map();
+
+  BASE_TILE_DEFINITIONS.tileTypes.forEach((value, key) => {
+    tileTypes.set(key, {
+      ...value,
+      metadata: value.metadata ? { ...value.metadata } : {}
+    });
+  });
+
+  BASE_TILE_DEFINITIONS.symbolMap.forEach((value, key) => {
+    symbolMap.set(key, value);
+  });
+
+  return { tileTypes, symbolMap };
+};
+
 const DEFAULT_TILE_TYPE = {
   id: 'floor',
   symbol: '.',
@@ -363,8 +442,7 @@ const DEFAULT_TILE_TYPE = {
 };
 
 const parseTileDefinitions = (lines = []) => {
-  const tileTypes = new Map();
-  const symbolMap = new Map();
+  const { tileTypes, symbolMap } = cloneBaseTileDefinitions();
 
   lines.forEach((rawLine) => {
     const line = rawLine.trim();
@@ -410,7 +488,8 @@ const parseTileDefinitions = (lines = []) => {
     const transparent = parseBoolean(properties.get('transparent'), true);
     const color = properties.get('color') ?? properties.get('colour') ?? null;
 
-    const metadata = {};
+    const baseDefinition = tileTypes.get(tileId);
+    const metadata = baseDefinition?.metadata ? { ...baseDefinition.metadata } : {};
     properties.forEach((value, key) => {
       if (
         ![
@@ -428,13 +507,23 @@ const parseTileDefinitions = (lines = []) => {
       }
     });
 
-    if (symbolMap.has(symbol) && symbolMap.get(symbol) !== tileId) {
-      throw new Error(
-        `El símbolo "${symbol}" ya está asignado a "${symbolMap.get(symbol)}"`
-      );
+    if (baseDefinition?.symbol && baseDefinition.symbol !== symbol) {
+      if (symbolMap.get(baseDefinition.symbol) === tileId) {
+        symbolMap.delete(baseDefinition.symbol);
+      }
+    }
+
+    if (symbol) {
+      const existingSymbolTarget = symbolMap.get(symbol);
+      if (existingSymbolTarget && existingSymbolTarget !== tileId) {
+        throw new Error(
+          `El símbolo "${symbol}" ya está asignado a "${symbolMap.get(symbol)}"`
+        );
+      }
     }
 
     tileTypes.set(tileId, {
+      ...(baseDefinition ? { ...baseDefinition } : {}),
       id: tileId,
       symbol,
       name,
@@ -443,7 +532,10 @@ const parseTileDefinitions = (lines = []) => {
       ...(color ? { color } : {}),
       metadata
     });
-    symbolMap.set(symbol, tileId);
+
+    if (symbol) {
+      symbolMap.set(symbol, tileId);
+    }
   });
 
   if (!tileTypes.size) {
