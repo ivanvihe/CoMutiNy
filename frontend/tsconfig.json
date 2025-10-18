@@ -1,24 +1,8 @@
 {
+  "extends": "./tsconfig.node.json",
   "compilerOptions": {
-    "target": "ESNext",
-    "useDefineForClassFields": true,
-    "module": "ESNext",
-    "moduleResolution": "Node",
-    "strict": true,
-    "jsx": "react-jsx",
-    "esModuleInterop": true,
-    "isolatedModules": true,
-    "resolveJsonModule": true,
-    "types": ["vite/client"],
-    "baseUrl": "./",
-    "paths": {
-      "@engine/*": ["src/engine/*"],
-      "@voxel/*": ["src/voxel/*"],
-      "@multiplayer/*": ["src/multiplayer/*"],
-      "@ui/*": ["src/ui/*"],
-      "@types/*": ["src/types/*"]
-    }
+    "composite": true,
+    "types": ["vite/client"]
   },
-  "include": ["src"],
-  "references": [{ "path": "./tsconfig.node.json" }]
+  "include": ["src"]
 }

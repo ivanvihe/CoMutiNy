@@ -1,36 +1,35 @@
-import "dotenv/config";
-import express, { type Request, type Response } from "express";
-import { createServer } from "http";
-import { Server } from "colyseus";
-import { monitor } from "@colyseus/monitor";
-import { WorldRoom } from "./rooms/WorldRoom";
-import { initialisePostgres } from "./database/postgres";
-import { initialiseRedis } from "./database/redis";
+import express from 'express';
+import { createServer } from 'http';
+import { Server } from 'colyseus';
+import { WorldRoom } from './rooms/world.room.js';
+import { createDatabaseConnection } from './database/index.js';
 
-async function bootstrap() {
-  await initialisePostgres();
-  await initialiseRedis();
+const PORT = Number(process.env.PORT ?? 2567);
 
-  const app = express();
-  app.use(express.json());
-  app.get("/health", (_req: Request, res: Response) => {
-    res.json({ status: "ok" });
-  });
+const app = express();
+app.use(express.json());
 
-  const port = Number(process.env.PORT ?? 2567);
-  const server = createServer(app);
-  const gameServer = new Server({ server });
+app.get('/health', (_req, res) => {
+  res.json({ status: 'ok' });
+});
 
-  gameServer.define("world", WorldRoom).enableRealtimeListing();
+const database = createDatabaseConnection();
 
-  app.use("/colyseus", monitor());
+database.connect().catch((error) => {
+  console.error('Error al inicializar la base de datos', error);
+});
 
-  server.listen(port, () => {
-    console.log(`CoMutiNy backend listening on :${port}`);
-  });
-}
+const httpServer = createServer(app);
+const gameServer = new Server({
+  server: httpServer,
+});
 
-bootstrap().catch((error) => {
-  console.error("Failed to start backend", error);
-  process.exit(1);
+gameServer.define('world', WorldRoom);
+
+gameServer.onShutdown(() => {
+  console.log('Cerrando servidor de juegos');
+});
+
+httpServer.listen(PORT, '0.0.0.0', () => {
+  console.log(`Servidor HTTP escuchando en http://0.0.0.0:${PORT}`);
 });
