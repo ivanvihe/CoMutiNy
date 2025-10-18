@@ -105,14 +105,84 @@ const normaliseUrlString = (rawUrl, { fallbackProtocol } = {}) => {
   }
 };
 
-const resolveServerUrl = () => {
-  if (typeof window === 'undefined') {
-    const envUrl =
-      process?.env?.VITE_SOCKET_URL ||
-      process?.env?.VITE_API_BASE_URL ||
-      `http://localhost:${DEFAULT_PORT}`;
+const getImportMetaEnv = () => {
+  try {
+    return Function(
+      'return typeof import.meta !== "undefined" ? import.meta.env : undefined;'
+    )();
+  } catch {
+    return undefined;
+  }
+};
 
-    return normaliseUrlString(envUrl, { fallbackProtocol: 'http:' });
+const resolveServerUrl = () => {
+  const importMetaEnv = getImportMetaEnv();
+
+  if (typeof window === 'undefined') {
+    const fallbackProtocol = normaliseProtocol(
+      process?.env?.VITE_SOCKET_PROTOCOL ??
+        process?.env?.VITE_API_PROTOCOL ??
+        importMetaEnv?.VITE_SOCKET_PROTOCOL ??
+        importMetaEnv?.VITE_API_PROTOCOL ??
+        'http:',
+      'http:'
+    );
+    const fallbackHostname =
+      (
+        process?.env?.VITE_SOCKET_HOST ??
+        process?.env?.VITE_API_HOST ??
+        importMetaEnv?.VITE_SOCKET_HOST ??
+        importMetaEnv?.VITE_API_HOST ??
+        'localhost'
+      ).trim() ||
+      'localhost';
+    const fallbackPort =
+      parsePort(process?.env?.VITE_SOCKET_PORT) ??
+      parsePort(process?.env?.VITE_API_PORT) ??
+      parsePort(importMetaEnv?.VITE_SOCKET_PORT) ??
+      parsePort(importMetaEnv?.VITE_API_PORT) ??
+      DEFAULT_PORT;
+
+    const rawUrl = normaliseUrlString(
+      process?.env?.VITE_SOCKET_URL ??
+        process?.env?.VITE_API_BASE_URL ??
+        importMetaEnv?.VITE_SOCKET_URL ??
+        importMetaEnv?.VITE_API_BASE_URL ??
+        null,
+      { fallbackProtocol }
+    );
+
+    if (rawUrl) {
+      try {
+        const candidate = new URL(rawUrl, `${fallbackProtocol}//${fallbackHostname}`);
+
+        if (shouldNormaliseHostname(candidate.hostname)) {
+          candidate.hostname = fallbackHostname;
+        }
+
+        if (!candidate.port && fallbackPort) {
+          candidate.port = String(fallbackPort);
+        }
+
+        candidate.protocol = normaliseProtocol(candidate.protocol, fallbackProtocol);
+
+        return candidate.toString();
+      } catch (error) {
+        console.warn('Failed to parse server URL, falling back to raw value.', error);
+        return rawUrl;
+      }
+    }
+
+    const includePort =
+      fallbackPort &&
+      !(
+        (fallbackProtocol === 'https:' && fallbackPort === 443) ||
+        (fallbackProtocol === 'http:' && fallbackPort === 80)
+      );
+
+    const portSegment = includePort ? `:${fallbackPort}` : '';
+
+    return `${fallbackProtocol}//${fallbackHostname}${portSegment}`;
   }
 
   const { protocol: currentProtocol, hostname: currentHostname } = window.location;
@@ -123,14 +193,14 @@ const resolveServerUrl = () => {
   const fallbackHostname = currentHostname || 'localhost';
 
   const fallbackPort =
-    parsePort(import.meta?.env?.VITE_SOCKET_PORT) ??
-    parsePort(import.meta?.env?.VITE_API_PORT) ??
+    parsePort(importMetaEnv?.VITE_SOCKET_PORT) ??
+    parsePort(importMetaEnv?.VITE_API_PORT) ??
     DEFAULT_PORT;
 
   const rawUrl = normaliseUrlString(
     window.__COMUTINY_SOCKET_URL__ ??
-      import.meta?.env?.VITE_SOCKET_URL ??
-      import.meta?.env?.VITE_API_BASE_URL ??
+      importMetaEnv?.VITE_SOCKET_URL ??
+      importMetaEnv?.VITE_API_BASE_URL ??
       null,
     { fallbackProtocol }
   );
