@@ -1,6 +1,9 @@
 import { Client, Room } from 'colyseus';
+import { getAuthService, getWorldPersistence } from '../context.js';
 import { BlockState, PlayerState, WorldState } from '../world/state.js';
 import { createWorldGenerator } from '../world/generator.js';
+
+const CHUNK_FLUSH_INTERVAL_MS = Number(process.env.WORLD_FLUSH_INTERVAL_MS ?? 15_000);
 
 type Vector3Message = Partial<Record<'x' | 'y' | 'z', number>>;
 type NormalizedVector3 = { x: number; y: number; z: number };
@@ -34,16 +37,49 @@ type ChatBroadcastPayload = {
   type: 'system' | 'player';
 };
 
+type AuthContext = {
+  userId: string;
+  username: string;
+};
+
 const DEFAULT_SPAWN: Vector3Message = { x: 0, y: 64, z: 0 };
 
 export class WorldRoom extends Room<WorldState> {
   private chatCounter = 0;
+  private readonly persistence = getWorldPersistence();
+  private readonly pendingChunkUpdates = new Set<string>();
+  private flushTimer: NodeJS.Timeout | null = null;
 
-  onCreate(): void {
+  async onAuth(_client: Client, options: { token?: string } = {}): Promise<AuthContext | false> {
+    const token = typeof options.token === 'string' ? options.token : undefined;
+    if (!token) {
+      return false;
+    }
+
+    const session = await getAuthService().verifySession(token);
+    if (!session) {
+      return false;
+    }
+
+    return {
+      userId: session.user.id,
+      username: session.user.username,
+    } satisfies AuthContext;
+  }
+
+  async onCreate(): Promise<void> {
     this.setState(new WorldState());
 
     const generator = createWorldGenerator();
     generator.populateState(this.state);
+
+    void this.persistence.loadIntoState(this.state).catch((error) => {
+      console.error('No se pudo cargar el estado persistido del mundo', error);
+    });
+
+    this.flushTimer = setInterval(() => {
+      void this.flushPendingChunks();
+    }, CHUNK_FLUSH_INTERVAL_MS);
 
     this.onMessage('ping', (client: Client) => {
       client.send('pong');
@@ -69,7 +105,10 @@ export class WorldRoom extends Room<WorldState> {
   onJoin(client: Client, options?: { displayName?: string }): void {
     const player = new PlayerState();
     player.id = client.sessionId;
-    player.displayName = this.sanitizeDisplayName(options?.displayName);
+
+    const auth = client.auth as AuthContext | undefined;
+    const fallbackName = this.sanitizeDisplayName(options?.displayName);
+    player.displayName = auth?.username ?? fallbackName;
     player.position.copyFrom(DEFAULT_SPAWN);
     player.rotation.copyFrom({ x: 0, y: 0, z: 0 });
     player.lastUpdate = Date.now();
@@ -105,6 +144,35 @@ export class WorldRoom extends Room<WorldState> {
     console.log(`Cliente ${client.sessionId} abandonó la sala world.`);
   }
 
+  async onDispose(): Promise<void> {
+    if (this.flushTimer) {
+      clearInterval(this.flushTimer);
+      this.flushTimer = null;
+    }
+    await this.flushPendingChunks();
+  }
+
+  private async flushPendingChunks(): Promise<void> {
+    if (this.pendingChunkUpdates.size === 0) {
+      return;
+    }
+
+    const pending = Array.from(this.pendingChunkUpdates.values());
+    this.pendingChunkUpdates.clear();
+
+    await Promise.all(
+      pending.map(async (chunkId) => {
+        try {
+          const blocks = this.persistence.collectChunkBlocks(this.state, chunkId);
+          const chunkData = this.state.chunks.find((chunk) => chunk.id === chunkId)?.data ?? null;
+          await this.persistence.saveChunkSnapshot(chunkId, blocks, chunkData);
+        } catch (error) {
+          console.error(`No se pudo guardar el chunk ${chunkId}`, error);
+        }
+      }),
+    );
+  }
+
   private handlePlayerUpdate(client: Client, message: PlayerUpdateMessage): void {
     const player = this.state.players.get(client.sessionId);
     if (!player) {
@@ -136,10 +204,7 @@ export class WorldRoom extends Room<WorldState> {
     }
   }
 
-  private handleBlockPlacement(
-    client: Client,
-    message: BlockPlacementMessage,
-  ): void {
+  private handleBlockPlacement(client: Client, message: BlockPlacementMessage): void {
     if (!message || typeof message.type !== 'string') {
       return;
     }
@@ -159,8 +224,10 @@ export class WorldRoom extends Room<WorldState> {
       block.position.copyFrom(position);
     }
     block.type = message.type;
-    block.placedBy = client.sessionId;
+    block.placedBy = (client.auth as AuthContext | undefined)?.userId ?? client.sessionId;
     block.updatedAt = Date.now();
+
+    this.pendingChunkUpdates.add(this.persistence.determineChunkIdFromBlockKey(key));
 
     this.broadcast('block:placed', {
       id: key,
@@ -182,6 +249,7 @@ export class WorldRoom extends Room<WorldState> {
 
     if (this.state.blocks.has(key)) {
       this.state.blocks.delete(key);
+      this.pendingChunkUpdates.add(this.persistence.determineChunkIdFromBlockKey(key));
       this.broadcast('block:removed', {
         id: key,
         by: client.sessionId,
