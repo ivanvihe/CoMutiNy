@@ -1,0 +1,26 @@
+.build-status {
+  position: absolute;
+  bottom: 32px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 12px 24px;
+  border-radius: 14px;
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: #0b0e17;
+  background: linear-gradient(135deg, #f1f5ff, #d8e1ff);
+  box-shadow: 0 18px 32px rgba(0, 0, 0, 0.35);
+  z-index: 30;
+}
+
+.build-status--pending {
+  background: linear-gradient(135deg, #ffd54f, #ffecb3);
+}
+
+.build-status--success {
+  background: linear-gradient(135deg, #8bc34a, #dcedc8);
+}
+
+.build-status--error {
+  background: linear-gradient(135deg, #ef5350, #ffcdd2);
+}

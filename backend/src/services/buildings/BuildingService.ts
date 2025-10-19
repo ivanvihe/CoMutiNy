@@ -1,6 +1,7 @@
 import { Repository } from 'typeorm';
 
 import { Building, User, WorldState } from '../../entities';
+import { isPointInsideParcel, parseWorldParcels } from './parcels';
 
 export interface BuildingPlacementRequest {
   worldId: string;
@@ -11,7 +12,7 @@ export interface BuildingPlacementRequest {
 }
 
 export interface IBuildingService {
-  validatePlacement(worldId: string, x: number, y: number): Promise<WorldState>;
+  validatePlacement(worldId: string, owner: User, x: number, y: number): Promise<WorldState>;
   createBuilding(request: BuildingPlacementRequest): Promise<Building>;
   getBuildingsForWorld(worldId: string): Promise<Building[]>;
 }
@@ -22,7 +23,7 @@ export class BuildingService implements IBuildingService {
     private readonly worldRepository: Repository<WorldState>,
   ) {}
 
-  public async validatePlacement(worldId: string, x: number, y: number): Promise<WorldState> {
+  public async validatePlacement(worldId: string, owner: User, x: number, y: number): Promise<WorldState> {
     const world = await this.worldRepository.findOne({ where: { id: worldId } });
 
     if (!world) {
@@ -46,11 +47,13 @@ export class BuildingService implements IBuildingService {
       throw new Error('Tile already occupied by another building');
     }
 
+    this.ensurePlacementWithinParcels(world, owner, x, y);
+
     return world;
   }
 
   public async createBuilding(request: BuildingPlacementRequest): Promise<Building> {
-    const world = await this.validatePlacement(request.worldId, request.x, request.y);
+    const world = await this.validatePlacement(request.worldId, request.owner, request.x, request.y);
 
     const building = this.buildingRepository.create({
       owner: request.owner,
@@ -65,5 +68,23 @@ export class BuildingService implements IBuildingService {
 
   public getBuildingsForWorld(worldId: string): Promise<Building[]> {
     return this.buildingRepository.find({ where: { world: { id: worldId } } });
+  }
+
+  private ensurePlacementWithinParcels(world: WorldState, owner: User, x: number, y: number): void {
+    const parcels = parseWorldParcels(world);
+
+    if (parcels.length === 0) {
+      return;
+    }
+
+    const containingParcel = parcels.find((parcel) => isPointInsideParcel(parcel, x, y));
+
+    if (!containingParcel) {
+      throw new Error('Tile is not within an assigned parcel.');
+    }
+
+    if (containingParcel.ownerId !== owner.id && !containingParcel.allowPublic) {
+      throw new Error('You are not allowed to build on this parcel.');
+    }
   }
 }

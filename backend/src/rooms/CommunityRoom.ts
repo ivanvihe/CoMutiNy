@@ -5,6 +5,7 @@ import { Repository } from 'typeorm';
 import { AppDataSource } from '../database';
 import { Building, ChatMessage, User, WorldState } from '../entities';
 import { BuildingService, ChatService } from '../services';
+import { ParcelDefinition, parseWorldParcels } from '../services/buildings/parcels';
 import {
   BuildingState,
   ChatMessageState,
@@ -62,6 +63,7 @@ export class CommunityRoom extends Room<CommunityState> {
   private readonly chatService: ChatService;
 
   private world!: WorldState;
+  private parcels: ParcelDefinition[] = [];
   private chunkSize = CommunityRoom.DEFAULT_CHUNK_SIZE;
   private chatHistoryLimit = CommunityRoom.DEFAULT_CHAT_HISTORY_LIMIT;
 
@@ -93,6 +95,7 @@ export class CommunityRoom extends Room<CommunityState> {
     }
 
     this.world = world;
+    this.parcels = parseWorldParcels(this.world);
 
     const buildings = await this.buildingRepository.find({
       where: { world: { id: this.world.id } },
@@ -151,6 +154,13 @@ export class CommunityRoom extends Room<CommunityState> {
       typeof options.spawnY === 'number'
         ? options.spawnY
         : this.world.height * DEFAULT_SPAWN_OFFSET;
+
+    client.send('world:info', {
+      width: this.world.width,
+      height: this.world.height,
+      parcels: this.parcels.map((parcel) => this.serializeParcel(parcel)),
+      assignedParcelIds: this.parcels.filter((parcel) => parcel.ownerId === user.id).map((parcel) => parcel.id),
+    });
 
     const playerState = new PlayerState();
     playerState.id = client.sessionId;
@@ -451,6 +461,18 @@ export class CommunityRoom extends Room<CommunityState> {
       x: buildingState.x,
       y: buildingState.y,
       chunkId: buildingState.chunkId,
+    };
+  }
+
+  private serializeParcel(parcel: ParcelDefinition): ParcelDefinition {
+    return {
+      id: parcel.id,
+      ownerId: parcel.ownerId,
+      x: parcel.x,
+      y: parcel.y,
+      width: parcel.width,
+      height: parcel.height,
+      allowPublic: parcel.allowPublic,
     };
   }
 

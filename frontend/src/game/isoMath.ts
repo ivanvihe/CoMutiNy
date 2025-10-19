@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
-import IsometricPlugin, { IsoPointLike } from './plugins/IsometricPlugin';
+import IsometricPlugin from './plugins/IsometricPlugin';
+import type { IsoPointLike } from './plugins/IsometricPlugin';
 
 export interface IsoToScreenOptions {
   offset?: Phaser.Math.Vector2;
@@ -41,9 +42,10 @@ export const screenToIsoPoint = (
 
 export const clampIsoToBounds = (
   iso: Phaser.Math.Vector3,
-  mapSize: number
+  width: number,
+  height: number
 ): Phaser.Math.Vector3 => {
-  iso.x = Phaser.Math.Clamp(iso.x, 0, mapSize - 1);
-  iso.y = Phaser.Math.Clamp(iso.y, 0, mapSize - 1);
+  iso.x = Phaser.Math.Clamp(iso.x, 0, width - 1);
+  iso.y = Phaser.Math.Clamp(iso.y, 0, height - 1);
   return iso;
 };
