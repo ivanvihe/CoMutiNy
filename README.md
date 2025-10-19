@@ -90,17 +90,19 @@ El frontend requiere recursos externos que no se versionan. El manifiesto
 ./infrastructure/scripts/download-assets.sh
 ```
 
-- Descarga y extrae packs como **Kenney Starter Kit City Builder** dentro de `frontend/public/assets/`.
+- Genera imágenes de placeholder desde **dummyimage.com** dentro de `frontend/public/assets/`.
 - Usa `--force` para re-descargar o `--dest`/`--manifest` para rutas alternativas.
 - Antes de ejecutar `npm run dev` en el frontend se valida automáticamente que todos los assets existen.
 
 Descarga manual alternativa:
 
-1. Obtener **Kenney Starter Kit City Builder** y copiar los archivos `colormap.png`, `selector.png` y `coin.png`
-   a `frontend/public/assets/tilesets/` con los nombres `kenney-citybuilder-colormap.png`,
-   `kenney-citybuilder-selector.png` y `kenney-citybuilder-coin.png`.
-2. Descargar `brawler48x48.png` del repositorio [photonstorm/phaser3-examples](https://github.com/photonstorm/phaser3-examples)
-   y guardarlo como `frontend/public/assets/sprites/brawler48x48.png`.
+1. Generar imágenes con `curl` (o el navegador) usando los siguientes endpoints de [dummyimage.com](https://dummyimage.com/):
+   - `https://dummyimage.com/512x512/2d7d46/ffffff.png&text=Ground%20Tiles`
+   - `https://dummyimage.com/256x256/2843a1/ffffff.png&text=Prop%20Selector`
+   - `https://dummyimage.com/128x128/c88917/ffffff.png&text=Coin`
+   - `https://dummyimage.com/48x48/2d7d46/ffffff.png&text=P`
+2. Guardar los archivos anteriores en `frontend/public/assets/tilesets/` y `frontend/public/assets/sprites/` con los nombres
+   esperados por el manifiesto (`kenney-citybuilder-*.png` y `brawler48x48.png`).
 
 ## Controles básicos del juego
 
@@ -125,8 +127,7 @@ Descarga manual alternativa:
 - **Código del backend**: licencia ISC (ver `backend/package.json`).
 - **Código del frontend**: sin licencia definida; añade una licencia apropiada antes de publicar.
 - **Assets**:
-  - *Kenney Starter Kit City Builder*: licencia MIT (incluida en el paquete).
-  - *Phaser Brawler Sprite Sheet*: licencia MIT disponible en el repositorio de ejemplos.
+  - *Placeholders dummyimage.com*: las imágenes generadas son de uso libre (consulta términos en https://dummyimage.com/).
 
 ## Autenticación y creación del primer usuario
 
