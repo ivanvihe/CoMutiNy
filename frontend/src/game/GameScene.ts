@@ -29,6 +29,7 @@ interface SerializedPlayer {
   displayName: string;
   x: number;
   y: number;
+  chunkId: string;
 }
 
 interface ChunkSnapshot {
@@ -46,6 +47,13 @@ interface SerializedBuilding {
   x: number;
   y: number;
   chunkId: string;
+}
+
+interface BuildingRemovedPayload {
+  buildingId: string;
+  chunkId: string;
+  x: number;
+  y: number;
 }
 
 interface CharacterVisual {
@@ -126,6 +134,28 @@ export default class GameScene extends Phaser.Scene {
 
   private userId: string | null = null;
 
+  private trackedChunks = new Map<string, { chunkX: number; chunkY: number }>();
+
+  private currentChunkId: string | null = null;
+
+  private isConnecting = false;
+
+  private isShuttingDown = false;
+
+  private reconnectTimer?: Phaser.Time.TimerEvent;
+
+  private readonly handleRoomLeave = (): void => {
+    this.room = undefined;
+    this.isConnecting = false;
+    this.resetWorldState();
+
+    if (this.isShuttingDown) {
+      return;
+    }
+
+    this.scheduleReconnect();
+  };
+
   private readonly onTilesetLoadError = (file: Phaser.Loader.File): void => {
     if (file.key.startsWith('tileset-')) {
       console.warn(
@@ -158,6 +188,10 @@ export default class GameScene extends Phaser.Scene {
     if (!keyboard) {
       throw new Error('Keyboard plugin is not available in this scene.');
     }
+    this.isShuttingDown = false;
+    this.clearReconnectTimer();
+    this.trackedChunks.clear();
+    this.currentChunkId = null;
     this.cursors = keyboard.createCursorKeys();
 
     this.createAnimations();
@@ -192,7 +226,7 @@ export default class GameScene extends Phaser.Scene {
     this.events.on(Phaser.Scenes.Events.SHUTDOWN, this.cleanup, this);
     this.events.on(Phaser.Scenes.Events.DESTROY, this.cleanup, this);
 
-    this.connectToCommunityRoom();
+    void this.connectToCommunityRoom();
   }
 
   update(_time: number, delta: number): void {
@@ -558,6 +592,18 @@ export default class GameScene extends Phaser.Scene {
     return { x: Number.parseInt(rawX, 10), y: Number.parseInt(rawY, 10) };
   }
 
+  private parseChunkId(chunkId: string): { chunkX: number; chunkY: number } | null {
+    const [rawX, rawY] = chunkId.split(':');
+    const chunkX = Number.parseInt(rawX ?? '', 10);
+    const chunkY = Number.parseInt(rawY ?? '', 10);
+
+    if (!Number.isFinite(chunkX) || !Number.isFinite(chunkY)) {
+      return null;
+    }
+
+    return { chunkX, chunkY };
+  }
+
   private colorStringToTint(color: string): number {
     try {
       return Phaser.Display.Color.HexStringToColor(color).color;
@@ -825,6 +871,23 @@ export default class GameScene extends Phaser.Scene {
     }
   }
 
+  private handleBuildingRemoved(payload: BuildingRemovedPayload): void {
+    if (!payload || typeof payload.buildingId !== 'string') {
+      return;
+    }
+
+    if (!this.buildingVisuals.has(payload.buildingId)) {
+      this.setTileOccupancy(payload.x, payload.y, null);
+    }
+
+    this.removeBuilding(payload.buildingId);
+
+    if (this.pendingPlacement && this.pendingPlacement.key === this.tileKey(payload.x, payload.y)) {
+      this.isAwaitingBuildConfirmation = false;
+      this.pendingPlacement = null;
+    }
+  }
+
   private handleServerError(message: string): void {
     this.isAwaitingBuildConfirmation = false;
     this.pendingPlacement = null;
@@ -949,7 +1012,11 @@ export default class GameScene extends Phaser.Scene {
     });
   }
 
-  private connectToCommunityRoom(): void {
+  private async connectToCommunityRoom(isReconnecting = false): Promise<void> {
+    if (this.isShuttingDown || this.isConnecting) {
+      return;
+    }
+
     const endpoint = this.resolveServerEndpoint();
     const userId = this.resolveUserId();
 
@@ -959,20 +1026,29 @@ export default class GameScene extends Phaser.Scene {
     }
 
     this.userId = userId;
+    this.isConnecting = true;
+    this.clearReconnectTimer();
 
     try {
-      this.client = new Client(endpoint);
-      this.client
-        .joinOrCreate('community', { userId })
-        .then((room: Room) => {
-          this.room = room;
-          this.registerRoomListeners(room);
-        })
-        .catch((error: unknown) => {
-          console.error('Failed to join community room', error);
-        });
-    } catch (error: unknown) {
-      console.error('Failed to connect to Colyseus server', error);
+      if (!this.client || (!isReconnecting && this.client)) {
+        this.client = new Client(endpoint);
+      }
+
+      const room = await this.client.joinOrCreate('community', { userId });
+      this.room = room;
+      this.registerRoomListeners(room);
+
+      if (isReconnecting) {
+        this.resubscribeTrackedChunks(room);
+      }
+    } catch (error) {
+      console.error('Failed to join community room', error);
+
+      if (isReconnecting && !this.isShuttingDown) {
+        this.scheduleReconnect();
+      }
+    } finally {
+      this.isConnecting = false;
     }
   }
 
@@ -997,6 +1073,10 @@ export default class GameScene extends Phaser.Scene {
       this.handleBuildingPlaced(payload.building);
     });
 
+    room.onMessage('chunk:buildingRemoved', (payload: BuildingRemovedPayload) => {
+      this.handleBuildingRemoved(payload);
+    });
+
     room.onMessage('world:info', (payload: WorldInfoPayload) => {
       this.handleWorldInfo(payload);
     });
@@ -1004,12 +1084,71 @@ export default class GameScene extends Phaser.Scene {
     room.onMessage('error', (payload: { message: string }) => {
       this.handleServerError(payload.message);
     });
+
+    room.onLeave(this.handleRoomLeave);
+  }
+
+  private resubscribeTrackedChunks(room: Room): void {
+    this.trackedChunks.forEach(({ chunkX, chunkY }) => {
+      if (Number.isFinite(chunkX) && Number.isFinite(chunkY)) {
+        room.send('chunk:subscribe', { chunkX, chunkY });
+      }
+    });
+  }
+
+  private scheduleReconnect(): void {
+    if (this.isShuttingDown || this.isConnecting) {
+      return;
+    }
+
+    this.clearReconnectTimer();
+    this.reconnectTimer = this.time.delayedCall(750, () => {
+      if (!this.isShuttingDown) {
+        void this.connectToCommunityRoom(true);
+      }
+    });
+  }
+
+  private clearReconnectTimer(): void {
+    if (this.reconnectTimer) {
+      this.reconnectTimer.remove(false);
+      this.reconnectTimer = undefined;
+    }
+  }
+
+  private resetWorldState(): void {
+    const buildingIds = Array.from(this.buildingVisuals.keys());
+    buildingIds.forEach((id) => this.removeBuilding(id));
+    this.buildingVisuals.clear();
+    this.occupiedTiles.clear();
+    this.pathfindingGrid.forEach((row) => {
+      row.fill(0);
+    });
+    this.pathfinder.setGrid(this.pathfindingGrid);
+    this.pathfinder.enableSync();
+
+    this.remotePlayers.forEach((remote) => {
+      remote.sprite.destroy();
+      remote.label.destroy();
+    });
+    this.remotePlayers.clear();
+
+    this.pendingPlacement = null;
+    this.isAwaitingBuildConfirmation = false;
+    this.previewIsValid = false;
+    this.previewSprite?.setVisible(false);
+    this.hasSyncedPosition = false;
+    this.lastSyncedPosition.set(0, 0);
+    this.syncAccumulator = 0;
+    this.clearPath();
   }
 
   private handleChunkSnapshot(snapshot: ChunkSnapshot): void {
     if (!this.room) {
       return;
     }
+
+    this.trackedChunks.set(snapshot.chunkId, { chunkX: snapshot.x, chunkY: snapshot.y });
 
     const seen = new Set<string>();
     snapshot.players.forEach((player) => {
@@ -1034,6 +1173,8 @@ export default class GameScene extends Phaser.Scene {
     if (!this.localCharacter) {
       return;
     }
+
+    this.handleLocalChunkTransition(player.chunkId);
 
     this.localCharacter.isoPosition.set(player.x, player.y, 0);
     if (this.localCharacter.displayName !== player.displayName) {
@@ -1088,6 +1229,41 @@ export default class GameScene extends Phaser.Scene {
     this.remotePlayers.delete(playerId);
   }
 
+  private handleLocalChunkTransition(chunkId: string | undefined): void {
+    if (!chunkId) {
+      return;
+    }
+
+    if (this.currentChunkId === chunkId) {
+      return;
+    }
+
+    if (this.currentChunkId) {
+      this.removeChunkVisuals(this.currentChunkId);
+      this.trackedChunks.delete(this.currentChunkId);
+    }
+
+    this.currentChunkId = chunkId;
+
+    if (!this.trackedChunks.has(chunkId)) {
+      const parsed = this.parseChunkId(chunkId);
+      if (parsed) {
+        this.trackedChunks.set(chunkId, parsed);
+      }
+    }
+  }
+
+  private removeChunkVisuals(chunkId: string): void {
+    const toRemove: string[] = [];
+    this.buildingVisuals.forEach((visual, id) => {
+      if (visual.chunkId === chunkId) {
+        toRemove.push(id);
+      }
+    });
+
+    toRemove.forEach((id) => this.removeBuilding(id));
+  }
+
   private sendPositionToServer(): void {
     if (!this.room || !this.localCharacter) {
       return;
@@ -1114,6 +1290,10 @@ export default class GameScene extends Phaser.Scene {
   }
 
   private cleanup(): void {
+    this.isShuttingDown = true;
+    this.clearReconnectTimer();
+    this.isConnecting = false;
+
     this.input.off('pointerup', this.handlePointerUp, this);
     this.input.off('wheel', this.handleCameraWheel, this);
     this.input.off('pointerdown', this.handlePointerDown, this);
@@ -1161,6 +1341,8 @@ export default class GameScene extends Phaser.Scene {
 
     this.client = undefined;
     this.userId = null;
+    this.trackedChunks.clear();
+    this.currentChunkId = null;
   }
 
   private resolveServerEndpoint(): string | null {
