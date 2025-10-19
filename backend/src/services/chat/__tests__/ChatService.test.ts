@@ -51,9 +51,33 @@ describe('ChatService', () => {
         content: 'Hello world',
         sender,
         world,
+        scope: 'global',
+        isPersistent: true,
+        chunkId: null,
       });
       expect(chatRepository.save).toHaveBeenCalledWith(created);
       expect(result).toBe(created);
+      expect(result.scope).toBe('global');
+      expect(result.isPersistent).toBe(true);
+      expect(result.chunkId).toBeNull();
+    });
+
+    it('creates an ephemeral message when persistence is disabled', async () => {
+      const result = await service.postMessage({
+        content: 'Local',
+        sender,
+        world,
+        persist: false,
+        scope: 'proximity',
+        chunkId: '0:0',
+      });
+
+      expect(chatRepository.create).not.toHaveBeenCalled();
+      expect(chatRepository.save).not.toHaveBeenCalled();
+      expect(result.scope).toBe('proximity');
+      expect(result.isPersistent).toBe(false);
+      expect(result.chunkId).toBe('0:0');
+      expect(result.createdAt).toBeInstanceOf(Date);
     });
   });
 
@@ -62,7 +86,7 @@ describe('ChatService', () => {
       await service.getRecentMessages(world.id);
 
       expect(chatRepository.find).toHaveBeenCalledWith({
-        where: { world: { id: world.id } },
+        where: { world: { id: world.id }, isPersistent: true },
         order: { createdAt: 'DESC' },
         take: 50,
       });
@@ -72,7 +96,7 @@ describe('ChatService', () => {
       await service.getRecentMessages(world.id, 10);
 
       expect(chatRepository.find).toHaveBeenCalledWith({
-        where: { world: { id: world.id } },
+        where: { world: { id: world.id }, isPersistent: true },
         order: { createdAt: 'DESC' },
         take: 10,
       });

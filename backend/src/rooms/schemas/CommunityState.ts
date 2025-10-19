@@ -55,6 +55,15 @@ export class ChatMessageState extends Schema {
 
   @type('number')
   public timestamp!: number;
+
+  @type('string')
+  public scope: string = 'global';
+
+  @type('boolean')
+  public persistent = true;
+
+  @type('string')
+  public chunkId = '';
 }
 
 export class ChunkState extends Schema {

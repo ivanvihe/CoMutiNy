@@ -1,9 +1,11 @@
+import { randomUUID } from 'node:crypto';
+
 import { MapSchema } from '@colyseus/schema';
 import { Client, Room } from 'colyseus';
 import { Repository } from 'typeorm';
 
 import { AppDataSource } from '../database';
-import { Building, ChatMessage, User, WorldState } from '../entities';
+import { Building, ChatMessage, ChatScope, User, WorldState } from '../entities';
 import { BuildingService, ChatService } from '../services';
 import { ParcelDefinition, parseWorldParcels } from '../services/buildings/parcels';
 import {
@@ -35,8 +37,14 @@ interface BuildRemoveMessagePayload {
   buildingId: string;
 }
 
-interface ChatMessagePayload {
+interface ChatSendPayload {
   content: string;
+  persist?: boolean;
+}
+
+interface TypingPayload {
+  scope: ChatScope;
+  typing: boolean;
 }
 
 interface ChunkSubscriptionPayload {
@@ -50,6 +58,25 @@ interface ChunkSnapshot {
   y: number;
   buildings: Array<ReturnType<CommunityRoom['serializeBuildingState']>>;
   players: Array<ReturnType<CommunityRoom['serializePlayerState']>>;
+}
+
+interface ChatMessageStateInput {
+  id: string;
+  senderId: string | null;
+  senderName: string;
+  content: string;
+  timestamp: number;
+  scope: ChatScope;
+  persistent: boolean;
+  chunkId: string | null;
+}
+
+interface ChatTypingBroadcast {
+  scope: ChatScope;
+  userId: string;
+  displayName: string;
+  typing: boolean;
+  chunkId: string | null;
 }
 
 const DEFAULT_SPAWN_OFFSET = 0.5;
@@ -74,6 +101,8 @@ export class CommunityRoom extends Room<CommunityState> {
   private readonly chunkListeners = new Map<string, Set<string>>();
   private readonly playerChunks = new Map<string, string>();
   private readonly activeUsers = new Map<string, User>();
+  private readonly chatGuards = new Map<string, { lastSentAt: number; lastContent: string; duplicateCount: number }>();
+  private readonly typingStates = new Map<string, { scope: ChatScope }>();
 
   constructor() {
     super();
@@ -107,7 +136,7 @@ export class CommunityRoom extends Room<CommunityState> {
     });
 
     const chatMessages = await this.chatRepository.find({
-      where: { world: { id: this.world.id } },
+      where: { world: { id: this.world.id }, isPersistent: true },
       relations: ['sender'],
       order: { createdAt: 'ASC' },
       take: this.chatHistoryLimit,
@@ -126,13 +155,15 @@ export class CommunityRoom extends Room<CommunityState> {
     });
 
     chatMessages.forEach((message) => {
-      this.addChatMessageToState(message);
+      this.recordChatMessage(this.toChatMessageInput(message), true);
     });
 
     this.onMessage('player:move', this.handlePlayerMove.bind(this));
     this.onMessage('build:place', this.handleBuildPlacement.bind(this));
     this.onMessage('build:remove', this.handleBuildRemoval.bind(this));
-    this.onMessage('chat:send', this.handleChatMessage.bind(this));
+    this.onMessage('chat:global', this.handleGlobalChat.bind(this));
+    this.onMessage('chat:proximity', this.handleProximityChat.bind(this));
+    this.onMessage('chat:typing', this.handleTypingNotification.bind(this));
     this.onMessage('chunk:subscribe', this.handleChunkSubscribe.bind(this));
     this.onMessage('chunk:unsubscribe', this.handleChunkUnsubscribe.bind(this));
   }
@@ -189,9 +220,12 @@ export class CommunityRoom extends Room<CommunityState> {
     this.broadcastToChunk(chunkId, 'chunk:playerJoined', {
       player: this.serializePlayerState(playerState),
     });
+
+    this.broadcastSystemNotification(`${user.displayName} se ha conectado.`);
   }
 
   public onLeave(client: Client): void {
+    const user = this.activeUsers.get(client.sessionId);
     const playerState = this.state.players.get(client.sessionId);
 
     if (playerState) {
@@ -205,7 +239,26 @@ export class CommunityRoom extends Room<CommunityState> {
       this.state.players.delete(client.sessionId);
     }
 
+    if (user) {
+      this.broadcastSystemNotification(`${user.displayName} se ha desconectado.`);
+    }
+
+    const typingState = this.typingStates.get(client.sessionId);
+    if (user && typingState) {
+      const chunkId = typingState.scope === 'proximity' ? this.playerChunks.get(client.sessionId) ?? null : null;
+      this.typingStates.delete(client.sessionId);
+      this.broadcastTypingStatus({
+        scope: typingState.scope,
+        userId: user.id,
+        displayName: user.displayName,
+        typing: false,
+        chunkId,
+      });
+    }
+
     this.removeAllListenersForClient(client.sessionId);
+    this.chatGuards.delete(client.sessionId);
+    this.typingStates.delete(client.sessionId);
     this.playerChunks.delete(client.sessionId);
     this.activeUsers.delete(client.sessionId);
   }
@@ -338,25 +391,118 @@ export class CommunityRoom extends Room<CommunityState> {
     }
   }
 
-  private async handleChatMessage(client: Client, payload: ChatMessagePayload): Promise<void> {
+  private async handleGlobalChat(client: Client, payload: ChatSendPayload): Promise<void> {
+    await this.handleChatSend(client, payload, { scope: 'global' });
+  }
+
+  private async handleProximityChat(client: Client, payload: ChatSendPayload): Promise<void> {
+    const chunkId = this.playerChunks.get(client.sessionId);
+
+    if (!chunkId) {
+      return;
+    }
+
+    await this.handleChatSend(client, payload, { scope: 'proximity', chunkId });
+  }
+
+  private async handleChatSend(
+    client: Client,
+    payload: ChatSendPayload,
+    options: { scope: ChatScope; chunkId?: string | null },
+  ): Promise<void> {
     const user = this.activeUsers.get(client.sessionId);
 
     if (!user || !payload || typeof payload.content !== 'string') {
       return;
     }
 
+    const sanitized = payload.content.trim();
+
+    if (!sanitized) {
+      return;
+    }
+
+    const normalized = sanitized.slice(0, 280);
+    const guard = this.enforceChatGuards(client.sessionId, normalized);
+
+    if (guard.blocked) {
+      client.send('error', { message: guard.reason ?? 'Mensaje bloqueado por el servidor.' });
+      return;
+    }
+
     try {
+      const persistDefault = options.scope === 'global';
+      const persist = payload.persist ?? persistDefault;
       const message = await this.chatService.postMessage({
-        content: payload.content,
+        content: normalized,
         sender: user,
         world: this.world,
+        scope: options.scope,
+        persist,
+        chunkId: options.chunkId ?? null,
       });
 
-      const messageState = this.addChatMessageToState(message);
-      this.broadcast('chat:message', this.serializeChatMessage(messageState));
+      const messageData = this.toChatMessageInput(message);
+
+      if (persist) {
+        this.recordChatMessage(messageData, true);
+      }
+
+      this.dispatchChatMessage(messageData);
+
+      const typingState = this.typingStates.get(client.sessionId);
+      if (typingState) {
+        this.typingStates.delete(client.sessionId);
+        const chunkIdForTyping =
+          typingState.scope === 'proximity'
+            ? options.chunkId ?? this.playerChunks.get(client.sessionId) ?? null
+            : null;
+        this.broadcastTypingStatus({
+          scope: typingState.scope,
+          userId: user.id,
+          displayName: user.displayName,
+          typing: false,
+          chunkId: chunkIdForTyping,
+        });
+      }
     } catch (error) {
       client.send('error', { message: (error as Error).message });
     }
+  }
+
+  private handleTypingNotification(client: Client, payload: TypingPayload): void {
+    const user = this.activeUsers.get(client.sessionId);
+
+    if (!user || !payload) {
+      return;
+    }
+
+    const scope: ChatScope = payload.scope === 'proximity' ? 'proximity' : 'global';
+    const typing = Boolean(payload.typing);
+    let chunkId: string | null = null;
+
+    if (scope === 'proximity') {
+      chunkId = this.playerChunks.get(client.sessionId) ?? null;
+      if (!chunkId) {
+        return;
+      }
+    }
+
+    if (typing) {
+      this.typingStates.set(client.sessionId, { scope });
+    } else {
+      this.typingStates.delete(client.sessionId);
+    }
+
+    const broadcast: ChatTypingBroadcast = {
+      scope,
+      userId: user.id,
+      displayName: user.displayName,
+      typing,
+      chunkId,
+    };
+
+    this.broadcastTypingStatus(broadcast);
   }
 
   private handleChunkSubscribe(client: Client, payload: ChunkSubscriptionPayload): void {
@@ -416,13 +562,20 @@ export class CommunityRoom extends Room<CommunityState> {
     return buildingState;
   }
 
-  private addChatMessageToState(message: ChatMessage): ChatMessageState {
+  private recordChatMessage(data: ChatMessageStateInput, addToState: boolean): ChatMessageState | null {
+    if (!addToState) {
+      return null;
+    }
+
     const chatState = new ChatMessageState();
-    chatState.id = message.id;
-    chatState.senderId = message.sender.id;
-    chatState.senderName = message.sender.displayName;
-    chatState.content = message.content;
-    chatState.timestamp = message.createdAt.getTime();
+    chatState.id = data.id;
+    chatState.senderId = data.senderId ?? '';
+    chatState.senderName = data.senderName;
+    chatState.content = data.content;
+    chatState.timestamp = data.timestamp;
+    chatState.scope = data.scope;
+    chatState.persistent = data.persistent;
+    chatState.chunkId = data.chunkId ?? '';
 
     this.state.chat.push(chatState);
 
@@ -431,6 +584,116 @@ export class CommunityRoom extends Room<CommunityState> {
     }
 
     return chatState;
+  }
+
+  private enforceChatGuards(
+    sessionId: string,
+    content: string,
+  ): { blocked: boolean; reason?: string } {
+    const now = Date.now();
+    const guard =
+      this.chatGuards.get(sessionId) ?? ({ lastSentAt: 0, lastContent: '', duplicateCount: 0 } as {
+        lastSentAt: number;
+        lastContent: string;
+        duplicateCount: number;
+      });
+
+    let blocked = false;
+    let reason: string | undefined;
+
+    if (now - guard.lastSentAt < 750) {
+      blocked = true;
+      reason = 'Estás enviando mensajes demasiado rápido.';
+    }
+
+    if (!blocked) {
+      if (guard.lastContent === content) {
+        guard.duplicateCount += 1;
+        if (guard.duplicateCount >= 2) {
+          blocked = true;
+          reason = 'Evita repetir el mismo mensaje.';
+        }
+      } else {
+        guard.duplicateCount = 0;
+      }
+    }
+
+    guard.lastSentAt = now;
+    guard.lastContent = content;
+    this.chatGuards.set(sessionId, guard);
+
+    return { blocked, reason };
+  }
+
+  private dispatchChatMessage(data: ChatMessageStateInput): void {
+    const payload = this.serializeChatMessageData(data);
+
+    if (data.scope === 'proximity' && data.chunkId) {
+      this.broadcastToChunk(data.chunkId, 'chat:message', payload);
+    } else {
+      this.broadcast('chat:message', payload);
+    }
+  }
+
+  private broadcastTypingStatus(status: ChatTypingBroadcast): void {
+    if (status.scope === 'proximity' && status.chunkId) {
+      this.broadcastToChunk(status.chunkId, 'chat:typing', status);
+    } else {
+      this.broadcast('chat:typing', status);
+    }
+  }
+
+  private toChatMessageInput(message: ChatMessage): ChatMessageStateInput {
+    const sender = message.sender as User | undefined;
+
+    return {
+      id: message.id,
+      senderId: sender?.id ?? null,
+      senderName: sender?.displayName ?? 'Desconocido',
+      content: message.content,
+      timestamp: message.createdAt.getTime(),
+      scope: message.scope,
+      persistent: message.isPersistent,
+      chunkId: message.chunkId ?? null,
+    };
+  }
+
+  private serializeChatMessageData(data: ChatMessageStateInput): {
+    id: string;
+    senderId: string | null;
+    senderName: string;
+    content: string;
+    timestamp: number;
+    scope: ChatScope;
+    persistent: boolean;
+    chunkId: string | null;
+  } {
+    return {
+      id: data.id,
+      senderId: data.senderId,
+      senderName: data.senderName,
+      content: data.content,
+      timestamp: data.timestamp,
+      scope: data.scope,
+      persistent: data.persistent,
+      chunkId: data.chunkId,
+    };
+  }
+
+  private broadcastSystemNotification(content: string): void {
+    const data: ChatMessageStateInput = {
+      id: randomUUID(),
+      senderId: null,
+      senderName: 'Sistema',
+      content,
+      timestamp: Date.now(),
+      scope: 'system',
+      persistent: false,
+      chunkId: null,
+    };
+
+    this.recordChatMessage(data, true);
+    this.dispatchChatMessage(data);
   }
 
   private removeBuildingFromState(
@@ -536,22 +799,6 @@ export class CommunityRoom extends Room<CommunityState> {
       width: parcel.width,
       height: parcel.height,
       allowPublic: parcel.allowPublic,
-    };
-  }
-
-  private serializeChatMessage(messageState: ChatMessageState): {
-    id: string;
-    senderId: string;
-    senderName: string;
-    content: string;
-    timestamp: number;
-  } {
-    return {
-      id: messageState.id,
-      senderId: messageState.senderId,
-      senderName: messageState.senderName,
-      content: messageState.content,
-      timestamp: messageState.timestamp,
     };
   }
 
