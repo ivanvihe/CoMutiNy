@@ -1,73 +1,45 @@
-# React + TypeScript + Vite
+# CoMutiNy Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Aplicación frontend inicializada con [Vite](https://vite.dev/) usando React y TypeScript. Incluye la configuración básica de ESLint y Prettier junto con las dependencias necesarias para integrar Phaser, Colyseus y el estado global con Zustand.
 
-Currently, two official plugins are available:
+## Scripts disponibles
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- `npm run dev`: levanta el entorno de desarrollo de Vite.
+- `npm run build`: ejecuta la compilación del proyecto y la verificación de tipos.
+- `npm run preview`: sirve la compilación generada para revisión.
+- `npm run lint`: analiza el código con ESLint.
+- `npm run lint:fix`: intenta corregir automáticamente los problemas detectados por ESLint.
+- `npm run format`: aplica el formateo definido por Prettier.
+- `npm run format:check`: valida que los archivos cumplan con el formato de Prettier.
+- `npm run typecheck`: ejecuta la comprobación de tipos sin emitir archivos.
 
-## React Compiler
+## Dependencias clave
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+- [`phaser`](https://phaser.io/): motor 2D para la lógica del juego.
+- [`@colyseus/client`](https://docs.colyseus.io/colyseus/client/overview/): cliente de Colyseus para la comunicación en tiempo real.
+- [`zustand`](https://docs.pmnd.rs/zustand/getting-started/introduction): librería ligera para manejar el estado global en React.
+- [`easystarjs`](http://easystarjs.com/): utilidades de pathfinding que complementan la lógica del juego.
 
-## Expanding the ESLint configuration
+## Formateo y linting
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+- ESLint está configurado en [`eslint.config.js`](./eslint.config.js) con reglas para TypeScript, React y React Hooks, integrándose con Prettier.
+- Prettier utiliza la configuración definida en [`.prettierrc.json`](./.prettierrc.json) y excluye los directorios de build y dependencias listados en [`.prettierignore`](./.prettierignore).
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+## Requisitos previos
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+Asegúrate de tener instalado [Node.js](https://nodejs.org/) (versión 18 o superior recomendada) y `npm`.
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+## Instalación
+
+```bash
+cd frontend
+npm install
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## Ejecución
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm run dev
 ```
+
+Esto abrirá el proyecto en `http://localhost:5173/` por defecto.
