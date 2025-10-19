@@ -37,6 +37,7 @@ const BUILD_PREVIEW_TEXTURE_KEY = 'build-preview-tile';
 
 interface SerializedPlayer {
   id: string;
+  userId: string;
   displayName: string;
   x: number;
   y: number;
@@ -73,6 +74,9 @@ interface CharacterVisual {
   isoPosition: Phaser.Math.Vector3;
   lastDirection: Phaser.Math.Vector2;
   displayName: string;
+  userId?: string;
+  tint?: number;
+  textColor: string;
 }
 
 interface BuildingVisual {
@@ -120,6 +124,10 @@ export default class GameScene extends Phaser.Scene {
   private isCameraPanning = false;
 
   private lastPanPoint = new Phaser.Math.Vector2();
+
+  private cameraPanPointerId: number | null = null;
+
+  private panReleasePointerId: number | null = null;
 
   private pathfindingGrid: number[][] = [];
 
@@ -220,9 +228,12 @@ export default class GameScene extends Phaser.Scene {
     gameEvents.on(GameEvent.ChatSend, this.handleChatSendRequest, this);
     gameEvents.on(GameEvent.ChatTyping, this.handleChatTypingRequest, this);
 
+    const localIdentity = this.resolveLocalPlayerIdentity();
     const localCharacter = this.createCharacterVisual({
-      displayName: 'You',
-      textColor: '#ffe089',
+      displayName: localIdentity.displayName,
+      textColor: localIdentity.textColor,
+      tint: localIdentity.tint,
+      userId: localIdentity.userId ?? undefined,
     });
     localCharacter.isoPosition.set(2, 2, 0);
     this.localCharacter = localCharacter;
@@ -327,21 +338,43 @@ export default class GameScene extends Phaser.Scene {
       return;
     }
 
-    if (pointer.rightButtonReleased()) {
+    if (this.panReleasePointerId === pointer.id) {
+      this.panReleasePointerId = null;
+      return;
+    }
+
+    const isPanPointer = this.isCameraPanning && pointer.id === this.cameraPanPointerId;
+    if (isPanPointer) {
+      return;
+    }
+
+    const releaseDistance = Phaser.Math.Distance.Between(
+      pointer.downX,
+      pointer.downY,
+      pointer.upX ?? pointer.x,
+      pointer.upY ?? pointer.y
+    );
+
+    if (pointer.leftButtonReleased() && releaseDistance < 10) {
+      this.moveToPointer(pointer);
+      return;
+    }
+
+    if (pointer.rightButtonReleased() && releaseDistance < 10) {
       this.moveToPointer(pointer);
     }
   }
 
   private handlePointerDown(pointer: Phaser.Input.Pointer): void {
-    if (pointer.middleButtonDown()) {
-      this.isCameraPanning = true;
-      this.lastPanPoint.set(pointer.x, pointer.y);
-      this.cameras.main.stopFollow();
+    const wantsPan = pointer.middleButtonDown() || pointer.rightButtonDown();
+
+    if (wantsPan) {
+      this.startCameraPan(pointer);
     }
   }
 
   private handlePointerMove(pointer: Phaser.Input.Pointer): void {
-    if (this.isCameraPanning && pointer.middleButtonDown()) {
+    if (this.isCameraPanning && pointer.id === this.cameraPanPointerId && pointer.isDown) {
       const camera = this.cameras.main;
       const deltaX = pointer.x - this.lastPanPoint.x;
       const deltaY = pointer.y - this.lastPanPoint.y;
@@ -356,15 +389,24 @@ export default class GameScene extends Phaser.Scene {
   }
 
   private handlePointerUpGeneral(pointer: Phaser.Input.Pointer): void {
-    if (!this.isCameraPanning) {
-      return;
+    if (this.isCameraPanning && pointer.id === this.cameraPanPointerId) {
+      this.stopCameraPan(pointer);
     }
+  }
 
-    if (!pointer.middleButtonReleased()) {
-      return;
-    }
+  private startCameraPan(pointer: Phaser.Input.Pointer): void {
+    this.isCameraPanning = true;
+    this.cameraPanPointerId = pointer.id;
+    this.panReleasePointerId = null;
+    this.lastPanPoint.set(pointer.x, pointer.y);
+    this.cameras.main.stopFollow();
+  }
 
+  private stopCameraPan(pointer?: Phaser.Input.Pointer): void {
     this.isCameraPanning = false;
+    const activePointerId = this.cameraPanPointerId;
+    this.cameraPanPointerId = null;
+    this.panReleasePointerId = pointer ? pointer.id : activePointerId;
     if (this.localCharacter) {
       this.configureCameraFollow(this.localCharacter.sprite);
     }
@@ -378,6 +420,7 @@ export default class GameScene extends Phaser.Scene {
 
   private createCharacterVisual(options: {
     displayName: string;
+    userId?: string;
     tint?: number;
     textColor?: string;
   }): CharacterVisual {
@@ -396,6 +439,7 @@ export default class GameScene extends Phaser.Scene {
     label.setStroke('#000000', 4);
     label.setScrollFactor(1, 1);
     label.setShadow(0, 0, '#000000', 4, true, true);
+    label.setColor(options.textColor ?? '#ffffff');
 
     return {
       sprite,
@@ -403,7 +447,53 @@ export default class GameScene extends Phaser.Scene {
       isoPosition: new Phaser.Math.Vector3(0, 0, 0),
       lastDirection: new Phaser.Math.Vector2(0, 1),
       displayName: options.displayName,
+      userId: options.userId,
+      tint: options.tint,
+      textColor: options.textColor ?? '#ffffff',
     };
+  }
+
+  private resolveLocalPlayerIdentity(): {
+    userId: string | null;
+    displayName: string;
+    tint: number;
+    textColor: string;
+  } {
+    const session = loadSession();
+    const userId = session?.user.id ?? null;
+    const displayName = session?.user.displayName ?? 'Tú';
+    const identity = this.deriveIdentityFromUserId(userId);
+
+    return {
+      userId,
+      displayName,
+      tint: identity.tint,
+      textColor: identity.textColor,
+    };
+  }
+
+  private deriveIdentityFromUserId(userId: string | null | undefined): {
+    tint: number;
+    textColor: string;
+  } {
+    if (!userId) {
+      return { tint: 0xfdd663, textColor: '#ffe089' };
+    }
+
+    let hash = 0;
+    for (let index = 0; index < userId.length; index += 1) {
+      hash = (hash << 5) - hash + userId.charCodeAt(index);
+      hash |= 0; // force 32bit integer
+    }
+
+    const hue = Math.abs(hash % 360) / 360;
+    const spriteColor = Phaser.Display.Color.HSLToColor(hue, 0.58, 0.58);
+    const labelColor = Phaser.Display.Color.HSLToColor(hue, 0.32, 0.9);
+
+    const toHex = Phaser.Display.Color.ComponentToHex;
+    const textColor = `#${toHex(labelColor.red)}${toHex(labelColor.green)}${toHex(labelColor.blue)}`;
+
+    return { tint: spriteColor.color, textColor };
   }
 
   private handleCameraWheel(
@@ -510,15 +600,15 @@ export default class GameScene extends Phaser.Scene {
       targetX,
       targetY,
       (path: Array<{ x: number; y: number }> | null) => {
-      if (!path || path.length === 0) {
-        return;
-      }
+        if (!path || path.length === 0) {
+          return;
+        }
 
-      this.movePath = path
-        .slice(1)
-        .map((node: { x: number; y: number }) => new Phaser.Math.Vector2(node.x, node.y));
-      this.advancePath();
-    },
+        this.movePath = path
+          .slice(1)
+          .map((node: { x: number; y: number }) => new Phaser.Math.Vector2(node.x, node.y));
+        this.advancePath();
+      }
     );
     this.pathfinder.calculate();
   }
@@ -546,6 +636,7 @@ export default class GameScene extends Phaser.Scene {
     character.sprite.setDepth(screenPosition.y + PLAYER_HEIGHT_OFFSET);
     const labelY = screenPosition.y - character.sprite.displayHeight + PLAYER_HEIGHT_OFFSET - 8;
     character.label.setText(character.displayName);
+    character.label.setColor(character.textColor);
     character.label.setPosition(screenPosition.x, labelY);
     character.label.setDepth(character.sprite.depth + 10);
   }
@@ -697,7 +788,11 @@ export default class GameScene extends Phaser.Scene {
 
     this.previewIso.set(tileX, tileY, 0);
 
-    if (!Number.isFinite(tileX) || !Number.isFinite(tileY) || !this.isTileWithinBounds(tileX, tileY)) {
+    if (
+      !Number.isFinite(tileX) ||
+      !Number.isFinite(tileY) ||
+      !this.isTileWithinBounds(tileX, tileY)
+    ) {
       this.previewSprite.setVisible(false);
       this.previewIsValid = false;
       return;
@@ -767,7 +862,9 @@ export default class GameScene extends Phaser.Scene {
   }
 
   private isPointInsideParcel(parcel: ParcelDefinition, x: number, y: number): boolean {
-    return x >= parcel.x && y >= parcel.y && x < parcel.x + parcel.width && y < parcel.y + parcel.height;
+    return (
+      x >= parcel.x && y >= parcel.y && x < parcel.x + parcel.width && y < parcel.y + parcel.height
+    );
   }
 
   private handleBuildPlacement(pointer: Phaser.Input.Pointer): void {
@@ -810,7 +907,9 @@ export default class GameScene extends Phaser.Scene {
   }
 
   private projectBuildingVisual(visual: BuildingVisual): void {
-    const screenPosition = isoToScreenPoint(visual.isoPosition, this.iso, { offset: this.mapOffset });
+    const screenPosition = isoToScreenPoint(visual.isoPosition, this.iso, {
+      offset: this.mapOffset,
+    });
     visual.image.setPosition(screenPosition.x, screenPosition.y);
     visual.image.setDepth(screenPosition.y + 8);
     visual.image.setTint(visual.tintColor);
@@ -823,7 +922,12 @@ export default class GameScene extends Phaser.Scene {
     image.setTint(tint);
 
     const isoPosition = new Phaser.Math.Vector3(building.x, building.y, 0);
-    const visual: BuildingVisual = { image, isoPosition, tintColor: tint, chunkId: building.chunkId };
+    const visual: BuildingVisual = {
+      image,
+      isoPosition,
+      tintColor: tint,
+      chunkId: building.chunkId,
+    };
     this.projectBuildingVisual(visual);
     return visual;
   }
@@ -1158,7 +1262,12 @@ export default class GameScene extends Phaser.Scene {
   }
 
   private bindChatState(room: Room): void {
-    const state = room.state as { chat?: { forEach: (cb: (message: unknown) => void) => void; onAdd?: (message: unknown) => void } };
+    const state = room.state as {
+      chat?: {
+        forEach: (cb: (message: unknown) => void) => void;
+        onAdd?: (message: unknown) => void;
+      };
+    };
     const chatCollection = state?.chat;
 
     const history: ChatMessageEvent[] = [];
@@ -1199,12 +1308,14 @@ export default class GameScene extends Phaser.Scene {
         ? window.crypto.randomUUID()
         : `msg-${Date.now().toString(16)}-${Math.random().toString(16).slice(2)}`;
     const id = typeof data.id === 'string' && data.id.length > 0 ? data.id : fallbackId;
-    const senderIdValue = typeof data.senderId === 'string' && data.senderId.length > 0 ? data.senderId : null;
+    const senderIdValue =
+      typeof data.senderId === 'string' && data.senderId.length > 0 ? data.senderId : null;
     const senderNameValue = typeof data.senderName === 'string' ? data.senderName : 'Usuario';
     const contentValue = typeof data.content === 'string' ? data.content : '';
     const timestampValue = typeof data.timestamp === 'number' ? data.timestamp : Date.now();
     const scopeValue = (typeof data.scope === 'string' ? data.scope : 'global') as ChatScope;
-    const chunkIdValue = typeof data.chunkId === 'string' && data.chunkId.length > 0 ? data.chunkId : null;
+    const chunkIdValue =
+      typeof data.chunkId === 'string' && data.chunkId.length > 0 ? data.chunkId : null;
 
     return {
       id,
@@ -1299,9 +1410,13 @@ export default class GameScene extends Phaser.Scene {
     this.handleLocalChunkTransition(player.chunkId);
 
     this.localCharacter.isoPosition.set(player.x, player.y, 0);
-    if (this.localCharacter.displayName !== player.displayName) {
-      this.localCharacter.displayName = player.displayName;
-    }
+    const identity = this.deriveIdentityFromUserId(player.userId);
+    this.localCharacter.displayName = player.displayName;
+    this.localCharacter.userId = player.userId;
+    this.localCharacter.tint = identity.tint;
+    this.localCharacter.textColor = identity.textColor;
+    this.localCharacter.sprite.setTint(identity.tint);
+    this.localCharacter.label.setColor(identity.textColor);
     this.projectCharacter(this.localCharacter);
     this.updateCharacterAnimation(this.localCharacter, null, false);
     this.lastSyncedPosition.set(player.x, player.y);
@@ -1313,12 +1428,20 @@ export default class GameScene extends Phaser.Scene {
       return;
     }
 
+    const identity = this.deriveIdentityFromUserId(player.userId);
     const existing = this.remotePlayers.get(player.id);
     if (existing) {
       const previous = existing.isoPosition.clone();
       existing.isoPosition.set(player.x, player.y, 0);
-      if (existing.displayName !== player.displayName) {
-        existing.displayName = player.displayName;
+      existing.displayName = player.displayName;
+      existing.userId = player.userId;
+      if (existing.tint !== identity.tint) {
+        existing.tint = identity.tint;
+        existing.sprite.setTint(identity.tint);
+      }
+      if (existing.textColor !== identity.textColor) {
+        existing.textColor = identity.textColor;
+        existing.label.setColor(identity.textColor);
       }
       const movement = new Phaser.Math.Vector2(
         existing.isoPosition.x - previous.x,
@@ -1330,8 +1453,9 @@ export default class GameScene extends Phaser.Scene {
     } else {
       const remote = this.createCharacterVisual({
         displayName: player.displayName,
-        tint: 0x6cf3ff,
-        textColor: '#bdf6ff',
+        tint: identity.tint,
+        textColor: identity.textColor,
+        userId: player.userId,
       });
       remote.isoPosition.set(player.x, player.y, 0);
       this.remotePlayers.set(player.id, remote);

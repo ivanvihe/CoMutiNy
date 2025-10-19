@@ -20,6 +20,7 @@ const GameView = ({ session, onLogout }: GameViewProps) => {
   const [activeCategory, setActiveCategory] = useState<BuildCategory>('houses');
   const [selectedBlueprint, setSelectedBlueprint] = useState<BuildBlueprint | null>(null);
   const [status, setStatus] = useState<(BuildPlacementStatus & { timestamp: number }) | null>(null);
+  const [isBuildMenuOpen, setIsBuildMenuOpen] = useState(false);
 
   useEffect(() => {
     const game = new Phaser.Game(createGameConfig());
@@ -51,10 +52,22 @@ const GameView = ({ session, onLogout }: GameViewProps) => {
         message: `Modo construcción: ${blueprint.name}`,
         timestamp: Date.now(),
       });
+    } else {
+      setStatus(null);
     }
   };
 
   const handleDismissStatus = () => setStatus(null);
+
+  useEffect(() => {
+    if (!isBuildMenuOpen) {
+      setSelectedBlueprint((previous) => (previous ? null : previous));
+    }
+  }, [isBuildMenuOpen]);
+
+  const handleToggleBuildMenu = () => {
+    setIsBuildMenuOpen((previous) => !previous);
+  };
 
   return (
     <div className="App">
@@ -63,17 +76,33 @@ const GameView = ({ session, onLogout }: GameViewProps) => {
           <span className="app-user__greeting">Hola, {session.user.displayName}</span>
           {session.user.email && <span className="app-user__email">{session.user.email}</span>}
         </div>
-        <button type="button" className="app-logout" onClick={onLogout}>
-          Cerrar sesión
-        </button>
+        <div className="app-actions">
+          <button
+            type="button"
+            className={`app-build-toggle${isBuildMenuOpen ? ' is-active' : ''}`}
+            aria-pressed={isBuildMenuOpen}
+            onClick={handleToggleBuildMenu}
+            title={isBuildMenuOpen ? 'Cerrar menú de construcción' : 'Abrir menú de construcción'}
+          >
+            <span className="app-build-toggle__icon" aria-hidden>
+              🏗️
+            </span>
+            <span className="app-build-toggle__label">Construcción</span>
+          </button>
+          <button type="button" className="app-logout" onClick={onLogout}>
+            Cerrar sesión
+          </button>
+        </div>
       </header>
       <div id="game-container" className="game-container" />
-      <BuildMenu
-        activeCategory={activeCategory}
-        onCategoryChange={setActiveCategory}
-        selectedBlueprint={selectedBlueprint}
-        onSelectBlueprint={handleBlueprintSelect}
-      />
+      {isBuildMenuOpen ? (
+        <BuildMenu
+          activeCategory={activeCategory}
+          onCategoryChange={setActiveCategory}
+          selectedBlueprint={selectedBlueprint}
+          onSelectBlueprint={handleBlueprintSelect}
+        />
+      ) : null}
       <BuildStatusPanel status={status} onDismiss={handleDismissStatus} />
       <ChatOverlay />
     </div>
