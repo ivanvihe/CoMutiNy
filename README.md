@@ -43,8 +43,8 @@ scripts esenciales, descargar assets y documentar las pruebas realizadas.
    ```
 
    El mismo archivo alimenta a Docker Compose, PostgreSQL y al backend. Si cambias el usuario o la contraseña asegúrate de
-   eliminar el volumen `postgres-data` (por ejemplo con `docker compose down -v`) para que PostgreSQL regenere las
-   credenciales. También puedes ejecutar `./reset-database.sh` para automatizar todo el proceso.
+   eliminar la carpeta `.docker-data/postgres` (tras detener los servicios) para que PostgreSQL regenere las credenciales.
+   También puedes ejecutar `./reset-database.sh` para automatizar todo el proceso.
 
 5. (Opcional) Ejecutar migraciones de TypeORM:
 
@@ -72,7 +72,7 @@ lógica auxiliar del juego.
 
 El archivo [`docker-compose.yml`](docker-compose.yml) define tres servicios:
 
-- **postgres**: PostgreSQL 15 con volúmenes persistentes y credenciales configurables.
+- **postgres**: PostgreSQL 16 con volúmenes persistentes y credenciales configurables.
 - **backend**: servidor Node.js expuesto en `localhost:8010` (puerto interno `8000`) que lee `DATABASE_URL` y las variables
   `DEFAULT_ADMIN_DISPLAY_NAME`/`DEFAULT_ADMIN_PASSWORD` desde el entorno.
 - **frontend**: cliente Vite servido en `localhost:5173` y enlazado al backend mediante `API_URL`.
@@ -95,8 +95,9 @@ proyecto:
 ./reset-database.sh
 ```
 
-El script detiene los servicios, elimina los volúmenes persistentes y vuelve a construir el stack con las credenciales
-definidas en tu `.env`. De este modo evitas errores de autenticación entre el backend y PostgreSQL.
+El script detiene los servicios, elimina los volúmenes persistentes y borra la carpeta `.docker-data/postgres` para que
+PostgreSQL se reinicialice con las credenciales definidas en tu `.env`. De este modo evitas errores de autenticación entre
+el backend y PostgreSQL.
 
 ## Assets del proyecto
 

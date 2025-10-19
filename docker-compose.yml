@@ -1,7 +1,7 @@
 x-backend-db-env: &backend-db-env
   POSTGRES_DB: ${POSTGRES_DB:-app_db}
   POSTGRES_USER: ${POSTGRES_USER:-app_user}
-  POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-app_password}
+  POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-com-21}
 
 services:
   postgres:
@@ -11,7 +11,7 @@ services:
     environment:
       <<: *backend-db-env
     volumes:
-      - postgres-data:/var/lib/postgresql/data
+      - ./.docker-data/postgres:/var/lib/postgresql/data
     ports:
       - "5432:5432"
     healthcheck:
@@ -30,6 +30,7 @@ services:
       <<: *backend-db-env
       DATABASE_HOST: ${DATABASE_HOST:-postgres}
       DATABASE_PORT: ${DATABASE_PORT:-5432}
+      DATABASE_URL: ${DATABASE_URL:-postgresql://${POSTGRES_USER:-app_user}:${POSTGRES_PASSWORD:-com-21}@${DATABASE_HOST:-postgres}:${DATABASE_PORT:-5432}/${POSTGRES_DB:-app_db}}
       APP_ENV: ${APP_ENV:-production}
       PORT: ${PORT:-8000}
       DEFAULT_ADMIN_DISPLAY_NAME: ${DEFAULT_ADMIN_DISPLAY_NAME:-admin}
@@ -49,5 +50,3 @@ services:
     ports:
       - "5173:5173"
 
-volumes:
-  postgres-data:

@@ -30,6 +30,13 @@ cd "$PROJECT_ROOT"
 echo "🔄 Deteniendo servicios y eliminando volúmenes persistentes..."
 run_compose down --volumes --remove-orphans
 
+POSTGRES_DATA_DIR="${PROJECT_ROOT}/.docker-data/postgres"
+
+if [ -d "${POSTGRES_DATA_DIR}" ]; then
+  echo "🧹 Eliminando datos persistidos de PostgreSQL (${POSTGRES_DATA_DIR})..."
+  rm -rf "${POSTGRES_DATA_DIR}"
+fi
+
 echo "🚀 Reconstruyendo servicios..."
 run_compose up --build -d
 

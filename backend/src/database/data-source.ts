@@ -11,7 +11,7 @@ dotenv.config();
 const DEFAULT_HOST = 'postgres';
 const DEFAULT_PORT = 5432;
 const DEFAULT_USERNAME = 'app_user';
-const DEFAULT_PASSWORD = 'app_password';
+const DEFAULT_PASSWORD = 'com-21';
 const DEFAULT_DATABASE = 'app_db';
 
 export interface DatabaseConnectionConfig {

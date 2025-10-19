@@ -71,11 +71,11 @@ describe('resolveDatabaseConfig', () => {
 
     expect(config).toEqual(
       expect.objectContaining({
-        url: 'postgresql://app_user:app_password@postgres:5432/app_db',
+        url: 'postgresql://app_user:com-21@postgres:5432/app_db',
         host: 'postgres',
         port: 5432,
         username: 'app_user',
-        password: 'app_password',
+        password: 'com-21',
         database: 'app_db',
       }),
     );
