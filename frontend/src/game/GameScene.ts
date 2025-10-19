@@ -1,6 +1,8 @@
 import EasyStar from 'easystarjs';
 import { Client, Room } from 'colyseus.js';
 import Phaser from 'phaser';
+import { clampIsoToBounds, isoToScreenPoint, screenToIsoPoint } from './isoMath';
+import { TILESET_PLACEHOLDERS } from './tilesets';
 
 const TILE_WIDTH = 128;
 const TILE_HEIGHT = 64;
@@ -8,6 +10,9 @@ const HALF_TILE_HEIGHT = TILE_HEIGHT / 2;
 const PLAYER_HEIGHT_OFFSET = 32;
 const CAMERA_SMOOTHNESS = 0.1;
 const CAMERA_ZOOM = 1.4;
+const CAMERA_MIN_ZOOM = 0.8;
+const CAMERA_MAX_ZOOM = 2.2;
+const CAMERA_ZOOM_STEP = 0.1;
 const DEFAULT_MAP_SIZE = 10;
 const PLAYER_SPEED = 3.2;
 const GROUND_TEXTURE_KEY = 'generated-ground-tile';
@@ -60,12 +65,25 @@ export default class GameScene extends Phaser.Scene {
 
   private syncAccumulator = 0;
 
+  private isCameraPanning = false;
+
+  private lastPanPoint = new Phaser.Math.Vector2();
+
+  private readonly onTilesetLoadError = (file: Phaser.Loader.File): void => {
+    if (file.key.startsWith('tileset-')) {
+      console.warn(
+        `Tileset "${file.key}" could not be loaded from ${file.src}. Please download the asset manually and update the URL.`
+      );
+    }
+  };
+
   constructor() {
     super('GameScene');
   }
 
   preload(): void {
     this.iso.setTileSize(TILE_WIDTH, TILE_HEIGHT);
+    this.preloadTilesets();
     this.load.spritesheet(
       PLAYER_SPRITE_KEY,
       'https://raw.githubusercontent.com/photonstorm/phaser3-examples/master/public/assets/animations/brawler48x48.png',
@@ -98,18 +116,14 @@ export default class GameScene extends Phaser.Scene {
     this.projectCharacter(this.localCharacter);
     this.updateCharacterAnimation(this.localCharacter, null, false);
 
-    const camera = this.cameras.main;
-    const mapWidth = TILE_WIDTH * this.mapSize;
-    const mapHeight = TILE_HEIGHT * this.mapSize;
-    camera.setRoundPixels(true);
-    camera.setBounds(-mapWidth, -mapHeight, mapWidth * 2, mapHeight * 2);
-    camera.startFollow(sprite, true, CAMERA_SMOOTHNESS, CAMERA_SMOOTHNESS);
-    camera.setZoom(CAMERA_ZOOM);
-    camera.setLerp(CAMERA_SMOOTHNESS, CAMERA_SMOOTHNESS);
-    camera.setBackgroundColor('#050b16');
+    this.configureCamera(sprite);
 
     this.input.mouse?.disableContextMenu();
     this.input.on('pointerup', this.handlePointerUp, this);
+    this.input.on('wheel', this.handleCameraWheel, this);
+    this.input.on('pointerdown', this.handlePointerDown, this);
+    this.input.on('pointermove', this.handlePointerMove, this);
+    this.input.on('pointerup', this.handlePointerUpGeneral, this);
 
     this.events.on(Phaser.Scenes.Events.SHUTDOWN, this.cleanup, this);
     this.events.on(Phaser.Scenes.Events.DESTROY, this.cleanup, this);
@@ -176,16 +190,7 @@ export default class GameScene extends Phaser.Scene {
       }
     }
 
-    this.localCharacter.isoPosition.x = Phaser.Math.Clamp(
-      this.localCharacter.isoPosition.x,
-      0,
-      this.mapSize - 1
-    );
-    this.localCharacter.isoPosition.y = Phaser.Math.Clamp(
-      this.localCharacter.isoPosition.y,
-      0,
-      this.mapSize - 1
-    );
+    clampIsoToBounds(this.localCharacter.isoPosition, this.mapSize);
 
     this.projectCharacter(this.localCharacter);
     this.updateCharacterAnimation(this.localCharacter, directionForAnimation, moved);
@@ -209,10 +214,85 @@ export default class GameScene extends Phaser.Scene {
     }
   }
 
+  private handlePointerDown(pointer: Phaser.Input.Pointer): void {
+    if (pointer.middleButtonDown()) {
+      this.isCameraPanning = true;
+      this.lastPanPoint.set(pointer.x, pointer.y);
+      this.cameras.main.stopFollow();
+    }
+  }
+
+  private handlePointerMove(pointer: Phaser.Input.Pointer): void {
+    if (!this.isCameraPanning || !pointer.middleButtonDown()) {
+      return;
+    }
+
+    const camera = this.cameras.main;
+    const deltaX = pointer.x - this.lastPanPoint.x;
+    const deltaY = pointer.y - this.lastPanPoint.y;
+    camera.scrollX -= deltaX / camera.zoom;
+    camera.scrollY -= deltaY / camera.zoom;
+    this.lastPanPoint.set(pointer.x, pointer.y);
+  }
+
+  private handlePointerUpGeneral(pointer: Phaser.Input.Pointer): void {
+    if (!this.isCameraPanning) {
+      return;
+    }
+
+    if (!pointer.middleButtonReleased()) {
+      return;
+    }
+
+    this.isCameraPanning = false;
+    if (this.localCharacter) {
+      this.configureCameraFollow(this.localCharacter.sprite);
+    }
+  }
+
   private createPlayerSprite(): Phaser.GameObjects.Sprite {
     const sprite = this.add.sprite(0, 0, PLAYER_SPRITE_KEY);
     sprite.setOrigin(0.5, 1);
     return sprite;
+  }
+
+  private handleCameraWheel(
+    _pointer: Phaser.Input.Pointer,
+    _objects: Phaser.GameObjects.GameObject[],
+    _deltaX: number,
+    deltaY: number
+  ): void {
+    if (deltaY === 0) {
+      return;
+    }
+
+    const camera = this.cameras.main;
+    const direction = Math.sign(deltaY);
+    const targetZoom = Phaser.Math.Clamp(
+      camera.zoom - direction * CAMERA_ZOOM_STEP,
+      CAMERA_MIN_ZOOM,
+      CAMERA_MAX_ZOOM
+    );
+
+    camera.zoomTo(targetZoom, 150);
+  }
+
+  private configureCamera(target: Phaser.GameObjects.Sprite): void {
+    const camera = this.cameras.main;
+    const mapWidth = TILE_WIDTH * this.mapSize;
+    const mapHeight = TILE_HEIGHT * this.mapSize;
+    camera.setRoundPixels(true);
+    camera.setBounds(-mapWidth, -mapHeight, mapWidth * 2, mapHeight * 2);
+    camera.setBackgroundColor('#050b16');
+    camera.setDeadzone(200, 150);
+    camera.setLerp(CAMERA_SMOOTHNESS, CAMERA_SMOOTHNESS);
+    camera.setZoom(CAMERA_ZOOM);
+    this.configureCameraFollow(target);
+  }
+
+  private configureCameraFollow(target: Phaser.GameObjects.Sprite): void {
+    const camera = this.cameras.main;
+    camera.startFollow(target, true, CAMERA_SMOOTHNESS, CAMERA_SMOOTHNESS);
   }
 
   private createAnimations(): void {
@@ -262,7 +342,7 @@ export default class GameScene extends Phaser.Scene {
 
     const camera = this.cameras.main;
     const worldPoint = pointer.positionToCamera(camera) as Phaser.Math.Vector2;
-    const isoPoint = this.iso.screenToIso(worldPoint.clone().add(this.mapOffset));
+    const isoPoint = screenToIsoPoint(worldPoint, this.iso, { offset: this.mapOffset });
 
     const targetX = Math.round(isoPoint.x);
     const targetY = Math.round(isoPoint.y);
@@ -299,11 +379,13 @@ export default class GameScene extends Phaser.Scene {
   }
 
   private projectCharacter(character: CharacterVisual): void {
-    this.iso.projectGameObject(character.sprite, character.isoPosition, {
+    const screenPosition = isoToScreenPoint(character.isoPosition, this.iso, {
+      offset: this.mapOffset,
       displayHeightOffset: PLAYER_HEIGHT_OFFSET,
-      depthOffset: PLAYER_HEIGHT_OFFSET,
-      positionOffset: this.mapOffset,
     });
+
+    character.sprite.setPosition(screenPosition.x, screenPosition.y);
+    character.sprite.setDepth(screenPosition.y + PLAYER_HEIGHT_OFFSET);
   }
 
   private updateMapOffset(): void {
@@ -335,13 +417,31 @@ export default class GameScene extends Phaser.Scene {
 
     for (let x = 0; x < this.mapSize; x += 1) {
       for (let y = 0; y < this.mapSize; y += 1) {
-        const screenPosition = this.iso.isoToScreen({ x, y, z: 0 }).subtract(this.mapOffset);
+        const screenPosition = isoToScreenPoint({ x, y, z: 0 }, this.iso, {
+          offset: this.mapOffset,
+        });
         const tile = this.add.image(screenPosition.x, screenPosition.y, GROUND_TEXTURE_KEY);
         tile.setOrigin(0.5, 0.5);
         tile.setDepth(screenPosition.y - HALF_TILE_HEIGHT);
         this.groundLayer.add(tile);
       }
     }
+  }
+
+  private preloadTilesets(): void {
+    const loader = this.load;
+    loader.on(Phaser.Loader.Events.FILE_LOAD_ERROR, this.onTilesetLoadError, this);
+    loader.once(Phaser.Loader.Events.COMPLETE, () => {
+      loader.off(Phaser.Loader.Events.FILE_LOAD_ERROR, this.onTilesetLoadError, this);
+    });
+
+    TILESET_PLACEHOLDERS.forEach((tileset) => {
+      if (this.textures.exists(tileset.key)) {
+        return;
+      }
+
+      loader.image(tileset.key, tileset.url);
+    });
   }
 
   private connectToCommunityRoom(): void {
@@ -488,6 +588,11 @@ export default class GameScene extends Phaser.Scene {
 
   private cleanup(): void {
     this.input.off('pointerup', this.handlePointerUp, this);
+    this.input.off('wheel', this.handleCameraWheel, this);
+    this.input.off('pointerdown', this.handlePointerDown, this);
+    this.input.off('pointermove', this.handlePointerMove, this);
+    this.input.off('pointerup', this.handlePointerUpGeneral, this);
+    this.load.off(Phaser.Loader.Events.FILE_LOAD_ERROR, this.onTilesetLoadError, this);
     this.remotePlayers.forEach((remote) => remote.sprite.destroy());
     this.remotePlayers.clear();
 
