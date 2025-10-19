@@ -27,6 +27,7 @@ const CAMERA_ZOOM = 1.4;
 const CAMERA_MIN_ZOOM = 0.8;
 const CAMERA_MAX_ZOOM = 2.2;
 const CAMERA_ZOOM_STEP = 0.1;
+const CAMERA_PAN_THRESHOLD = 10;
 const DEFAULT_MAP_WIDTH = 10;
 const DEFAULT_MAP_HEIGHT = 10;
 const PLAYER_SPEED = 3.2;
@@ -129,6 +130,10 @@ export default class GameScene extends Phaser.Scene {
 
   private panReleasePointerId: number | null = null;
 
+  private pendingPanPointerId: number | null = null;
+
+  private isCameraFollowing = true;
+
   private pathfindingGrid: number[][] = [];
 
   private previewSprite?: Phaser.GameObjects.Image;
@@ -214,6 +219,7 @@ export default class GameScene extends Phaser.Scene {
     this.trackedChunks.clear();
     this.currentChunkId = null;
     this.cursors = keyboard.createCursorKeys();
+    this.isCameraFollowing = true;
 
     this.createAnimations();
     this.updateMapOffset();
@@ -319,6 +325,10 @@ export default class GameScene extends Phaser.Scene {
     this.projectCharacter(this.localCharacter);
     this.updateCharacterAnimation(this.localCharacter, directionForAnimation, moved);
 
+    if (moved && !this.isCameraFollowing) {
+      this.configureCameraFollow(this.localCharacter.sprite);
+    }
+
     this.remotePlayers.forEach((remote) => {
       this.projectCharacter(remote);
     });
@@ -369,11 +379,38 @@ export default class GameScene extends Phaser.Scene {
     const wantsPan = pointer.middleButtonDown() || pointer.rightButtonDown();
 
     if (wantsPan) {
+      this.pendingPanPointerId = null;
       this.startCameraPan(pointer);
+      return;
+    }
+
+    const leftButtonDown = pointer.leftButtonDown();
+
+    if (leftButtonDown && !this.isCameraPanning && this.cameraPanPointerId === null) {
+      this.pendingPanPointerId = pointer.id;
+      this.lastPanPoint.set(pointer.x, pointer.y);
     }
   }
 
   private handlePointerMove(pointer: Phaser.Input.Pointer): void {
+    if (
+      !this.isCameraPanning &&
+      this.pendingPanPointerId === pointer.id &&
+      pointer.isDown &&
+      pointer.leftButtonDown()
+    ) {
+      const dragDistance = Phaser.Math.Distance.Between(
+        pointer.downX,
+        pointer.downY,
+        pointer.x,
+        pointer.y
+      );
+
+      if (dragDistance >= CAMERA_PAN_THRESHOLD) {
+        this.startCameraPan(pointer);
+      }
+    }
+
     if (this.isCameraPanning && pointer.id === this.cameraPanPointerId && pointer.isDown) {
       const camera = this.cameras.main;
       const deltaX = pointer.x - this.lastPanPoint.x;
@@ -389,6 +426,10 @@ export default class GameScene extends Phaser.Scene {
   }
 
   private handlePointerUpGeneral(pointer: Phaser.Input.Pointer): void {
+    if (this.pendingPanPointerId === pointer.id) {
+      this.pendingPanPointerId = null;
+    }
+
     if (this.isCameraPanning && pointer.id === this.cameraPanPointerId) {
       this.stopCameraPan(pointer);
     }
@@ -399,6 +440,8 @@ export default class GameScene extends Phaser.Scene {
     this.cameraPanPointerId = pointer.id;
     this.panReleasePointerId = null;
     this.lastPanPoint.set(pointer.x, pointer.y);
+    this.pendingPanPointerId = null;
+    this.isCameraFollowing = false;
     this.cameras.main.stopFollow();
   }
 
@@ -407,9 +450,6 @@ export default class GameScene extends Phaser.Scene {
     const activePointerId = this.cameraPanPointerId;
     this.cameraPanPointerId = null;
     this.panReleasePointerId = pointer ? pointer.id : activePointerId;
-    if (this.localCharacter) {
-      this.configureCameraFollow(this.localCharacter.sprite);
-    }
   }
 
   private createPlayerSprite(): Phaser.GameObjects.Sprite {
@@ -533,6 +573,7 @@ export default class GameScene extends Phaser.Scene {
   private configureCameraFollow(target: Phaser.GameObjects.Sprite): void {
     const camera = this.cameras.main;
     camera.startFollow(target, true, CAMERA_SMOOTHNESS, CAMERA_SMOOTHNESS);
+    this.isCameraFollowing = true;
   }
 
   private createAnimations(): void {
