@@ -3,8 +3,10 @@ import express from 'express';
 import { Server } from 'colyseus';
 import dotenv from 'dotenv';
 
-import { initializeDatabase } from './database';
+import { AppDataSource, initializeDatabase } from './database';
 import { CommunityRoom, LobbyRoom } from './rooms';
+import { User } from './entities';
+import { AuthService, sessionService } from './services';
 
 dotenv.config();
 
@@ -15,6 +17,70 @@ async function bootstrap(): Promise<void> {
 
   const app = express();
   app.use(express.json());
+
+  const userRepository = AppDataSource.getRepository(User);
+  const authService = new AuthService(userRepository);
+
+  const sanitizeUser = (user: User) => ({
+    id: user.id,
+    email: user.email,
+    displayName: user.displayName,
+  });
+
+  app.post('/api/auth/register', async (req, res) => {
+    const { email, password, displayName } = req.body ?? {};
+
+    if (!email || !password || !displayName) {
+      return res.status(400).json({ message: 'email, password y displayName son obligatorios.' });
+    }
+
+    try {
+      const user = await authService.register({ email, password, displayName });
+      sessionService.destroyUserSessions(user.id);
+      const session = sessionService.createSession(user.id);
+
+      return res.status(201).json({
+        token: session.token,
+        expiresAt: session.expiresAt.toISOString(),
+        user: sanitizeUser(user),
+      });
+    } catch (error) {
+      if (error instanceof Error && error.message === 'Email already registered') {
+        return res.status(409).json({ message: error.message });
+      }
+
+      console.error('Failed to register user', error);
+      return res.status(500).json({ message: 'No se pudo completar el registro.' });
+    }
+  });
+
+  app.post('/api/auth/login', async (req, res) => {
+    const { email, password } = req.body ?? {};
+
+    if (!email || !password) {
+      return res.status(400).json({ message: 'email y password son obligatorios.' });
+    }
+
+    try {
+      const user = await authService.validateCredentials({ email, password });
+
+      if (!user) {
+        return res.status(401).json({ message: 'Credenciales inválidas.' });
+      }
+
+      sessionService.destroyUserSessions(user.id);
+      const session = sessionService.createSession(user.id);
+
+      return res.status(200).json({
+        token: session.token,
+        expiresAt: session.expiresAt.toISOString(),
+        user: sanitizeUser(user),
+      });
+    } catch (error) {
+      console.error('Failed to process login', error);
+      return res.status(500).json({ message: 'No se pudo iniciar sesión.' });
+    }
+  });
 
   app.get('/health', (_req, res) => {
     res.json({ status: 'ok' });

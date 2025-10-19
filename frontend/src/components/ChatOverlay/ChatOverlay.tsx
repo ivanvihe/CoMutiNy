@@ -11,6 +11,7 @@ import {
   type ChatScope,
   type ChatTypingStatusPayload,
 } from '../../game/events';
+import { loadSession } from '../../auth/session';
 import './ChatOverlay.css';
 
 type ActiveScope = Exclude<ChatScope, 'system'>;
@@ -37,24 +38,20 @@ export const ChatOverlay = (): JSX.Element => {
   });
 
   useEffect(() => {
-    if (typeof window === 'undefined') {
-      return;
-    }
-
     const envUserId = import.meta.env?.VITE_COLYSEUS_USER_ID as string | undefined;
     if (envUserId && envUserId.trim()) {
       userIdRef.current = envUserId.trim();
       return;
     }
 
-    const stored = window.localStorage.getItem('colyseusUserId');
-    userIdRef.current = stored;
+    const session = loadSession();
+    userIdRef.current = session?.user.id ?? null;
   }, []);
 
   const formatTime = useMemo(() => {
     try {
       return new Intl.DateTimeFormat('es-ES', { hour: '2-digit', minute: '2-digit' });
-    } catch (error) {
+    } catch {
       return new Intl.DateTimeFormat(undefined, { hour: '2-digit', minute: '2-digit' });
     }
   }, []);
