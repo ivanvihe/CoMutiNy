@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import Phaser from 'phaser';
 import { AuthScreen } from './auth/AuthScreen';
-import { loadSession, clearSession, SessionData } from './auth/session';
+import { loadSession, clearSession } from './auth/session';
+import type { SessionData } from './auth/session';
 import { createGameConfig } from './game/config';
 import type { BuildBlueprint, BuildCategory, BuildPlacementStatus } from './buildings/types';
 import { BuildMenu } from './components/BuildMenu/BuildMenu';

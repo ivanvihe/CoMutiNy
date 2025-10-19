@@ -1,7 +1,9 @@
-import { ChangeEvent, FormEvent, useState } from 'react';
+import { useState } from 'react';
+import type { ChangeEvent, FormEvent } from 'react';
 
 import { login, register } from './api';
-import { SessionData, storeSession } from './session';
+import { storeSession } from './session';
+import type { SessionData } from './session';
 import './AuthScreen.css';
 
 interface AuthScreenProps {
@@ -16,7 +18,7 @@ const emptyForm = {
   displayName: '',
 };
 
-export const AuthScreen = ({ onAuthenticated }: AuthScreenProps): JSX.Element => {
+export const AuthScreen = ({ onAuthenticated }: AuthScreenProps) => {
   const [mode, setMode] = useState<AuthMode>('login');
   const [form, setForm] = useState({ ...emptyForm });
   const [isSubmitting, setIsSubmitting] = useState(false);
