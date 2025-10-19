@@ -7,17 +7,17 @@ export interface TilesetDefinition {
 export const TILESET_PLACEHOLDERS: TilesetDefinition[] = [
   {
     key: 'tileset-ground',
-    url: 'https://placehold.co/512x512/2d3436/ffffff?text=Ground+Tileset',
-    description: 'Placeholder for isometric ground tileset (download real asset manually).',
+    url: 'assets/tilesets/kenney-citybuilder-colormap.png',
+    description: 'Kenney Starter Kit City Builder – textura de terreno (MIT).',
   },
   {
     key: 'tileset-props',
-    url: 'https://placehold.co/512x512/36404a/ffffff?text=Props+Tileset',
-    description: 'Placeholder for decorative props tileset.',
+    url: 'assets/tilesets/kenney-citybuilder-selector.png',
+    description: 'Selector del pack City Builder usado como sustituto temporal de props.',
   },
   {
     key: 'tileset-structures',
-    url: 'https://placehold.co/512x512/4b5763/ffffff?text=Structures+Tileset',
-    description: 'Placeholder for structures/buildings tileset.',
+    url: 'assets/tilesets/kenney-citybuilder-coin.png',
+    description: 'Icono de moneda del pack City Builder como marcador de estructuras.',
   },
 ];

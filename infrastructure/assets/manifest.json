@@ -1,0 +1,39 @@
+{
+  "assets": [
+    {
+      "name": "Kenney Starter Kit City Builder",
+      "type": "zip",
+      "url": "https://codeload.github.com/KenneyNL/Starter-Kit-City-Builder/zip/main",
+      "strip_components": 1,
+      "entries": [
+        {
+          "source": "models/Textures/colormap.png",
+          "target": "tilesets/kenney-citybuilder-colormap.png"
+        },
+        {
+          "source": "sprites/selector.png",
+          "target": "tilesets/kenney-citybuilder-selector.png"
+        },
+        {
+          "source": "sprites/coin.png",
+          "target": "tilesets/kenney-citybuilder-coin.png"
+        }
+      ],
+      "license": {
+        "name": "MIT License",
+        "url": "https://github.com/KenneyNL/Starter-Kit-City-Builder/blob/main/LICENSE.md"
+      },
+      "notes": "Assets extraídos del paquete Starter Kit City Builder publicado por Kenney."
+    },
+    {
+      "name": "Phaser brawler sprite sheet",
+      "type": "file",
+      "url": "https://raw.githubusercontent.com/photonstorm/phaser3-examples/master/public/assets/animations/brawler48x48.png",
+      "target": "sprites/brawler48x48.png",
+      "license": {
+        "name": "MIT License",
+        "url": "https://github.com/photonstorm/phaser3-examples/blob/master/license.txt"
+      }
+    }
+  ]
+}

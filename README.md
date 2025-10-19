@@ -58,13 +58,34 @@ autenticadas al backend.
 
 ### `download-assets.sh`
 
-Descarga los recursos listados en un archivo `assets.txt` (una URL por línea).
+### Assets del proyecto
 
-Uso:
+El frontend requiere un pequeño conjunto de recursos externos que no se versionan en Git. El manifiesto
+[`infrastructure/assets/manifest.json`](infrastructure/assets/manifest.json) describe cada descarga y el script
+`download-assets.sh` automatiza el proceso.
 
 ```bash
-./infrastructure/scripts/download-assets.sh [directorio-de-destino]
+./infrastructure/scripts/download-assets.sh
 ```
 
-- Si no se especifica el destino, los archivos se guardan en `infrastructure/assets/`.
-- Asegúrese de crear un archivo `assets.txt` en la raíz del proyecto con las URLs a descargar antes de ejecutar el script.
+- Descarga y extrae packs comprimidos (por ejemplo, **Kenney Starter Kit City Builder**) y los coloca en `frontend/public/assets/`.
+- Usa `--force` para re-descargar y sobrescribir archivos existentes o `--dest`/`--manifest` para rutas alternativas.
+- Antes de arrancar el frontend se ejecuta automáticamente `npm run assets:check`, que llama a
+  [`check-assets.sh`](infrastructure/scripts/check-assets.sh) para validar que todos los archivos definidos en el manifiesto existen.
+
+Si prefieres obtener los recursos de forma manual:
+
+1. Descarga el paquete **Kenney Starter Kit City Builder** desde [kenney.nl](https://kenney.nl/assets/starter-kit-city-builder)
+   (o su repositorio en GitHub) y copia los archivos `models/Textures/colormap.png` y `sprites/{selector.png,coin.png}` a
+   `frontend/public/assets/tilesets/` con los nombres `kenney-citybuilder-colormap.png`, `kenney-citybuilder-selector.png`
+   y `kenney-citybuilder-coin.png` respectivamente.
+2. Descarga el sprite sheet `brawler48x48.png` del repositorio de [photonstorm/phaser3-examples](https://github.com/photonstorm/phaser3-examples)
+   y guárdalo como `frontend/public/assets/sprites/brawler48x48.png`.
+
+#### Licencias de los assets
+
+- **Kenney Starter Kit City Builder**: publicado bajo licencia MIT (ver `LICENSE.md` dentro del paquete).
+- **Phaser Brawler Sprite Sheet**: licencia MIT disponible en el repositorio de Phaser 3 Examples.
+
+Mantén los archivos descargados fuera de control de versiones (ya ignorados en `.gitignore`) y conserva los archivos de licencia
+adjuntos si distribuyes los assets junto a tu build.

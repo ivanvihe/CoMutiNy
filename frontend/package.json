@@ -5,12 +5,15 @@
   "description": "Frontend del proyecto CoMutiNy construido con Vite, React y TypeScript.",
   "type": "module",
   "scripts": {
+    "assets:check": "bash ../infrastructure/scripts/check-assets.sh",
     "build": "tsc -b && vite build",
     "dev": "vite",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
+    "prebuild": "npm run assets:check",
+    "predev": "npm run assets:check",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit"
   },
