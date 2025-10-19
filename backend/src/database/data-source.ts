@@ -3,13 +3,17 @@ import path from 'node:path';
 import { DataSource } from 'typeorm';
 import dotenv from 'dotenv';
 
+import { expandEnvPlaceholders } from '../config/environment';
+
 dotenv.config();
 
-const databaseUrl = process.env.DATABASE_URL;
+const databaseUrl = expandEnvPlaceholders(process.env.DATABASE_URL);
 
 if (!databaseUrl) {
   throw new Error('DATABASE_URL environment variable is not set.');
 }
+
+process.env.DATABASE_URL = databaseUrl;
 
 export const AppDataSource = new DataSource({
   type: 'postgres',
