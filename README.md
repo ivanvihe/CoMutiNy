@@ -69,7 +69,7 @@ lógica auxiliar del juego.
 El archivo [`docker-compose.yml`](docker-compose.yml) define tres servicios:
 
 - **postgres**: PostgreSQL 15 con volúmenes persistentes y credenciales configurables.
-- **backend**: servidor Node.js expuesto en `localhost:2567` que lee `DATABASE_URL` de su entorno.
+- **backend**: servidor Node.js expuesto en `localhost:8010` (puerto interno `8000`) que lee `DATABASE_URL` de su entorno.
 - **frontend**: cliente Vite servido en `localhost:5173` y enlazado al backend mediante `API_URL`.
 
 Comandos habituales:
@@ -140,7 +140,7 @@ El backend expone endpoints HTTP en `/api/auth` para registro e inicio de sesió
 Ejemplo de creación del primer usuario:
 
 ```bash
-curl -X POST "http://localhost:2567/api/auth/register" \
+curl -X POST "http://localhost:8010/api/auth/register" \
   -H "Content-Type: application/json" \
   -d '{
     "email": "admin@example.com",
