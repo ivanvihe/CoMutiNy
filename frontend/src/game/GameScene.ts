@@ -32,8 +32,10 @@ interface ChunkSnapshot {
 
 interface CharacterVisual {
   sprite: Phaser.GameObjects.Sprite;
+  label: Phaser.GameObjects.Text;
   isoPosition: Phaser.Math.Vector3;
   lastDirection: Phaser.Math.Vector2;
+  displayName: string;
 }
 
 export default class GameScene extends Phaser.Scene {
@@ -107,16 +109,16 @@ export default class GameScene extends Phaser.Scene {
     this.initializePathfindingGrid();
     this.createGroundLayer();
 
-    const sprite = this.createPlayerSprite();
-    this.localCharacter = {
-      sprite,
-      isoPosition: new Phaser.Math.Vector3(2, 2, 0),
-      lastDirection: new Phaser.Math.Vector2(0, 1),
-    };
+    const localCharacter = this.createCharacterVisual({
+      displayName: 'You',
+      textColor: '#ffe089',
+    });
+    localCharacter.isoPosition.set(2, 2, 0);
+    this.localCharacter = localCharacter;
     this.projectCharacter(this.localCharacter);
     this.updateCharacterAnimation(this.localCharacter, null, false);
 
-    this.configureCamera(sprite);
+    this.configureCamera(this.localCharacter.sprite);
 
     this.input.mouse?.disableContextMenu();
     this.input.on('pointerup', this.handlePointerUp, this);
@@ -256,6 +258,36 @@ export default class GameScene extends Phaser.Scene {
     return sprite;
   }
 
+  private createCharacterVisual(options: {
+    displayName: string;
+    tint?: number;
+    textColor?: string;
+  }): CharacterVisual {
+    const sprite = this.createPlayerSprite();
+    if (typeof options.tint === 'number') {
+      sprite.setTint(options.tint);
+    }
+
+    const label = this.add.text(0, 0, options.displayName, {
+      fontFamily: 'monospace',
+      fontSize: '13px',
+      color: options.textColor ?? '#ffffff',
+      align: 'center',
+    });
+    label.setOrigin(0.5, 1);
+    label.setStroke('#000000', 4);
+    label.setScrollFactor(1, 1);
+    label.setShadow(0, 0, '#000000', 4, true, true);
+
+    return {
+      sprite,
+      label,
+      isoPosition: new Phaser.Math.Vector3(0, 0, 0),
+      lastDirection: new Phaser.Math.Vector2(0, 1),
+      displayName: options.displayName,
+    };
+  }
+
   private handleCameraWheel(
     _pointer: Phaser.Input.Pointer,
     _objects: Phaser.GameObjects.GameObject[],
@@ -386,6 +418,10 @@ export default class GameScene extends Phaser.Scene {
 
     character.sprite.setPosition(screenPosition.x, screenPosition.y);
     character.sprite.setDepth(screenPosition.y + PLAYER_HEIGHT_OFFSET);
+    const labelY = screenPosition.y - character.sprite.displayHeight + PLAYER_HEIGHT_OFFSET - 8;
+    character.label.setText(character.displayName);
+    character.label.setPosition(screenPosition.x, labelY);
+    character.label.setDepth(character.sprite.depth + 10);
   }
 
   private updateMapOffset(): void {
@@ -515,6 +551,9 @@ export default class GameScene extends Phaser.Scene {
     }
 
     this.localCharacter.isoPosition.set(player.x, player.y, 0);
+    if (this.localCharacter.displayName !== player.displayName) {
+      this.localCharacter.displayName = player.displayName;
+    }
     this.projectCharacter(this.localCharacter);
     this.updateCharacterAnimation(this.localCharacter, null, false);
     this.lastSyncedPosition.set(player.x, player.y);
@@ -530,6 +569,9 @@ export default class GameScene extends Phaser.Scene {
     if (existing) {
       const previous = existing.isoPosition.clone();
       existing.isoPosition.set(player.x, player.y, 0);
+      if (existing.displayName !== player.displayName) {
+        existing.displayName = player.displayName;
+      }
       const movement = new Phaser.Math.Vector2(
         existing.isoPosition.x - previous.x,
         existing.isoPosition.y - previous.y
@@ -538,13 +580,12 @@ export default class GameScene extends Phaser.Scene {
       this.projectCharacter(existing);
       this.updateCharacterAnimation(existing, hasMoved ? movement.normalize() : null, hasMoved);
     } else {
-      const sprite = this.createPlayerSprite();
-      sprite.setTint(0x6cf3ff);
-      const remote: CharacterVisual = {
-        sprite,
-        isoPosition: new Phaser.Math.Vector3(player.x, player.y, 0),
-        lastDirection: new Phaser.Math.Vector2(0, 1),
-      };
+      const remote = this.createCharacterVisual({
+        displayName: player.displayName,
+        tint: 0x6cf3ff,
+        textColor: '#bdf6ff',
+      });
+      remote.isoPosition.set(player.x, player.y, 0);
       this.remotePlayers.set(player.id, remote);
       this.projectCharacter(remote);
       this.updateCharacterAnimation(remote, null, false);
@@ -558,6 +599,7 @@ export default class GameScene extends Phaser.Scene {
     }
 
     remote.sprite.destroy();
+    remote.label.destroy();
     this.remotePlayers.delete(playerId);
   }
 
@@ -593,8 +635,17 @@ export default class GameScene extends Phaser.Scene {
     this.input.off('pointermove', this.handlePointerMove, this);
     this.input.off('pointerup', this.handlePointerUpGeneral, this);
     this.load.off(Phaser.Loader.Events.FILE_LOAD_ERROR, this.onTilesetLoadError, this);
-    this.remotePlayers.forEach((remote) => remote.sprite.destroy());
+    this.remotePlayers.forEach((remote) => {
+      remote.sprite.destroy();
+      remote.label.destroy();
+    });
     this.remotePlayers.clear();
+
+    if (this.localCharacter) {
+      this.localCharacter.sprite.destroy();
+      this.localCharacter.label.destroy();
+      this.localCharacter = undefined;
+    }
 
     if (this.room) {
       this.room.leave(true).catch(() => {
@@ -634,7 +685,22 @@ export default class GameScene extends Phaser.Scene {
     }
 
     const stored = window.localStorage.getItem('colyseusUserId');
-    return stored ?? null;
+    if (stored) {
+      return stored;
+    }
+
+    const generated = this.generateUserId();
+    window.localStorage.setItem('colyseusUserId', generated);
+    return generated;
+  }
+
+  private generateUserId(): string {
+    if (typeof window !== 'undefined' && window.crypto && 'randomUUID' in window.crypto) {
+      return window.crypto.randomUUID();
+    }
+
+    const random = Math.random().toString(16).slice(2, 10);
+    return `guest-${Date.now().toString(16)}${random}`;
   }
 
   private generateGroundTexture(): void {
