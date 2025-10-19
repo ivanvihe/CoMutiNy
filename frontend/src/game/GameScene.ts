@@ -16,6 +16,12 @@ import {
   type ChatTypingStatusPayload,
 } from './events';
 import { clampIsoToBounds, isoToScreenPoint, screenToIsoPoint } from './isoMath';
+import {
+  createCharacterTexture,
+  type CharacterAppearanceConfig,
+} from './rendering/CharacterFactory';
+import { ObjectFactory } from './rendering/ObjectFactory';
+import { darken, lighten } from './rendering/colors';
 import { TILESET_PLACEHOLDERS } from './tilesets';
 
 const TILE_WIDTH = 128;
@@ -32,7 +38,6 @@ const DEFAULT_MAP_WIDTH = 10;
 const DEFAULT_MAP_HEIGHT = 10;
 const PLAYER_SPEED = 3.2;
 const GROUND_TEXTURE_KEY = 'generated-ground-tile';
-const PLAYER_SPRITE_KEY = 'player-sprite';
 const POSITION_SYNC_INTERVAL = 150;
 const BUILD_PREVIEW_TEXTURE_KEY = 'build-preview-tile';
 
@@ -76,8 +81,10 @@ interface CharacterVisual {
   lastDirection: Phaser.Math.Vector2;
   displayName: string;
   userId?: string;
-  tint?: number;
   textColor: string;
+  appearance: CharacterAppearanceConfig;
+  appearanceKey: string;
+  textureKey: string;
 }
 
 interface BuildingVisual {
@@ -201,10 +208,6 @@ export default class GameScene extends Phaser.Scene {
   preload(): void {
     this.iso.setTileSize(TILE_WIDTH, TILE_HEIGHT);
     this.preloadTilesets();
-    this.load.spritesheet(PLAYER_SPRITE_KEY, 'assets/sprites/brawler48x48.png', {
-      frameWidth: 48,
-      frameHeight: 48,
-    });
     this.generateGroundTexture();
     this.generatePreviewTexture();
   }
@@ -221,7 +224,6 @@ export default class GameScene extends Phaser.Scene {
     this.cursors = keyboard.createCursorKeys();
     this.isCameraFollowing = true;
 
-    this.createAnimations();
     this.updateMapOffset();
     this.initializePathfindingGrid();
     this.createGroundLayer();
@@ -238,7 +240,7 @@ export default class GameScene extends Phaser.Scene {
     const localCharacter = this.createCharacterVisual({
       displayName: localIdentity.displayName,
       textColor: localIdentity.textColor,
-      tint: localIdentity.tint,
+      appearance: localIdentity.appearance,
       userId: localIdentity.userId ?? undefined,
     });
     localCharacter.isoPosition.set(2, 2, 0);
@@ -455,8 +457,8 @@ export default class GameScene extends Phaser.Scene {
     }
   }
 
-  private createPlayerSprite(): Phaser.GameObjects.Sprite {
-    const sprite = this.add.sprite(0, 0, PLAYER_SPRITE_KEY);
+  private createPlayerSprite(textureKey: string): Phaser.GameObjects.Sprite {
+    const sprite = this.add.sprite(0, 0, textureKey);
     sprite.setOrigin(0.5, 1);
     return sprite;
   }
@@ -464,25 +466,26 @@ export default class GameScene extends Phaser.Scene {
   private createCharacterVisual(options: {
     displayName: string;
     userId?: string;
-    tint?: number;
-    textColor?: string;
+    textColor: string;
+    appearance: CharacterAppearanceConfig;
   }): CharacterVisual {
-    const sprite = this.createPlayerSprite();
-    if (typeof options.tint === 'number') {
-      sprite.setTint(options.tint);
-    }
+    const textureKey = createCharacterTexture(this, options.appearance);
+    const sprite = this.createPlayerSprite(textureKey);
 
     const label = this.add.text(0, 0, options.displayName, {
       fontFamily: 'monospace',
       fontSize: '13px',
-      color: options.textColor ?? '#ffffff',
+      color: options.textColor,
       align: 'center',
     });
     label.setOrigin(0.5, 1);
     label.setStroke('#000000', 4);
     label.setScrollFactor(1, 1);
     label.setShadow(0, 0, '#000000', 4, true, true);
-    label.setColor(options.textColor ?? '#ffffff');
+    label.setColor(options.textColor);
+
+    const appearance = { ...options.appearance };
+    const appearanceKey = this.serializeAppearance(appearance);
 
     return {
       sprite,
@@ -491,15 +494,37 @@ export default class GameScene extends Phaser.Scene {
       lastDirection: new Phaser.Math.Vector2(0, 1),
       displayName: options.displayName,
       userId: options.userId,
-      tint: options.tint,
-      textColor: options.textColor ?? '#ffffff',
+      textColor: options.textColor,
+      appearance,
+      appearanceKey,
+      textureKey,
     };
+  }
+
+  private serializeAppearance(appearance: CharacterAppearanceConfig): string {
+    return JSON.stringify(appearance);
+  }
+
+  private applyCharacterAppearance(
+    character: CharacterVisual,
+    appearance: CharacterAppearanceConfig
+  ): void {
+    const serialized = this.serializeAppearance(appearance);
+    if (character.appearanceKey === serialized && this.textures.exists(character.textureKey)) {
+      return;
+    }
+
+    const textureKey = createCharacterTexture(this, appearance);
+    character.appearance = { ...appearance };
+    character.appearanceKey = serialized;
+    character.textureKey = textureKey;
+    character.sprite.setTexture(textureKey);
   }
 
   private resolveLocalPlayerIdentity(): {
     userId: string | null;
     displayName: string;
-    tint: number;
+    appearance: CharacterAppearanceConfig;
     textColor: string;
   } {
     const session = loadSession();
@@ -510,17 +535,29 @@ export default class GameScene extends Phaser.Scene {
     return {
       userId,
       displayName,
-      tint: identity.tint,
+      appearance: identity.appearance,
       textColor: identity.textColor,
     };
   }
 
   private deriveIdentityFromUserId(userId: string | null | undefined): {
-    tint: number;
+    appearance: CharacterAppearanceConfig;
     textColor: string;
   } {
+    const outline = '#0d0d0d';
+    const skin = '#f2c9a0';
+
     if (!userId) {
-      return { tint: 0xfdd663, textColor: '#ffe089' };
+      const shirt = '#fdd663';
+      const hair = darken(shirt, 0.45);
+      const pants = darken(shirt, 0.5);
+      const accent = lighten(shirt, 0.2);
+      const eyes = '#3a3a3a';
+
+      return {
+        appearance: { skin, hair, eyes, shirt, pants, accent, outline },
+        textColor: '#ffe089',
+      };
     }
 
     let hash = 0;
@@ -530,13 +567,22 @@ export default class GameScene extends Phaser.Scene {
     }
 
     const hue = Math.abs(hash % 360) / 360;
-    const spriteColor = Phaser.Display.Color.HSLToColor(hue, 0.58, 0.58);
+    const baseColor = Phaser.Display.Color.HSLToColor(hue, 0.58, 0.58);
     const labelColor = Phaser.Display.Color.HSLToColor(hue, 0.32, 0.9);
 
     const toHex = Phaser.Display.Color.ComponentToHex;
+    const shirt = `#${toHex(baseColor.red)}${toHex(baseColor.green)}${toHex(baseColor.blue)}`;
     const textColor = `#${toHex(labelColor.red)}${toHex(labelColor.green)}${toHex(labelColor.blue)}`;
 
-    return { tint: spriteColor.color, textColor };
+    const accent = lighten(shirt, 0.28);
+    const hair = darken(shirt, 0.5);
+    const pants = darken(shirt, 0.4);
+    const eyes = lighten(hair, 0.45);
+
+    return {
+      appearance: { skin, hair, eyes, shirt, pants, accent, outline },
+      textColor,
+    };
   }
 
   private handleCameraWheel(
@@ -580,26 +626,6 @@ export default class GameScene extends Phaser.Scene {
     this.isCameraFollowing = true;
   }
 
-  private createAnimations(): void {
-    if (!this.anims.exists('player-walk')) {
-      this.anims.create({
-        key: 'player-walk',
-        frames: this.anims.generateFrameNumbers(PLAYER_SPRITE_KEY, { frames: [0, 1, 2, 3] }),
-        frameRate: 8,
-        repeat: -1,
-      });
-    }
-
-    if (!this.anims.exists('player-idle')) {
-      this.anims.create({
-        key: 'player-idle',
-        frames: this.anims.generateFrameNumbers(PLAYER_SPRITE_KEY, { frames: [5, 6, 7, 8] }),
-        frameRate: 4,
-        repeat: -1,
-      });
-    }
-  }
-
   private updateCharacterAnimation(
     character: CharacterVisual,
     direction: Phaser.Math.Vector2 | null,
@@ -613,11 +639,7 @@ export default class GameScene extends Phaser.Scene {
 
     const facingRight = character.lastDirection.x >= 0;
     sprite.setFlipX(!facingRight);
-
-    const targetAnimation = moving ? 'player-walk' : 'player-idle';
-    if (sprite.anims.currentAnim?.key !== targetAnimation) {
-      sprite.anims.play(targetAnimation);
-    }
+    sprite.setAlpha(moving ? 0.98 : 1);
   }
 
   private moveToPointer(pointer: Phaser.Input.Pointer): void {
@@ -1458,10 +1480,9 @@ export default class GameScene extends Phaser.Scene {
     const identity = this.deriveIdentityFromUserId(player.userId);
     this.localCharacter.displayName = player.displayName;
     this.localCharacter.userId = player.userId;
-    this.localCharacter.tint = identity.tint;
     this.localCharacter.textColor = identity.textColor;
-    this.localCharacter.sprite.setTint(identity.tint);
     this.localCharacter.label.setColor(identity.textColor);
+    this.applyCharacterAppearance(this.localCharacter, identity.appearance);
     this.projectCharacter(this.localCharacter);
     this.updateCharacterAnimation(this.localCharacter, null, false);
     this.lastSyncedPosition.set(player.x, player.y);
@@ -1480,10 +1501,7 @@ export default class GameScene extends Phaser.Scene {
       existing.isoPosition.set(player.x, player.y, 0);
       existing.displayName = player.displayName;
       existing.userId = player.userId;
-      if (existing.tint !== identity.tint) {
-        existing.tint = identity.tint;
-        existing.sprite.setTint(identity.tint);
-      }
+      this.applyCharacterAppearance(existing, identity.appearance);
       if (existing.textColor !== identity.textColor) {
         existing.textColor = identity.textColor;
         existing.label.setColor(identity.textColor);
@@ -1498,8 +1516,8 @@ export default class GameScene extends Phaser.Scene {
     } else {
       const remote = this.createCharacterVisual({
         displayName: player.displayName,
-        tint: identity.tint,
         textColor: identity.textColor,
+        appearance: identity.appearance,
         userId: player.userId,
       });
       remote.isoPosition.set(player.x, player.y, 0);
@@ -1681,33 +1699,15 @@ export default class GameScene extends Phaser.Scene {
       return;
     }
 
-    const graphics = this.add.graphics({ x: 0, y: 0 });
-    graphics.setVisible(false);
-    const diamondTop = { x: TILE_WIDTH / 2, y: 0 };
-    const diamondRight = { x: TILE_WIDTH, y: HALF_TILE_HEIGHT };
-    const diamondBottom = { x: TILE_WIDTH / 2, y: TILE_HEIGHT };
-    const diamondLeft = { x: 0, y: HALF_TILE_HEIGHT };
-
-    graphics.fillStyle(0x3b9c5c, 1);
-    graphics.beginPath();
-    graphics.moveTo(diamondTop.x, diamondTop.y);
-    graphics.lineTo(diamondRight.x, diamondRight.y);
-    graphics.lineTo(diamondBottom.x, diamondBottom.y);
-    graphics.lineTo(diamondLeft.x, diamondLeft.y);
-    graphics.closePath();
-    graphics.fillPath();
-
-    graphics.lineStyle(2, 0x1f5d32, 1);
-    graphics.beginPath();
-    graphics.moveTo(diamondTop.x, diamondTop.y);
-    graphics.lineTo(diamondRight.x, diamondRight.y);
-    graphics.lineTo(diamondBottom.x, diamondBottom.y);
-    graphics.lineTo(diamondLeft.x, diamondLeft.y);
-    graphics.closePath();
-    graphics.strokePath();
-
-    graphics.generateTexture(GROUND_TEXTURE_KEY, TILE_WIDTH, TILE_HEIGHT);
-    graphics.destroy();
+    const factory = new ObjectFactory(this);
+    factory.renderDiamond({
+      key: GROUND_TEXTURE_KEY,
+      width: TILE_WIDTH,
+      height: TILE_HEIGHT,
+      fill: '#3b9c5c',
+      stroke: '#1f5d32',
+      strokeWidth: 2,
+    });
   }
 
   private generatePreviewTexture(): void {
@@ -1715,21 +1715,18 @@ export default class GameScene extends Phaser.Scene {
       return;
     }
 
-    const graphics = this.add.graphics({ x: 0, y: 0 });
-    graphics.setVisible(false);
-
-    graphics.lineStyle(3, 0xffffff, 0.9);
-    graphics.fillStyle(0xffffff, 0.25);
-    graphics.beginPath();
-    graphics.moveTo(TILE_WIDTH / 2, 0);
-    graphics.lineTo(TILE_WIDTH, HALF_TILE_HEIGHT);
-    graphics.lineTo(TILE_WIDTH / 2, TILE_HEIGHT);
-    graphics.lineTo(0, HALF_TILE_HEIGHT);
-    graphics.closePath();
-    graphics.fillPath();
-    graphics.strokePath();
-
-    graphics.generateTexture(BUILD_PREVIEW_TEXTURE_KEY, TILE_WIDTH, TILE_HEIGHT);
-    graphics.destroy();
+    const factory = new ObjectFactory(this);
+    factory.renderDiamond({
+      key: BUILD_PREVIEW_TEXTURE_KEY,
+      width: TILE_WIDTH,
+      height: TILE_HEIGHT,
+      fill: '#ffffff',
+      fillAlpha: 0.25,
+      stroke: '#ffffff',
+      strokeAlpha: 0.9,
+      strokeWidth: 3,
+      highlight: null,
+      shadow: null,
+    });
   }
 }
