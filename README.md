@@ -26,6 +26,36 @@ docker compose up --build
 
 Los scripts compartidos residen en `infrastructure/scripts/`.
 
+## Autenticación y creación del primer usuario
+
+El backend expone endpoints HTTP para manejar el registro e inicio de sesión. Las rutas están disponibles en
+`/api/auth` y utilizan contraseñas protegidas con `bcrypt` junto con un sistema sencillo de sesiones en memoria.
+
+- **Registrar usuario**: `POST /api/auth/register`
+- **Iniciar sesión**: `POST /api/auth/login`
+
+Ambos endpoints devuelven un JSON con el token de sesión (`token`), la fecha de expiración y los datos del
+usuario autenticado. El cliente web guarda esta información en `localStorage` y envía automáticamente el token en
+la cabecera `Authorization` en las peticiones subsecuentes.
+
+### Crear el primer usuario
+
+Tras desplegar o levantar el proyecto por primera vez, crea la cuenta inicial ejecutando una petición `register`.
+El siguiente ejemplo con `curl` muestra los campos requeridos:
+
+```bash
+curl -X POST "http://localhost:2567/api/auth/register" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "admin@example.com",
+    "password": "c0mut1ny!",
+    "displayName": "Admin"
+  }'
+```
+
+El token devuelto puede usarse inmediatamente para iniciar sesión desde el frontend o para realizar llamadas
+autenticadas al backend.
+
 ### `download-assets.sh`
 
 Descarga los recursos listados en un archivo `assets.txt` (una URL por línea).

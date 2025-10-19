@@ -6,7 +6,7 @@ import { Repository } from 'typeorm';
 
 import { AppDataSource } from '../database';
 import { Building, ChatMessage, ChatScope, User, WorldState } from '../entities';
-import { BuildingService, ChatService } from '../services';
+import { BuildingService, ChatService, sessionService } from '../services';
 import { ParcelDefinition, parseWorldParcels } from '../services/buildings/parcels';
 import {
   BuildingState,
@@ -170,16 +170,26 @@ export class CommunityRoom extends Room<CommunityState> {
 
   public async onJoin(
     client: Client,
-    options: { userId?: string; spawnX?: number; spawnY?: number },
+    options: { authToken?: string; userId?: string; spawnX?: number; spawnY?: number },
   ): Promise<void> {
-    if (!options.userId) {
-      throw new Error('userId option is required to join the community room.');
+    if (!options.authToken) {
+      throw new Error('authToken option is required to join the community room.');
     }
 
-    const user = await this.userRepository.findOne({ where: { id: options.userId } });
+    const session = sessionService.getSession(options.authToken);
+
+    if (!session) {
+      throw new Error('Invalid session token provided.');
+    }
+
+    if (options.userId && options.userId !== session.userId) {
+      throw new Error('User ID does not match the session token.');
+    }
+
+    const user = await this.userRepository.findOne({ where: { id: session.userId } });
 
     if (!user) {
-      throw new Error(`User with id ${options.userId} could not be found.`);
+      throw new Error(`User with id ${session.userId} could not be found.`);
     }
 
     this.activeUsers.set(client.sessionId, user);

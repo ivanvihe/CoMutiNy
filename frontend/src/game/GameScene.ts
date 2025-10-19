@@ -3,6 +3,7 @@ import { Client, Room } from 'colyseus.js';
 import Phaser from 'phaser';
 import type { BuildBlueprint, ParcelDefinition, WorldInfoPayload } from '../buildings/types';
 import { getBlueprintByType } from '../buildings/catalog';
+import { loadSession } from '../auth/session';
 import {
   emitBuildPlacementResult,
   gameEvents,
@@ -1068,14 +1069,14 @@ export default class GameScene extends Phaser.Scene {
     }
 
     const endpoint = this.resolveServerEndpoint();
-    const userId = this.resolveUserId();
+    const credentials = this.resolveSessionCredentials();
 
-    if (!endpoint || !userId) {
-      console.warn('Skipping Colyseus connection. Missing endpoint or user id.');
+    if (!endpoint || !credentials) {
+      console.warn('Skipping Colyseus connection. Missing endpoint or session credentials.');
       return;
     }
 
-    this.userId = userId;
+    this.userId = credentials.userId;
     this.isConnecting = true;
     this.clearReconnectTimer();
 
@@ -1084,7 +1085,10 @@ export default class GameScene extends Phaser.Scene {
         this.client = new Client(endpoint);
       }
 
-      const room = await this.client.joinOrCreate('community', { userId });
+      const room = await this.client.joinOrCreate('community', {
+        userId: credentials.userId,
+        authToken: credentials.authToken,
+      });
       this.room = room;
       this.registerRoomListeners(room);
 
@@ -1491,33 +1495,20 @@ export default class GameScene extends Phaser.Scene {
     return `${protocol}://${host}:${port}`;
   }
 
-  private resolveUserId(): string | null {
+  private resolveSessionCredentials(): { userId: string; authToken: string } | null {
     const envUserId = import.meta.env?.VITE_COLYSEUS_USER_ID as string | undefined;
-    if (envUserId) {
-      return envUserId;
+    const envToken = import.meta.env?.VITE_COLYSEUS_AUTH_TOKEN as string | undefined;
+
+    if (envUserId && envToken) {
+      return { userId: envUserId, authToken: envToken };
     }
 
-    if (typeof window === 'undefined') {
+    const session = loadSession();
+    if (!session) {
       return null;
     }
 
-    const stored = window.localStorage.getItem('colyseusUserId');
-    if (stored) {
-      return stored;
-    }
-
-    const generated = this.generateUserId();
-    window.localStorage.setItem('colyseusUserId', generated);
-    return generated;
-  }
-
-  private generateUserId(): string {
-    if (typeof window !== 'undefined' && window.crypto && 'randomUUID' in window.crypto) {
-      return window.crypto.randomUUID();
-    }
-
-    const random = Math.random().toString(16).slice(2, 10);
-    return `guest-${Date.now().toString(16)}${random}`;
+    return { userId: session.user.id, authToken: session.token };
   }
 
   private generateGroundTexture(): void {

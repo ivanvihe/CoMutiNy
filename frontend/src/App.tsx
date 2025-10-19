@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 import Phaser from 'phaser';
+import { AuthScreen } from './auth/AuthScreen';
+import { loadSession, clearSession, SessionData } from './auth/session';
 import { createGameConfig } from './game/config';
 import type { BuildBlueprint, BuildCategory, BuildPlacementStatus } from './buildings/types';
 import { BuildMenu } from './components/BuildMenu/BuildMenu';
@@ -8,7 +10,12 @@ import { ChatOverlay } from './components/ChatOverlay/ChatOverlay';
 import { emitBuildSelection, gameEvents, GameEvent } from './game/events';
 import './App.css';
 
-function App() {
+interface GameViewProps {
+  session: SessionData;
+  onLogout(): void;
+}
+
+const GameView = ({ session, onLogout }: GameViewProps) => {
   const [activeCategory, setActiveCategory] = useState<BuildCategory>('houses');
   const [selectedBlueprint, setSelectedBlueprint] = useState<BuildBlueprint | null>(null);
   const [status, setStatus] = useState<(BuildPlacementStatus & { timestamp: number }) | null>(null);
@@ -18,7 +25,7 @@ function App() {
     return () => {
       game.destroy(true);
     };
-  }, []);
+  }, [session.user.id]);
 
   useEffect(() => {
     const handlePlacementStatus = (payload: BuildPlacementStatus) => {
@@ -38,7 +45,11 @@ function App() {
   const handleBlueprintSelect = (blueprint: BuildBlueprint | null) => {
     setSelectedBlueprint(blueprint);
     if (blueprint) {
-      setStatus({ status: 'pending', message: `Modo construcción: ${blueprint.name}` , timestamp: Date.now() });
+      setStatus({
+        status: 'pending',
+        message: `Modo construcción: ${blueprint.name}`,
+        timestamp: Date.now(),
+      });
     }
   };
 
@@ -46,6 +57,15 @@ function App() {
 
   return (
     <div className="App">
+      <header className="app-header">
+        <div className="app-user">
+          <span className="app-user__greeting">Hola, {session.user.displayName}</span>
+          <span className="app-user__email">{session.user.email}</span>
+        </div>
+        <button type="button" className="app-logout" onClick={onLogout}>
+          Cerrar sesión
+        </button>
+      </header>
       <div id="game-container" className="game-container" />
       <BuildMenu
         activeCategory={activeCategory}
@@ -57,6 +77,25 @@ function App() {
       <ChatOverlay />
     </div>
   );
+};
+
+function App() {
+  const [session, setSession] = useState<SessionData | null>(() => loadSession());
+
+  const handleAuthenticated = (next: SessionData) => {
+    setSession(next);
+  };
+
+  const handleLogout = () => {
+    clearSession();
+    setSession(null);
+  };
+
+  if (!session) {
+    return <AuthScreen onAuthenticated={handleAuthenticated} />;
+  }
+
+  return <GameView session={session} onLogout={handleLogout} />;
 }
 
 export default App;
