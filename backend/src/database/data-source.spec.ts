@@ -22,6 +22,28 @@ describe('resolveDatabaseConfig', () => {
     );
   });
 
+  it('prefers discrete PostgreSQL environment variables over DATABASE_URL when provided', () => {
+    const config = resolveDatabaseConfig({
+      DATABASE_URL: 'postgresql://user:secret@localhost:6543/app_db',
+      POSTGRES_USER: 'override-user',
+      POSTGRES_PASSWORD: 'override-password',
+      POSTGRES_DB: 'override-db',
+      DATABASE_HOST: 'db-service',
+      DATABASE_PORT: '5433',
+    } as NodeJS.ProcessEnv);
+
+    expect(config).toEqual(
+      expect.objectContaining({
+        url: 'postgresql://override-user:override-password@db-service:5433/override-db',
+        host: 'db-service',
+        port: 5433,
+        username: 'override-user',
+        password: 'override-password',
+        database: 'override-db',
+      }),
+    );
+  });
+
   it('falls back to individual environment variables when DATABASE_URL cannot be parsed', () => {
     const config = resolveDatabaseConfig({
       DATABASE_URL: 'postgresql://user:P@ssword@/app_db',

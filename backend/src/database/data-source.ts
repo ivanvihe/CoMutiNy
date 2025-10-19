@@ -52,6 +52,10 @@ const parseDatabaseUrl = (databaseUrl: string): DatabaseConnectionConfig | null 
   }
 };
 
+const hasExplicitValue = (key: string, env: NodeJS.ProcessEnv): boolean => {
+  return env[key] !== undefined || env[`${key}_FILE`] !== undefined;
+};
+
 const readEnvFile = (filePath: string): string => {
   try {
     return fs.readFileSync(filePath, 'utf8');
@@ -84,7 +88,47 @@ export const resolveDatabaseConfig = (env: NodeJS.ProcessEnv): DatabaseConnectio
     const parsed = parseDatabaseUrl(expandedDatabaseUrl);
 
     if (parsed) {
-      return parsed;
+      let host = parsed.host;
+      let port = parsed.port;
+      let username = parsed.username;
+      let password = parsed.password;
+      let database = parsed.database;
+
+      if (hasExplicitValue('DATABASE_HOST', env)) {
+        host = resolveEnvValue('DATABASE_HOST', env, host);
+      }
+
+      if (hasExplicitValue('DATABASE_PORT', env)) {
+        port = normalizePort(resolveEnvValue('DATABASE_PORT', env, String(port)), port);
+      }
+
+      if (hasExplicitValue('POSTGRES_USER', env)) {
+        username = resolveEnvValue('POSTGRES_USER', env, username);
+      }
+
+      if (hasExplicitValue('POSTGRES_PASSWORD', env)) {
+        password = resolveEnvValue('POSTGRES_PASSWORD', env, password);
+      }
+
+      if (hasExplicitValue('POSTGRES_DB', env)) {
+        database = resolveEnvValue('POSTGRES_DB', env, database);
+      }
+
+      const normalizedUrl = new URL(parsed.url);
+      normalizedUrl.hostname = host;
+      normalizedUrl.port = String(port);
+      normalizedUrl.username = username;
+      normalizedUrl.password = password;
+      normalizedUrl.pathname = `/${database}`;
+
+      return {
+        url: normalizedUrl.toString(),
+        host,
+        port,
+        username,
+        password,
+        database,
+      };
     }
 
     // eslint-disable-next-line no-console
