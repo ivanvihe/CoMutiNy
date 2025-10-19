@@ -44,7 +44,7 @@ scripts esenciales, descargar assets y documentar las pruebas realizadas.
 
    El mismo archivo alimenta a Docker Compose, PostgreSQL y al backend. Si cambias el usuario o la contraseña asegúrate de
    eliminar el volumen `postgres-data` (por ejemplo con `docker compose down -v`) para que PostgreSQL regenere las
-   credenciales.
+   credenciales. También puedes ejecutar `./reset-database.sh` para automatizar todo el proceso.
 
 5. (Opcional) Ejecutar migraciones de TypeORM:
 
@@ -84,6 +84,19 @@ docker compose up --build        # Levanta los servicios con reconstrucción
 docker compose down              # Detiene y limpia contenedores
 docker compose logs -f backend   # Sigue los logs del backend
 ```
+
+### Recuperar la base de datos cuando cambian las credenciales
+
+Si PostgreSQL se inicializa con credenciales distintas a las que espera el backend (por ejemplo, tras recrear el
+contenedor o actualizar `.env`), utiliza el script [`reset-database.sh`](reset-database.sh) incluido en la raíz del
+proyecto:
+
+```bash
+./reset-database.sh
+```
+
+El script detiene los servicios, elimina los volúmenes persistentes y vuelve a construir el stack con las credenciales
+definidas en tu `.env`. De este modo evitas errores de autenticación entre el backend y PostgreSQL.
 
 ## Assets del proyecto
 
