@@ -3,7 +3,17 @@ import { Client, Room } from 'colyseus.js';
 import Phaser from 'phaser';
 import type { BuildBlueprint, ParcelDefinition, WorldInfoPayload } from '../buildings/types';
 import { getBlueprintByType } from '../buildings/catalog';
-import { emitBuildPlacementResult, gameEvents, GameEvent } from './events';
+import {
+  emitBuildPlacementResult,
+  gameEvents,
+  GameEvent,
+  type ChatHistoryEvent,
+  type ChatMessageEvent,
+  type ChatScope,
+  type ChatSendPayload,
+  type ChatTypingPayload,
+  type ChatTypingStatusPayload,
+} from './events';
 import { clampIsoToBounds, isoToScreenPoint, screenToIsoPoint } from './isoMath';
 import { TILESET_PLACEHOLDERS } from './tilesets';
 
@@ -144,7 +154,13 @@ export default class GameScene extends Phaser.Scene {
 
   private reconnectTimer?: Phaser.Time.TimerEvent;
 
+  private chatStateCleanup?: () => void;
+
   private readonly handleRoomLeave = (): void => {
+    this.chatStateCleanup?.();
+    this.chatStateCleanup = undefined;
+    const clearEvent: ChatHistoryEvent = { messages: [] };
+    gameEvents.emit(GameEvent.ChatHistory, clearEvent);
     this.room = undefined;
     this.isConnecting = false;
     this.resetWorldState();
@@ -204,6 +220,8 @@ export default class GameScene extends Phaser.Scene {
     this.previewSprite.setVisible(false);
 
     gameEvents.on(GameEvent.BuildSelect, this.handleBuildSelection, this);
+    gameEvents.on(GameEvent.ChatSend, this.handleChatSendRequest, this);
+    gameEvents.on(GameEvent.ChatTyping, this.handleChatTypingRequest, this);
 
     const localCharacter = this.createCharacterVisual({
       displayName: 'You',
@@ -635,6 +653,38 @@ export default class GameScene extends Phaser.Scene {
     const tint = this.colorStringToTint(payload.blueprint.previewColor);
     this.previewSprite.setTint(tint);
     this.previewSprite.setVisible(false);
+  }
+
+  private handleChatSendRequest(payload: ChatSendPayload): void {
+    if (!this.room || !payload || typeof payload.content !== 'string') {
+      return;
+    }
+
+    const trimmed = payload.content.trim();
+    if (!trimmed) {
+      return;
+    }
+
+    const normalized = trimmed.slice(0, 280);
+    const scope: ChatScope = payload.scope === 'proximity' ? 'proximity' : 'global';
+    const persist = typeof payload.persist === 'boolean' ? payload.persist : scope === 'global';
+
+    const messagePayload = { content: normalized, persist };
+
+    if (scope === 'proximity') {
+      this.room.send('chat:proximity', messagePayload);
+    } else {
+      this.room.send('chat:global', messagePayload);
+    }
+  }
+
+  private handleChatTypingRequest(payload: ChatTypingPayload): void {
+    if (!this.room || !payload) {
+      return;
+    }
+
+    const scope: ChatScope = payload.scope === 'proximity' ? 'proximity' : 'global';
+    this.room.send('chat:typing', { scope, typing: Boolean(payload.typing) });
   }
 
   private updatePlacementPreview(pointer: Phaser.Input.Pointer): void {
@@ -1085,7 +1135,18 @@ export default class GameScene extends Phaser.Scene {
       this.handleServerError(payload.message);
     });
 
+    room.onMessage('chat:message', (payload: ChatMessageEvent) => {
+      gameEvents.emit(GameEvent.ChatMessage, payload);
+    });
+
+    room.onMessage('chat:typing', (payload: ChatTypingStatusPayload) => {
+      gameEvents.emit(GameEvent.ChatTypingStatus, payload);
+    });
+
     room.onLeave(this.handleRoomLeave);
+
+    this.chatStateCleanup?.();
+    this.bindChatState(room);
   }
 
   private resubscribeTrackedChunks(room: Room): void {
@@ -1094,6 +1155,67 @@ export default class GameScene extends Phaser.Scene {
         room.send('chunk:subscribe', { chunkX, chunkY });
       }
     });
+  }
+
+  private bindChatState(room: Room): void {
+    const state = room.state as { chat?: { forEach: (cb: (message: unknown) => void) => void; onAdd?: (message: unknown) => void } };
+    const chatCollection = state?.chat;
+
+    const history: ChatMessageEvent[] = [];
+    if (chatCollection && typeof chatCollection.forEach === 'function') {
+      chatCollection.forEach((message: unknown) => {
+        history.push(this.transformChatStateMessage(message));
+      });
+    }
+
+    history.sort((a, b) => a.timestamp - b.timestamp);
+
+    const historyEvent: ChatHistoryEvent = { messages: history };
+    gameEvents.emit(GameEvent.ChatHistory, historyEvent);
+
+    if (!chatCollection || typeof chatCollection.forEach !== 'function') {
+      this.chatStateCleanup = undefined;
+      return;
+    }
+
+    const handleAdd = (message: unknown) => {
+      const serialized = this.transformChatStateMessage(message);
+      gameEvents.emit(GameEvent.ChatMessage, serialized);
+    };
+
+    chatCollection.onAdd = handleAdd;
+
+    this.chatStateCleanup = () => {
+      if (chatCollection.onAdd === handleAdd) {
+        chatCollection.onAdd = undefined;
+      }
+    };
+  }
+
+  private transformChatStateMessage(message: unknown): ChatMessageEvent {
+    const data = (message ?? {}) as Record<string, unknown>;
+    const fallbackId =
+      typeof window !== 'undefined' && window.crypto && 'randomUUID' in window.crypto
+        ? window.crypto.randomUUID()
+        : `msg-${Date.now().toString(16)}-${Math.random().toString(16).slice(2)}`;
+    const id = typeof data.id === 'string' && data.id.length > 0 ? data.id : fallbackId;
+    const senderIdValue = typeof data.senderId === 'string' && data.senderId.length > 0 ? data.senderId : null;
+    const senderNameValue = typeof data.senderName === 'string' ? data.senderName : 'Usuario';
+    const contentValue = typeof data.content === 'string' ? data.content : '';
+    const timestampValue = typeof data.timestamp === 'number' ? data.timestamp : Date.now();
+    const scopeValue = (typeof data.scope === 'string' ? data.scope : 'global') as ChatScope;
+    const chunkIdValue = typeof data.chunkId === 'string' && data.chunkId.length > 0 ? data.chunkId : null;
+
+    return {
+      id,
+      senderId: senderIdValue,
+      senderName: senderNameValue,
+      content: contentValue,
+      timestamp: timestampValue,
+      scope: scopeValue,
+      persistent: Boolean(data.persistent),
+      chunkId: chunkIdValue,
+    };
   }
 
   private scheduleReconnect(): void {
@@ -1301,6 +1423,13 @@ export default class GameScene extends Phaser.Scene {
     this.input.off('pointerup', this.handlePointerUpGeneral, this);
     this.load.off(Phaser.Loader.Events.FILE_LOAD_ERROR, this.onTilesetLoadError, this);
     gameEvents.off(GameEvent.BuildSelect, this.handleBuildSelection, this);
+    gameEvents.off(GameEvent.ChatSend, this.handleChatSendRequest, this);
+    gameEvents.off(GameEvent.ChatTyping, this.handleChatTypingRequest, this);
+
+    this.chatStateCleanup?.();
+    this.chatStateCleanup = undefined;
+    const clearEvent: ChatHistoryEvent = { messages: [] };
+    gameEvents.emit(GameEvent.ChatHistory, clearEvent);
 
     this.previewSprite?.destroy();
     this.previewSprite = undefined;

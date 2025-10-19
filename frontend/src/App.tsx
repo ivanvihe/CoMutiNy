@@ -4,6 +4,7 @@ import { createGameConfig } from './game/config';
 import type { BuildBlueprint, BuildCategory, BuildPlacementStatus } from './buildings/types';
 import { BuildMenu } from './components/BuildMenu/BuildMenu';
 import { BuildStatusPanel } from './components/BuildMenu/BuildStatusPanel';
+import { ChatOverlay } from './components/ChatOverlay/ChatOverlay';
 import { emitBuildSelection, gameEvents, GameEvent } from './game/events';
 import './App.css';
 
@@ -53,6 +54,7 @@ function App() {
         onSelectBlueprint={handleBlueprintSelect}
       />
       <BuildStatusPanel status={status} onDismiss={handleDismissStatus} />
+      <ChatOverlay />
     </div>
   );
 }
