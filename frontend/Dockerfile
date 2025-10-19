@@ -6,6 +6,7 @@ COPY frontend/package*.json ./
 RUN npm ci
 COPY frontend ./
 COPY infrastructure /app/infrastructure
+RUN apk add --no-cache python3
 RUN npm run build
 
 FROM nginx:alpine AS production
