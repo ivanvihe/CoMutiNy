@@ -1,0 +1,57 @@
+import { resolveDatabaseConfig } from './data-source';
+
+describe('resolveDatabaseConfig', () => {
+  it('returns parsed values from DATABASE_URL when it is valid', () => {
+    const config = resolveDatabaseConfig({
+      DATABASE_URL: 'postgresql://user:secret@localhost:6543/app_db?sslmode=require',
+    } as NodeJS.ProcessEnv);
+
+    expect(config).toEqual(
+      expect.objectContaining({
+        url: 'postgresql://user:secret@localhost:6543/app_db?sslmode=require',
+        host: 'localhost',
+        port: 6543,
+        username: 'user',
+        password: 'secret',
+        database: 'app_db',
+      }),
+    );
+  });
+
+  it('falls back to individual environment variables when DATABASE_URL cannot be parsed', () => {
+    const config = resolveDatabaseConfig({
+      DATABASE_URL: 'postgresql://user:P@ssword@/app_db',
+      POSTGRES_USER: 'user',
+      POSTGRES_PASSWORD: 'P@ssword',
+      POSTGRES_DB: 'app_db',
+      DATABASE_HOST: 'db-service',
+      DATABASE_PORT: '5434',
+    } as NodeJS.ProcessEnv);
+
+    expect(config).toEqual(
+      expect.objectContaining({
+        url: 'postgresql://user:P%40ssword@db-service:5434/app_db',
+        host: 'db-service',
+        port: 5434,
+        username: 'user',
+        password: 'P@ssword',
+        database: 'app_db',
+      }),
+    );
+  });
+
+  it('applies default values when no relevant environment variables are present', () => {
+    const config = resolveDatabaseConfig({} as NodeJS.ProcessEnv);
+
+    expect(config).toEqual(
+      expect.objectContaining({
+        url: 'postgresql://app_user:app_password@postgres:5432/app_db',
+        host: 'postgres',
+        port: 5432,
+        username: 'app_user',
+        password: 'app_password',
+        database: 'app_db',
+      }),
+    );
+  });
+});
