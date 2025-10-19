@@ -22,7 +22,7 @@ const TILE_WIDTH = 128;
 const TILE_HEIGHT = 64;
 const HALF_TILE_HEIGHT = TILE_HEIGHT / 2;
 const PLAYER_HEIGHT_OFFSET = 32;
-const CAMERA_SMOOTHNESS = 0.1;
+const CAMERA_SMOOTHNESS = 1;
 const CAMERA_ZOOM = 1.4;
 const CAMERA_MIN_ZOOM = 0.8;
 const CAMERA_MAX_ZOOM = 2.2;
@@ -450,6 +450,9 @@ export default class GameScene extends Phaser.Scene {
     const activePointerId = this.cameraPanPointerId;
     this.cameraPanPointerId = null;
     this.panReleasePointerId = pointer ? pointer.id : activePointerId;
+    if (this.localCharacter) {
+      this.configureCameraFollow(this.localCharacter.sprite);
+    }
   }
 
   private createPlayerSprite(): Phaser.GameObjects.Sprite {
@@ -564,7 +567,7 @@ export default class GameScene extends Phaser.Scene {
     camera.setRoundPixels(true);
     camera.setBounds(-mapWidth, -mapHeight, mapWidth * 2, mapHeight * 2);
     camera.setBackgroundColor('#050b16');
-    camera.setDeadzone(200, 150);
+    camera.setDeadzone(0, 0);
     camera.setLerp(CAMERA_SMOOTHNESS, CAMERA_SMOOTHNESS);
     camera.setZoom(CAMERA_ZOOM);
     this.configureCameraFollow(target);
@@ -573,6 +576,7 @@ export default class GameScene extends Phaser.Scene {
   private configureCameraFollow(target: Phaser.GameObjects.Sprite): void {
     const camera = this.cameras.main;
     camera.startFollow(target, true, CAMERA_SMOOTHNESS, CAMERA_SMOOTHNESS);
+    camera.centerOn(target.x, target.y);
     this.isCameraFollowing = true;
   }
 
