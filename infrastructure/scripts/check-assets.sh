@@ -1,12 +1,12 @@
-#!/usr/bin/env bash
-set -euo pipefail
+#!/usr/bin/env sh
+set -eu
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 MANIFEST_PATH="${1:-${ROOT_DIR}/infrastructure/assets/manifest.json}"
 DEST_ROOT="${ASSETS_ROOT:-${ROOT_DIR}/frontend/public/assets}"
 
-if [[ ! -f "$MANIFEST_PATH" ]]; then
+if [ ! -f "$MANIFEST_PATH" ]; then
   echo "No se encontró el manifiesto de assets en: $MANIFEST_PATH" >&2
   exit 1
 fi
