@@ -4,12 +4,14 @@ import { Repository } from 'typeorm';
 import { User } from '../../entities';
 
 export interface AuthCredentials {
-  email: string;
+  identifier: string;
   password: string;
 }
 
-export interface RegistrationPayload extends AuthCredentials {
+export interface RegistrationPayload {
+  email: string;
   displayName: string;
+  password: string;
 }
 
 export interface IAuthService {
@@ -41,7 +43,9 @@ export class AuthService implements IAuthService {
   }
 
   public async validateCredentials(credentials: AuthCredentials): Promise<User | null> {
-    const user = await this.userRepository.findOne({ where: { email: credentials.email } });
+    const user = await this.userRepository.findOne({
+      where: [{ email: credentials.identifier }, { displayName: credentials.identifier }],
+    });
 
     if (!user) {
       return null;

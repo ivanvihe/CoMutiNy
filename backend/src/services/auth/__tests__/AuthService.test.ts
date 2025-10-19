@@ -65,11 +65,14 @@ describe('AuthService', () => {
       userRepository.findOne.mockResolvedValue(null);
 
       const result = await service.validateCredentials({
-        email: payload.email,
+        identifier: payload.email,
         password: payload.password,
       });
 
       expect(result).toBeNull();
+      expect(userRepository.findOne).toHaveBeenCalledWith({
+        where: [{ email: payload.email }, { displayName: payload.email }],
+      });
     });
 
     it('returns null when the password does not match', async () => {
@@ -80,11 +83,14 @@ describe('AuthService', () => {
       (bcrypt.compare as jest.Mock).mockResolvedValue(false);
 
       const result = await service.validateCredentials({
-        email: payload.email,
+        identifier: payload.email,
         password: payload.password,
       });
 
       expect(result).toBeNull();
+      expect(userRepository.findOne).toHaveBeenCalledWith({
+        where: [{ email: payload.email }, { displayName: payload.email }],
+      });
     });
 
     it('returns the user when the password matches', async () => {
@@ -95,11 +101,14 @@ describe('AuthService', () => {
       (bcrypt.compare as jest.Mock).mockResolvedValue(true);
 
       const result = await service.validateCredentials({
-        email: payload.email,
+        identifier: payload.email,
         password: payload.password,
       });
 
       expect(result).toBe(user);
+      expect(userRepository.findOne).toHaveBeenCalledWith({
+        where: [{ email: payload.email }, { displayName: payload.email }],
+      });
     });
   });
 });

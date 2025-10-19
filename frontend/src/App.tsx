@@ -61,7 +61,7 @@ const GameView = ({ session, onLogout }: GameViewProps) => {
       <header className="app-header">
         <div className="app-user">
           <span className="app-user__greeting">Hola, {session.user.displayName}</span>
-          <span className="app-user__email">{session.user.email}</span>
+          {session.user.email && <span className="app-user__email">{session.user.email}</span>}
         </div>
         <button type="button" className="app-logout" onClick={onLogout}>
           Cerrar sesión

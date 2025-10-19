@@ -13,7 +13,7 @@ interface AuthScreenProps {
 type AuthMode = 'login' | 'register';
 
 const emptyForm = {
-  email: '',
+  identifier: '',
   password: '',
   displayName: '',
 };
@@ -27,11 +27,11 @@ export const AuthScreen = ({ onAuthenticated }: AuthScreenProps) => {
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    const email = form.email.trim();
+    const identifier = form.identifier.trim();
     const password = form.password.trim();
     const displayName = form.displayName.trim();
 
-    if (!email || !password || (mode === 'register' && !displayName)) {
+    if (!identifier || !password || (mode === 'register' && !displayName)) {
       setError('Completa todos los campos requeridos.');
       return;
     }
@@ -42,8 +42,8 @@ export const AuthScreen = ({ onAuthenticated }: AuthScreenProps) => {
     try {
       const session =
         mode === 'login'
-          ? await login({ email, password })
-          : await register({ email, password, displayName });
+          ? await login({ identifier, password })
+          : await register({ email: identifier, password, displayName });
 
       storeSession(session);
       onAuthenticated(session);
@@ -64,7 +64,7 @@ export const AuthScreen = ({ onAuthenticated }: AuthScreenProps) => {
 
   const toggleMode = () => {
     setMode((current) => (current === 'login' ? 'register' : 'login'));
-    setForm((current) => ({ email: current.email, password: '', displayName: '' }));
+    setForm((current) => ({ identifier: current.identifier, password: '', displayName: '' }));
     setError(null);
   };
 
@@ -78,13 +78,13 @@ export const AuthScreen = ({ onAuthenticated }: AuthScreenProps) => {
 
         <form className="auth-form" onSubmit={handleSubmit}>
           <label className="auth-label">
-            Correo electrónico
+            {mode === 'login' ? 'Correo electrónico o usuario' : 'Correo electrónico'}
             <input
-              type="email"
-              inputMode="email"
-              autoComplete="email"
-              value={form.email}
-              onChange={handleChange('email')}
+              type={mode === 'login' ? 'text' : 'email'}
+              inputMode={mode === 'login' ? 'text' : 'email'}
+              autoComplete={mode === 'login' ? 'username' : 'email'}
+              value={form.identifier}
+              onChange={handleChange('identifier')}
               required
               disabled={isSubmitting}
             />

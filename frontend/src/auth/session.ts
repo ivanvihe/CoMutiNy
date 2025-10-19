@@ -1,7 +1,8 @@
 export interface AuthenticatedUser {
   id: string;
-  email: string;
+  email: string | null;
   displayName: string;
+  isAdmin: boolean;
 }
 
 export interface SessionData {
@@ -28,8 +29,9 @@ const isValidSession = (value: unknown): value is SessionData => {
     typeof session.createdAt === 'string' &&
     !!session.user &&
     typeof session.user.id === 'string' &&
-    typeof session.user.email === 'string' &&
-    typeof session.user.displayName === 'string'
+    (typeof session.user.email === 'string' || session.user.email === null) &&
+    typeof session.user.displayName === 'string' &&
+    typeof session.user.isAdmin === 'boolean'
   );
 };
 
