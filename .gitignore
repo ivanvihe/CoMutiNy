@@ -42,3 +42,5 @@ node_modules/
 backend/dist/
 frontend/dist/
 *.log
+.docker-data/*
+!.docker-data/.gitkeep
