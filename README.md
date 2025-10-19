@@ -35,12 +35,16 @@ scripts esenciales, descargar assets y documentar las pruebas realizadas.
    npm run assets:check
    ```
 
-4. Preparar variables de entorno (ejemplo `.env` para backend):
+4. Preparar variables de entorno copiando el archivo de ejemplo en la raíz del proyecto:
 
    ```bash
-   cp backend/.env.example backend/.env
-   # Editar DATABASE_URL, SESSION_SECRET, etc.
+   cp .env.example .env
+   # Ajusta POSTGRES_PASSWORD, SESSION_SECRET, etc. según tus necesidades.
    ```
+
+   El mismo archivo alimenta a Docker Compose, PostgreSQL y al backend. Si cambias el usuario o la contraseña asegúrate de
+   eliminar el volumen `postgres-data` (por ejemplo con `docker compose down -v`) para que PostgreSQL regenere las
+   credenciales.
 
 5. (Opcional) Ejecutar migraciones de TypeORM:
 
@@ -69,7 +73,8 @@ lógica auxiliar del juego.
 El archivo [`docker-compose.yml`](docker-compose.yml) define tres servicios:
 
 - **postgres**: PostgreSQL 15 con volúmenes persistentes y credenciales configurables.
-- **backend**: servidor Node.js expuesto en `localhost:8010` (puerto interno `8000`) que lee `DATABASE_URL` de su entorno.
+- **backend**: servidor Node.js expuesto en `localhost:8010` (puerto interno `8000`) que lee `DATABASE_URL` y las variables
+  `DEFAULT_ADMIN_DISPLAY_NAME`/`DEFAULT_ADMIN_PASSWORD` desde el entorno.
 - **frontend**: cliente Vite servido en `localhost:5173` y enlazado al backend mediante `API_URL`.
 
 Comandos habituales:
@@ -150,3 +155,7 @@ curl -X POST "http://localhost:8010/api/auth/register" \
 ```
 
 El token devuelto se guarda en el frontend (por ejemplo, en `localStorage`) para autenticar las siguientes peticiones.
+
+> 📌 El backend crea un usuario administrador por defecto cuando no existe ninguno. Las credenciales por defecto se leen de
+> `DEFAULT_ADMIN_DISPLAY_NAME` y `DEFAULT_ADMIN_PASSWORD` (ver `.env.example`). Si no defines variables personalizadas se
+> utilizarán `admin`/`com-21`.
