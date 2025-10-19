@@ -31,6 +31,10 @@ interface BuildMessagePayload {
   y: number;
 }
 
+interface BuildRemoveMessagePayload {
+  buildingId: string;
+}
+
 interface ChatMessagePayload {
   content: string;
 }
@@ -127,6 +131,7 @@ export class CommunityRoom extends Room<CommunityState> {
 
     this.onMessage('player:move', this.handlePlayerMove.bind(this));
     this.onMessage('build:place', this.handleBuildPlacement.bind(this));
+    this.onMessage('build:remove', this.handleBuildRemoval.bind(this));
     this.onMessage('chat:send', this.handleChatMessage.bind(this));
     this.onMessage('chunk:subscribe', this.handleChunkSubscribe.bind(this));
     this.onMessage('chunk:unsubscribe', this.handleChunkUnsubscribe.bind(this));
@@ -303,6 +308,36 @@ export class CommunityRoom extends Room<CommunityState> {
     }
   }
 
+  private async handleBuildRemoval(client: Client, payload: BuildRemoveMessagePayload): Promise<void> {
+    const user = this.activeUsers.get(client.sessionId);
+
+    if (!user || !payload || typeof payload.buildingId !== 'string') {
+      return;
+    }
+
+    const buildingId = payload.buildingId.trim();
+
+    if (!buildingId) {
+      return;
+    }
+
+    try {
+      const removedBuilding = await this.buildingService.removeBuilding(buildingId, user);
+      const location = this.removeBuildingFromState(removedBuilding);
+
+      if (location) {
+        this.broadcastToChunk(location.chunkId, 'chunk:buildingRemoved', {
+          buildingId: removedBuilding.id,
+          x: location.x,
+          y: location.y,
+          chunkId: location.chunkId,
+        });
+      }
+    } catch (error) {
+      client.send('error', { message: (error as Error).message });
+    }
+  }
+
   private async handleChatMessage(client: Client, payload: ChatMessagePayload): Promise<void> {
     const user = this.activeUsers.get(client.sessionId);
 
@@ -396,6 +431,34 @@ export class CommunityRoom extends Room<CommunityState> {
     }
 
     return chatState;
+  }
+
+  private removeBuildingFromState(
+    building: Pick<Building, 'id' | 'x' | 'y'>,
+  ): { chunkId: string; x: number; y: number } {
+    const existingState = this.state.buildings.get(building.id);
+
+    let chunkId: string;
+    let x = building.x;
+    let y = building.y;
+
+    if (existingState) {
+      chunkId = existingState.chunkId;
+      x = existingState.x;
+      y = existingState.y;
+      const chunkState = this.state.chunks.get(chunkId);
+      chunkState?.buildingIds.delete(building.id);
+      this.state.buildings.delete(building.id);
+      return { chunkId, x, y };
+    }
+
+    const { chunkId: derivedChunkId } = this.getChunkInfo(building.x, building.y);
+    chunkId = derivedChunkId;
+    const chunkState = this.state.chunks.get(chunkId);
+    chunkState?.buildingIds.delete(building.id);
+    this.state.buildings.delete(building.id);
+
+    return { chunkId, x, y };
   }
 
   private ensureChunkState(chunkId: string, chunkX: number, chunkY: number): ChunkState {

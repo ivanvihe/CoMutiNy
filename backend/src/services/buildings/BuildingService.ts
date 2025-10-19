@@ -15,6 +15,7 @@ export interface IBuildingService {
   validatePlacement(worldId: string, owner: User, x: number, y: number): Promise<WorldState>;
   createBuilding(request: BuildingPlacementRequest): Promise<Building>;
   getBuildingsForWorld(worldId: string): Promise<Building[]>;
+  removeBuilding(buildingId: string, requester: User): Promise<Building>;
 }
 
 export class BuildingService implements IBuildingService {
@@ -68,6 +69,25 @@ export class BuildingService implements IBuildingService {
 
   public getBuildingsForWorld(worldId: string): Promise<Building[]> {
     return this.buildingRepository.find({ where: { world: { id: worldId } } });
+  }
+
+  public async removeBuilding(buildingId: string, requester: User): Promise<Building> {
+    const building = await this.buildingRepository.findOne({
+      where: { id: buildingId },
+      relations: ['owner', 'world'],
+    });
+
+    if (!building) {
+      throw new Error('Building not found');
+    }
+
+    if (building.owner.id !== requester.id) {
+      throw new Error('You are not allowed to remove this building.');
+    }
+
+    await this.buildingRepository.remove(building);
+
+    return building;
   }
 
   private ensurePlacementWithinParcels(world: WorldState, owner: User, x: number, y: number): void {
