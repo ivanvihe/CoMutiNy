@@ -1,4 +1,5 @@
-import { getAuthorizationHeader, SessionData } from './session';
+import { getAuthorizationHeader } from './session';
+import type { SessionData } from './session';
 
 interface AuthSuccessResponse {
   token: string;

@@ -1,9 +1,21 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
-import { configDefaults } from 'vitest/config';
+import type { UserConfig } from 'vite';
 
-// https://vite.dev/config/
-export default defineConfig({
+type TestConfig = {
+  environment: string;
+  coverage: {
+    provider: string;
+    reporter: string[];
+    exclude: string[];
+  };
+  globals: boolean;
+  setupFiles: string[];
+};
+
+type ViteConfigWithTest = UserConfig & { test?: TestConfig };
+
+const config: ViteConfigWithTest = {
   plugins: [react()],
   resolve: {
     alias: {
@@ -15,9 +27,22 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       reporter: ['text', 'lcov'],
-      exclude: [...configDefaults.coverage.exclude, 'src/**/*.d.ts'],
+      exclude: [
+        'coverage/**',
+        'dist/**',
+        'node_modules/**',
+        'tests/**',
+        'test/**',
+        '**/*.spec.*',
+        '**/*.test.*',
+        '**/__tests__/**',
+        'src/**/*.d.ts',
+      ],
     },
     globals: false,
     setupFiles: [],
   },
-});
+};
+
+// https://vite.dev/config/
+export default defineConfig(config);
