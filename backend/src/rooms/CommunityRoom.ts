@@ -129,7 +129,10 @@ export class CommunityRoom extends Room<CommunityState> {
     this.onMessage('chunk:unsubscribe', this.handleChunkUnsubscribe.bind(this));
   }
 
-  public async onJoin(client: Client, options: { userId?: string; spawnX?: number; spawnY?: number }): Promise<void> {
+  public async onJoin(
+    client: Client,
+    options: { userId?: string; spawnX?: number; spawnY?: number },
+  ): Promise<void> {
     if (!options.userId) {
       throw new Error('userId option is required to join the community room.');
     }
@@ -142,8 +145,12 @@ export class CommunityRoom extends Room<CommunityState> {
 
     this.activeUsers.set(client.sessionId, user);
 
-    const spawnX = typeof options.spawnX === 'number' ? options.spawnX : this.world.width * DEFAULT_SPAWN_OFFSET;
-    const spawnY = typeof options.spawnY === 'number' ? options.spawnY : this.world.height * DEFAULT_SPAWN_OFFSET;
+    const spawnX =
+      typeof options.spawnX === 'number' ? options.spawnX : this.world.width * DEFAULT_SPAWN_OFFSET;
+    const spawnY =
+      typeof options.spawnY === 'number'
+        ? options.spawnY
+        : this.world.height * DEFAULT_SPAWN_OFFSET;
 
     const playerState = new PlayerState();
     playerState.id = client.sessionId;
@@ -222,17 +229,22 @@ export class CommunityRoom extends Room<CommunityState> {
       if (previousChunkId) {
         const previousChunkState = this.state.chunks.get(previousChunkId);
         previousChunkState?.playerIds.delete(client.sessionId);
+        this.removeListener(previousChunkId, client.sessionId);
         this.broadcastToChunk(previousChunkId, 'chunk:playerLeft', { playerId: client.sessionId });
       }
 
       const newChunkState = this.ensureChunkState(chunkId, chunkX, chunkY);
       newChunkState.playerIds.set(client.sessionId, true);
+      playerState.chunkId = chunkId;
+      this.broadcastToChunk(chunkId, 'chunk:playerJoined', {
+        player: this.serializePlayerState(playerState),
+      });
       this.playerChunks.set(client.sessionId, chunkId);
       this.addListener(chunkId, client.sessionId);
       client.send('chunk:snapshot', this.serializeChunk(newChunkState));
+    } else {
+      playerState.chunkId = chunkId;
     }
-
-    playerState.chunkId = chunkId;
 
     this.broadcastToChunk(chunkId, 'chunk:playerMoved', {
       player: this.serializePlayerState(playerState),
@@ -307,8 +319,19 @@ export class CommunityRoom extends Room<CommunityState> {
       return;
     }
 
-    const { chunkId, chunkX, chunkY } = this.getChunkInfoFromChunkCoords(payload.chunkX, payload.chunkY);
-    const chunkState = this.ensureChunkState(chunkId, chunkX, chunkY);
+    const chunkX = Math.floor(payload.chunkX);
+    const chunkY = Math.floor(payload.chunkY);
+
+    if (!Number.isFinite(chunkX) || !Number.isFinite(chunkY)) {
+      return;
+    }
+
+    const {
+      chunkId,
+      chunkX: normalizedChunkX,
+      chunkY: normalizedChunkY,
+    } = this.getChunkInfoFromChunkCoords(chunkX, chunkY);
+    const chunkState = this.ensureChunkState(chunkId, normalizedChunkX, normalizedChunkY);
     this.addListener(chunkId, client.sessionId);
     client.send('chunk:snapshot', this.serializeChunk(chunkState));
   }
@@ -318,18 +341,15 @@ export class CommunityRoom extends Room<CommunityState> {
       return;
     }
 
-    const { chunkId } = this.getChunkInfoFromChunkCoords(payload.chunkX, payload.chunkY);
-    const listeners = this.chunkListeners.get(chunkId);
+    const chunkX = Math.floor(payload.chunkX);
+    const chunkY = Math.floor(payload.chunkY);
 
-    if (!listeners) {
+    if (!Number.isFinite(chunkX) || !Number.isFinite(chunkY)) {
       return;
     }
 
-    listeners.delete(client.sessionId);
-
-    if (listeners.size === 0) {
-      this.chunkListeners.delete(chunkId);
-    }
+    const { chunkId } = this.getChunkInfoFromChunkCoords(chunkX, chunkY);
+    this.removeListener(chunkId, client.sessionId);
   }
 
   private addBuildingToState(building: Building): BuildingState {
@@ -483,7 +503,9 @@ export class CommunityRoom extends Room<CommunityState> {
     }
 
     for (const sessionId of listeners) {
-      const client = this.clients.find((connectedClient) => connectedClient.sessionId === sessionId);
+      const client = this.clients.find(
+        (connectedClient) => connectedClient.sessionId === sessionId,
+      );
       client?.send(type, payload);
     }
   }
@@ -497,6 +519,20 @@ export class CommunityRoom extends Room<CommunityState> {
     }
 
     listeners.add(sessionId);
+  }
+
+  private removeListener(chunkId: string, sessionId: string): void {
+    const listeners = this.chunkListeners.get(chunkId);
+
+    if (!listeners) {
+      return;
+    }
+
+    listeners.delete(sessionId);
+
+    if (listeners.size === 0) {
+      this.chunkListeners.delete(chunkId);
+    }
   }
 
   private removeAllListenersForClient(sessionId: string): void {

@@ -32,7 +32,10 @@ export class ChatService implements IChatService {
     return this.chatRepository.save(message);
   }
 
-  public getRecentMessages(worldId: string, limit = ChatService.DEFAULT_LIMIT): Promise<ChatMessage[]> {
+  public getRecentMessages(
+    worldId: string,
+    limit = ChatService.DEFAULT_LIMIT,
+  ): Promise<ChatMessage[]> {
     return this.chatRepository.find({
       where: { world: { id: worldId } },
       order: { createdAt: 'DESC' },
