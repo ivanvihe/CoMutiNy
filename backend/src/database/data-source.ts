@@ -1,4 +1,5 @@
 import 'reflect-metadata';
+import fs from 'node:fs';
 import path from 'node:path';
 import { DataSource } from 'typeorm';
 import dotenv from 'dotenv';
@@ -51,7 +52,22 @@ const parseDatabaseUrl = (databaseUrl: string): DatabaseConnectionConfig | null 
   }
 };
 
+const readEnvFile = (filePath: string): string => {
+  try {
+    return fs.readFileSync(filePath, 'utf8');
+  } catch (error) {
+    throw new Error(`Unable to read environment file "${filePath}": ${(error as Error).message}`);
+  }
+};
+
 const resolveEnvValue = (key: string, env: NodeJS.ProcessEnv, fallback: string): string => {
+  const fileKey = `${key}_FILE`;
+  const filePath = expandEnvPlaceholders(env[fileKey], env)?.trim();
+
+  if (filePath) {
+    return readEnvFile(filePath).trim();
+  }
+
   const expanded = expandEnvPlaceholders(env[key], env)?.trim();
 
   if (expanded && expanded.length > 0) {

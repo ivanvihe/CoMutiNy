@@ -1,3 +1,7 @@
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+
 import { resolveDatabaseConfig } from './data-source';
 
 describe('resolveDatabaseConfig', () => {
@@ -51,6 +55,24 @@ describe('resolveDatabaseConfig', () => {
         username: 'app_user',
         password: 'app_password',
         database: 'app_db',
+      }),
+    );
+  });
+
+  it('loads credentials from *_FILE environment variables when available', () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'database-config-test-'));
+    const passwordFile = path.join(tempDir, 'db-password');
+    fs.writeFileSync(passwordFile, 'from-file');
+
+    const config = resolveDatabaseConfig({
+      POSTGRES_PASSWORD_FILE: passwordFile,
+      POSTGRES_USER: 'user-from-env',
+    } as NodeJS.ProcessEnv);
+
+    expect(config).toEqual(
+      expect.objectContaining({
+        username: 'user-from-env',
+        password: 'from-file',
       }),
     );
   });
