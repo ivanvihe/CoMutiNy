@@ -1,6 +1,11 @@
 # Global ignores for binary assets
 *.png
-!frontend/public/assets/tilesets/*.png
+frontend/public/assets/**
+!frontend/public/assets/
+!frontend/public/assets/sprites/
+!frontend/public/assets/tilesets/
+!frontend/public/assets/.gitkeep
+!frontend/public/assets/**/.gitkeep
 *.jpg
 *.jpeg
 *.gif

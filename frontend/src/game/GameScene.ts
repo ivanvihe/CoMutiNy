@@ -176,7 +176,7 @@ export default class GameScene extends Phaser.Scene {
   private readonly onTilesetLoadError = (file: Phaser.Loader.File): void => {
     if (file.key.startsWith('tileset-')) {
       console.warn(
-        `Tileset "${file.key}" could not be loaded from ${file.src}. Please download the asset manually and update the URL.`
+        `Tileset "${file.key}" could not be loaded from ${file.src}. Ejecuta ./infrastructure/scripts/download-assets.sh y vuelve a intentar.`
       );
     }
   };
@@ -188,14 +188,10 @@ export default class GameScene extends Phaser.Scene {
   preload(): void {
     this.iso.setTileSize(TILE_WIDTH, TILE_HEIGHT);
     this.preloadTilesets();
-    this.load.spritesheet(
-      PLAYER_SPRITE_KEY,
-      'https://raw.githubusercontent.com/photonstorm/phaser3-examples/master/public/assets/animations/brawler48x48.png',
-      {
-        frameWidth: 48,
-        frameHeight: 48,
-      }
-    );
+    this.load.spritesheet(PLAYER_SPRITE_KEY, 'assets/sprites/brawler48x48.png', {
+      frameWidth: 48,
+      frameHeight: 48,
+    });
     this.generateGroundTexture();
     this.generatePreviewTexture();
   }
