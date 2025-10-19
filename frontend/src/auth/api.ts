@@ -67,7 +67,7 @@ export const register = async (payload: {
   };
 };
 
-export const login = async (payload: { email: string; password: string }): Promise<SessionData> => {
+export const login = async (payload: { identifier: string; password: string }): Promise<SessionData> => {
   const result = await request<AuthSuccessResponse>('/auth/login', {
     method: 'POST',
     body: JSON.stringify(payload),

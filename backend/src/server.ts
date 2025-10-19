@@ -6,7 +6,7 @@ import dotenv from 'dotenv';
 import { AppDataSource, initializeDatabase } from './database';
 import { CommunityRoom, LobbyRoom } from './rooms';
 import { User } from './entities';
-import { AuthService, sessionService } from './services';
+import { AuthService, ensureDefaultAdmin, sessionService } from './services';
 
 dotenv.config();
 
@@ -21,14 +21,19 @@ async function bootstrap(): Promise<void> {
   const userRepository = AppDataSource.getRepository(User);
   const authService = new AuthService(userRepository);
 
+  await ensureDefaultAdmin(userRepository);
+
   const sanitizeUser = (user: User) => ({
     id: user.id,
     email: user.email,
     displayName: user.displayName,
+    isAdmin: user.isAdmin,
   });
 
   app.post('/api/auth/register', async (req, res) => {
-    const { email, password, displayName } = req.body ?? {};
+    const email = typeof req.body?.email === 'string' ? req.body.email.trim() : '';
+    const password = typeof req.body?.password === 'string' ? req.body.password : '';
+    const displayName = typeof req.body?.displayName === 'string' ? req.body.displayName.trim() : '';
 
     if (!email || !password || !displayName) {
       return res.status(400).json({ message: 'email, password y displayName son obligatorios.' });
@@ -55,14 +60,15 @@ async function bootstrap(): Promise<void> {
   });
 
   app.post('/api/auth/login', async (req, res) => {
-    const { email, password } = req.body ?? {};
+    const identifier = typeof req.body?.identifier === 'string' ? req.body.identifier.trim() : '';
+    const password = typeof req.body?.password === 'string' ? req.body.password : '';
 
-    if (!email || !password) {
-      return res.status(400).json({ message: 'email y password son obligatorios.' });
+    if (!identifier || !password) {
+      return res.status(400).json({ message: 'identificador y password son obligatorios.' });
     }
 
     try {
-      const user = await authService.validateCredentials({ email, password });
+      const user = await authService.validateCredentials({ identifier, password });
 
       if (!user) {
         return res.status(401).json({ message: 'Credenciales inválidas.' });
