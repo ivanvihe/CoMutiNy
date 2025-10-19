@@ -1,15 +1,18 @@
 {
-  "name": "vite-react-typescript-starter",
+  "name": "comutiny-frontend",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.1.0",
+  "description": "Frontend del proyecto CoMutiNy construido con Vite, React y TypeScript.",
   "type": "module",
   "scripts": {
-    "dev": "vite",
     "build": "tsc -b && vite build",
-    "lint": "eslint .",
-    "preview": "vite preview",
+    "dev": "vite",
     "format": "prettier --write .",
-    "lint:fix": "eslint . --fix"
+    "format:check": "prettier --check .",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@colyseus/client": "npm:colyseus.js@^0.16.21",
