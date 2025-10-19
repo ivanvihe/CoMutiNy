@@ -6,6 +6,8 @@
   align-items: stretch;
   justify-content: center;
   background: radial-gradient(circle at top, #0b1a2a 0%, #050b16 60%, #02060d 100%);
+  position: relative;
+  overflow: hidden;
 }
 
 .game-container {

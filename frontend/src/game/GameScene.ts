@@ -1,6 +1,9 @@
 import EasyStar from 'easystarjs';
 import { Client, Room } from 'colyseus.js';
 import Phaser from 'phaser';
+import type { BuildBlueprint, ParcelDefinition, WorldInfoPayload } from '../buildings/types';
+import { getBlueprintByType } from '../buildings/catalog';
+import { emitBuildPlacementResult, gameEvents, GameEvent } from './events';
 import { clampIsoToBounds, isoToScreenPoint, screenToIsoPoint } from './isoMath';
 import { TILESET_PLACEHOLDERS } from './tilesets';
 
@@ -13,11 +16,13 @@ const CAMERA_ZOOM = 1.4;
 const CAMERA_MIN_ZOOM = 0.8;
 const CAMERA_MAX_ZOOM = 2.2;
 const CAMERA_ZOOM_STEP = 0.1;
-const DEFAULT_MAP_SIZE = 10;
+const DEFAULT_MAP_WIDTH = 10;
+const DEFAULT_MAP_HEIGHT = 10;
 const PLAYER_SPEED = 3.2;
 const GROUND_TEXTURE_KEY = 'generated-ground-tile';
 const PLAYER_SPRITE_KEY = 'player-sprite';
 const POSITION_SYNC_INTERVAL = 150;
+const BUILD_PREVIEW_TEXTURE_KEY = 'build-preview-tile';
 
 interface SerializedPlayer {
   id: string;
@@ -27,7 +32,20 @@ interface SerializedPlayer {
 }
 
 interface ChunkSnapshot {
+  chunkId: string;
+  x: number;
+  y: number;
+  buildings: SerializedBuilding[];
   players: SerializedPlayer[];
+}
+
+interface SerializedBuilding {
+  id: string;
+  ownerId: string;
+  type: string;
+  x: number;
+  y: number;
+  chunkId: string;
 }
 
 interface CharacterVisual {
@@ -36,6 +54,13 @@ interface CharacterVisual {
   isoPosition: Phaser.Math.Vector3;
   lastDirection: Phaser.Math.Vector2;
   displayName: string;
+}
+
+interface BuildingVisual {
+  image: Phaser.GameObjects.Image;
+  isoPosition: Phaser.Math.Vector3;
+  tintColor: number;
+  chunkId: string;
 }
 
 export default class GameScene extends Phaser.Scene {
@@ -51,11 +76,17 @@ export default class GameScene extends Phaser.Scene {
 
   private mapOffset = new Phaser.Math.Vector2();
 
-  private mapSize = DEFAULT_MAP_SIZE;
+  private mapWidth = DEFAULT_MAP_WIDTH;
+
+  private mapHeight = DEFAULT_MAP_HEIGHT;
 
   private groundLayer?: Phaser.GameObjects.Layer;
 
   private remotePlayers = new Map<string, CharacterVisual>();
+
+  private buildingVisuals = new Map<string, BuildingVisual>();
+
+  private occupiedTiles = new Map<string, string>();
 
   private client?: Client;
 
@@ -70,6 +101,30 @@ export default class GameScene extends Phaser.Scene {
   private isCameraPanning = false;
 
   private lastPanPoint = new Phaser.Math.Vector2();
+
+  private pathfindingGrid: number[][] = [];
+
+  private previewSprite?: Phaser.GameObjects.Image;
+
+  private previewIso = new Phaser.Math.Vector3();
+
+  private previewIsValid = false;
+
+  private selectedBlueprint: BuildBlueprint | null = null;
+
+  private buildableParcels: ParcelDefinition[] = [];
+
+  private allParcels: ParcelDefinition[] = [];
+
+  private assignedParcelIds = new Set<string>();
+
+  private parcelLayer?: Phaser.GameObjects.Layer;
+
+  private pendingPlacement: { key: string; type: string } | null = null;
+
+  private isAwaitingBuildConfirmation = false;
+
+  private userId: string | null = null;
 
   private readonly onTilesetLoadError = (file: Phaser.Loader.File): void => {
     if (file.key.startsWith('tileset-')) {
@@ -95,6 +150,7 @@ export default class GameScene extends Phaser.Scene {
       }
     );
     this.generateGroundTexture();
+    this.generatePreviewTexture();
   }
 
   create(): void {
@@ -108,6 +164,12 @@ export default class GameScene extends Phaser.Scene {
     this.updateMapOffset();
     this.initializePathfindingGrid();
     this.createGroundLayer();
+    this.previewSprite = this.add.image(0, 0, BUILD_PREVIEW_TEXTURE_KEY);
+    this.previewSprite.setOrigin(0.5, 0.5);
+    this.previewSprite.setAlpha(0.8);
+    this.previewSprite.setVisible(false);
+
+    gameEvents.on(GameEvent.BuildSelect, this.handleBuildSelection, this);
 
     const localCharacter = this.createCharacterVisual({
       displayName: 'You',
@@ -192,7 +254,7 @@ export default class GameScene extends Phaser.Scene {
       }
     }
 
-    clampIsoToBounds(this.localCharacter.isoPosition, this.mapSize);
+    clampIsoToBounds(this.localCharacter.isoPosition, this.mapWidth, this.mapHeight);
 
     this.projectCharacter(this.localCharacter);
     this.updateCharacterAnimation(this.localCharacter, directionForAnimation, moved);
@@ -211,6 +273,11 @@ export default class GameScene extends Phaser.Scene {
   }
 
   private handlePointerUp(pointer: Phaser.Input.Pointer): void {
+    if (this.selectedBlueprint && pointer.leftButtonReleased()) {
+      this.handleBuildPlacement(pointer);
+      return;
+    }
+
     if (pointer.rightButtonReleased()) {
       this.moveToPointer(pointer);
     }
@@ -225,16 +292,18 @@ export default class GameScene extends Phaser.Scene {
   }
 
   private handlePointerMove(pointer: Phaser.Input.Pointer): void {
-    if (!this.isCameraPanning || !pointer.middleButtonDown()) {
-      return;
+    if (this.isCameraPanning && pointer.middleButtonDown()) {
+      const camera = this.cameras.main;
+      const deltaX = pointer.x - this.lastPanPoint.x;
+      const deltaY = pointer.y - this.lastPanPoint.y;
+      camera.scrollX -= deltaX / camera.zoom;
+      camera.scrollY -= deltaY / camera.zoom;
+      this.lastPanPoint.set(pointer.x, pointer.y);
     }
 
-    const camera = this.cameras.main;
-    const deltaX = pointer.x - this.lastPanPoint.x;
-    const deltaY = pointer.y - this.lastPanPoint.y;
-    camera.scrollX -= deltaX / camera.zoom;
-    camera.scrollY -= deltaY / camera.zoom;
-    this.lastPanPoint.set(pointer.x, pointer.y);
+    if (this.selectedBlueprint) {
+      this.updatePlacementPreview(pointer);
+    }
   }
 
   private handlePointerUpGeneral(pointer: Phaser.Input.Pointer): void {
@@ -311,8 +380,8 @@ export default class GameScene extends Phaser.Scene {
 
   private configureCamera(target: Phaser.GameObjects.Sprite): void {
     const camera = this.cameras.main;
-    const mapWidth = TILE_WIDTH * this.mapSize;
-    const mapHeight = TILE_HEIGHT * this.mapSize;
+    const mapWidth = TILE_WIDTH * this.mapWidth;
+    const mapHeight = TILE_HEIGHT * this.mapHeight;
     camera.setRoundPixels(true);
     camera.setBounds(-mapWidth, -mapHeight, mapWidth * 2, mapHeight * 2);
     camera.setBackgroundColor('#050b16');
@@ -386,14 +455,22 @@ export default class GameScene extends Phaser.Scene {
     const startX = Math.round(this.localCharacter.isoPosition.x);
     const startY = Math.round(this.localCharacter.isoPosition.y);
 
-    this.pathfinder.findPath(startX, startY, targetX, targetY, (path) => {
+    this.pathfinder.findPath(
+      startX,
+      startY,
+      targetX,
+      targetY,
+      (path: Array<{ x: number; y: number }> | null) => {
       if (!path || path.length === 0) {
         return;
       }
 
-      this.movePath = path.slice(1).map((node) => new Phaser.Math.Vector2(node.x, node.y));
+      this.movePath = path
+        .slice(1)
+        .map((node: { x: number; y: number }) => new Phaser.Math.Vector2(node.x, node.y));
       this.advancePath();
-    });
+    },
+    );
     this.pathfinder.calculate();
   }
 
@@ -407,7 +484,7 @@ export default class GameScene extends Phaser.Scene {
   }
 
   private isTileWithinBounds(x: number, y: number): boolean {
-    return x >= 0 && y >= 0 && x < this.mapSize && y < this.mapSize;
+    return x >= 0 && y >= 0 && x < this.mapWidth && y < this.mapHeight;
   }
 
   private projectCharacter(character: CharacterVisual): void {
@@ -426,23 +503,31 @@ export default class GameScene extends Phaser.Scene {
 
   private updateMapOffset(): void {
     this.mapOffset = this.iso.isoToScreen({
-      x: (this.mapSize - 1) / 2,
-      y: (this.mapSize - 1) / 2,
+      x: (this.mapWidth - 1) / 2,
+      y: (this.mapHeight - 1) / 2,
       z: 0,
     });
   }
 
   private initializePathfindingGrid(): void {
     const grid: number[][] = [];
-    for (let y = 0; y < this.mapSize; y += 1) {
+    for (let y = 0; y < this.mapHeight; y += 1) {
       const row: number[] = [];
-      for (let x = 0; x < this.mapSize; x += 1) {
+      for (let x = 0; x < this.mapWidth; x += 1) {
         row.push(0);
       }
       grid.push(row);
     }
 
-    this.pathfinder.setGrid(grid);
+    this.pathfindingGrid = grid;
+    this.occupiedTiles.forEach((_value, key) => {
+      const { x, y } = this.parseTileKey(key);
+      if (this.pathfindingGrid[y] && typeof this.pathfindingGrid[y][x] !== 'undefined') {
+        this.pathfindingGrid[y][x] = 1;
+      }
+    });
+
+    this.pathfinder.setGrid(this.pathfindingGrid);
     this.pathfinder.setAcceptableTiles([0]);
     this.pathfinder.enableSync();
   }
@@ -451,8 +536,8 @@ export default class GameScene extends Phaser.Scene {
     this.groundLayer?.destroy(true);
     this.groundLayer = this.add.layer();
 
-    for (let x = 0; x < this.mapSize; x += 1) {
-      for (let y = 0; y < this.mapSize; y += 1) {
+    for (let x = 0; x < this.mapWidth; x += 1) {
+      for (let y = 0; y < this.mapHeight; y += 1) {
         const screenPosition = isoToScreenPoint({ x, y, z: 0 }, this.iso, {
           offset: this.mapOffset,
         });
@@ -462,6 +547,390 @@ export default class GameScene extends Phaser.Scene {
         this.groundLayer.add(tile);
       }
     }
+  }
+
+  private tileKey(x: number, y: number): string {
+    return `${x},${y}`;
+  }
+
+  private parseTileKey(key: string): { x: number; y: number } {
+    const [rawX, rawY] = key.split(',');
+    return { x: Number.parseInt(rawX, 10), y: Number.parseInt(rawY, 10) };
+  }
+
+  private colorStringToTint(color: string): number {
+    try {
+      return Phaser.Display.Color.HexStringToColor(color).color;
+    } catch (error) {
+      console.warn('Failed to parse color string for blueprint preview', color, error);
+      return 0xffffff;
+    }
+  }
+
+  private handleBuildSelection(payload: { blueprint: BuildBlueprint | null }): void {
+    const previousBlueprint = this.selectedBlueprint;
+    this.selectedBlueprint = payload.blueprint;
+    this.pendingPlacement = null;
+    this.isAwaitingBuildConfirmation = false;
+
+    if (!this.previewSprite) {
+      return;
+    }
+
+    if (!payload.blueprint) {
+      this.previewSprite.setVisible(false);
+      this.previewIsValid = false;
+      if (previousBlueprint) {
+        emitBuildPlacementResult({ status: 'pending', message: 'Modo construcción desactivado.' });
+      }
+      return;
+    }
+
+    const tint = this.colorStringToTint(payload.blueprint.previewColor);
+    this.previewSprite.setTint(tint);
+    this.previewSprite.setVisible(false);
+  }
+
+  private updatePlacementPreview(pointer: Phaser.Input.Pointer): void {
+    if (!this.selectedBlueprint || !this.previewSprite) {
+      return;
+    }
+
+    const camera = this.cameras.main;
+    const worldPoint = pointer.positionToCamera(camera) as Phaser.Math.Vector2;
+    const isoPoint = screenToIsoPoint(worldPoint, this.iso, { offset: this.mapOffset });
+    const tileX = Math.round(isoPoint.x);
+    const tileY = Math.round(isoPoint.y);
+
+    this.previewIso.set(tileX, tileY, 0);
+
+    if (!Number.isFinite(tileX) || !Number.isFinite(tileY) || !this.isTileWithinBounds(tileX, tileY)) {
+      this.previewSprite.setVisible(false);
+      this.previewIsValid = false;
+      return;
+    }
+
+    const valid = this.evaluatePlacement(tileX, tileY);
+    this.previewIsValid = valid;
+    this.updatePreviewVisual(tileX, tileY, valid);
+  }
+
+  private refreshPreviewValidity(): void {
+    if (!this.selectedBlueprint || !this.previewSprite || !this.previewSprite.visible) {
+      return;
+    }
+
+    const tileX = Math.round(this.previewIso.x);
+    const tileY = Math.round(this.previewIso.y);
+
+    if (!this.isTileWithinBounds(tileX, tileY)) {
+      this.previewSprite.setVisible(false);
+      this.previewIsValid = false;
+      return;
+    }
+
+    const valid = this.evaluatePlacement(tileX, tileY);
+    this.previewIsValid = valid;
+    this.updatePreviewVisual(tileX, tileY, valid);
+  }
+
+  private updatePreviewVisual(tileX: number, tileY: number, valid: boolean): void {
+    if (!this.previewSprite || !this.selectedBlueprint) {
+      return;
+    }
+
+    const screenPosition = isoToScreenPoint({ x: tileX, y: tileY, z: 0 }, this.iso, {
+      offset: this.mapOffset,
+    });
+    const baseTint = this.colorStringToTint(this.selectedBlueprint.previewColor);
+    const tint = valid ? baseTint : 0xef5350;
+    const alpha = valid ? 0.85 : 0.5;
+
+    this.previewSprite.setPosition(screenPosition.x, screenPosition.y);
+    this.previewSprite.setDepth(screenPosition.y + 6);
+    this.previewSprite.setTint(tint);
+    this.previewSprite.setAlpha(alpha);
+    this.previewSprite.setVisible(true);
+  }
+
+  private evaluatePlacement(x: number, y: number): boolean {
+    if (!this.selectedBlueprint) {
+      return false;
+    }
+
+    if (!this.isTileWithinBounds(x, y)) {
+      return false;
+    }
+
+    if (this.occupiedTiles.has(this.tileKey(x, y))) {
+      return false;
+    }
+
+    if (this.buildableParcels.length === 0) {
+      return true;
+    }
+
+    return this.buildableParcels.some((parcel) => this.isPointInsideParcel(parcel, x, y));
+  }
+
+  private isPointInsideParcel(parcel: ParcelDefinition, x: number, y: number): boolean {
+    return x >= parcel.x && y >= parcel.y && x < parcel.x + parcel.width && y < parcel.y + parcel.height;
+  }
+
+  private handleBuildPlacement(pointer: Phaser.Input.Pointer): void {
+    if (!this.selectedBlueprint || !this.room) {
+      return;
+    }
+
+    if (this.isAwaitingBuildConfirmation) {
+      emitBuildPlacementResult({
+        status: 'pending',
+        message: 'Esperando confirmación del servidor...',
+      });
+      return;
+    }
+
+    this.updatePlacementPreview(pointer);
+
+    if (!this.previewIsValid) {
+      emitBuildPlacementResult({ status: 'error', message: 'No puedes construir en esa baldosa.' });
+      return;
+    }
+
+    const x = Math.round(this.previewIso.x);
+    const y = Math.round(this.previewIso.y);
+
+    this.room.send('build:place', { type: this.selectedBlueprint.type, x, y });
+    this.pendingPlacement = { key: this.tileKey(x, y), type: this.selectedBlueprint.type };
+    this.isAwaitingBuildConfirmation = true;
+
+    emitBuildPlacementResult({ status: 'pending', message: 'Orden de construcción enviada...' });
+  }
+
+  private resolveBlueprintTint(type: string): number {
+    const blueprint = getBlueprintByType(type);
+    if (!blueprint) {
+      return 0xb0bec5;
+    }
+
+    return this.colorStringToTint(blueprint.previewColor);
+  }
+
+  private projectBuildingVisual(visual: BuildingVisual): void {
+    const screenPosition = isoToScreenPoint(visual.isoPosition, this.iso, { offset: this.mapOffset });
+    visual.image.setPosition(screenPosition.x, screenPosition.y);
+    visual.image.setDepth(screenPosition.y + 8);
+    visual.image.setTint(visual.tintColor);
+  }
+
+  private createBuildingVisual(building: SerializedBuilding, tint: number): BuildingVisual {
+    const image = this.add.image(0, 0, BUILD_PREVIEW_TEXTURE_KEY);
+    image.setOrigin(0.5, 0.5);
+    image.setAlpha(0.95);
+    image.setTint(tint);
+
+    const isoPosition = new Phaser.Math.Vector3(building.x, building.y, 0);
+    const visual: BuildingVisual = { image, isoPosition, tintColor: tint, chunkId: building.chunkId };
+    this.projectBuildingVisual(visual);
+    return visual;
+  }
+
+  private setTileOccupancy(x: number, y: number, buildingId: string | null): void {
+    if (!this.isTileWithinBounds(x, y)) {
+      return;
+    }
+
+    const key = this.tileKey(x, y);
+    if (buildingId) {
+      this.occupiedTiles.set(key, buildingId);
+    } else {
+      this.occupiedTiles.delete(key);
+    }
+
+    if (this.pathfindingGrid[y] && typeof this.pathfindingGrid[y][x] !== 'undefined') {
+      this.pathfindingGrid[y][x] = buildingId ? 1 : 0;
+      this.pathfinder.setGrid(this.pathfindingGrid);
+      this.pathfinder.enableSync();
+    }
+
+    this.refreshPreviewValidity();
+  }
+
+  private upsertBuilding(building: SerializedBuilding): void {
+    const tint = this.resolveBlueprintTint(building.type);
+    const existing = this.buildingVisuals.get(building.id);
+
+    if (existing) {
+      const previousX = Math.round(existing.isoPosition.x);
+      const previousY = Math.round(existing.isoPosition.y);
+      this.setTileOccupancy(previousX, previousY, null);
+      existing.isoPosition.set(building.x, building.y, 0);
+      existing.tintColor = tint;
+      existing.chunkId = building.chunkId;
+      existing.image.setTint(tint);
+      this.projectBuildingVisual(existing);
+      this.setTileOccupancy(building.x, building.y, building.id);
+      return;
+    }
+
+    const visual = this.createBuildingVisual(building, tint);
+    this.buildingVisuals.set(building.id, visual);
+    this.setTileOccupancy(building.x, building.y, building.id);
+  }
+
+  private removeBuilding(buildingId: string): void {
+    const visual = this.buildingVisuals.get(buildingId);
+    if (!visual) {
+      return;
+    }
+
+    const tileX = Math.round(visual.isoPosition.x);
+    const tileY = Math.round(visual.isoPosition.y);
+    this.setTileOccupancy(tileX, tileY, null);
+    visual.image.destroy();
+    this.buildingVisuals.delete(buildingId);
+  }
+
+  private reconcileBuildings(snapshot: ChunkSnapshot): void {
+    const seen = new Set<string>();
+    snapshot.buildings.forEach((building) => {
+      seen.add(building.id);
+      this.upsertBuilding(building);
+    });
+
+    const toRemove: string[] = [];
+    this.buildingVisuals.forEach((visual, id) => {
+      if (visual.chunkId === snapshot.chunkId && !seen.has(id)) {
+        toRemove.push(id);
+      }
+    });
+
+    toRemove.forEach((id) => this.removeBuilding(id));
+  }
+
+  private handleBuildingPlaced(building: SerializedBuilding): void {
+    this.upsertBuilding(building);
+
+    if (
+      this.pendingPlacement &&
+      this.pendingPlacement.key === this.tileKey(building.x, building.y) &&
+      building.ownerId === this.userId
+    ) {
+      this.isAwaitingBuildConfirmation = false;
+      this.pendingPlacement = null;
+      emitBuildPlacementResult({
+        status: 'success',
+        message: `Construcción completada en (${building.x}, ${building.y}).`,
+      });
+    }
+  }
+
+  private handleServerError(message: string): void {
+    this.isAwaitingBuildConfirmation = false;
+    this.pendingPlacement = null;
+    emitBuildPlacementResult({ status: 'error', message });
+  }
+
+  private applyWorldDimensions(width: number, height: number): void {
+    const changed = width !== this.mapWidth || height !== this.mapHeight;
+    this.mapWidth = width;
+    this.mapHeight = height;
+
+    if (!changed) {
+      return;
+    }
+
+    this.updateMapOffset();
+
+    const existingEntries = Array.from(this.buildingVisuals.entries());
+    this.occupiedTiles.clear();
+
+    existingEntries.forEach(([id, visual]) => {
+      const tileX = Math.round(visual.isoPosition.x);
+      const tileY = Math.round(visual.isoPosition.y);
+      if (this.isTileWithinBounds(tileX, tileY)) {
+        this.occupiedTiles.set(this.tileKey(tileX, tileY), id);
+      } else {
+        this.removeBuilding(id);
+      }
+    });
+
+    this.initializePathfindingGrid();
+    this.createGroundLayer();
+
+    this.buildingVisuals.forEach((visual, id) => {
+      if (this.buildingVisuals.has(id)) {
+        this.projectBuildingVisual(visual);
+      }
+    });
+
+    if (this.localCharacter) {
+      clampIsoToBounds(this.localCharacter.isoPosition, this.mapWidth, this.mapHeight);
+      this.projectCharacter(this.localCharacter);
+    }
+
+    this.renderParcelOverlay();
+    this.refreshPreviewValidity();
+  }
+
+  private updateBuildableParcels(parcels: ParcelDefinition[]): void {
+    this.allParcels = parcels;
+
+    const userId = this.userId;
+    this.buildableParcels = parcels.filter((parcel) => {
+      if (parcel.allowPublic) {
+        return true;
+      }
+      if (userId && parcel.ownerId === userId) {
+        return true;
+      }
+      return this.assignedParcelIds.has(parcel.id);
+    });
+
+    this.renderParcelOverlay();
+    this.refreshPreviewValidity();
+  }
+
+  private renderParcelOverlay(): void {
+    this.parcelLayer?.destroy(true);
+    this.parcelLayer = undefined;
+
+    if (this.allParcels.length === 0 || this.assignedParcelIds.size === 0) {
+      return;
+    }
+
+    const layer = this.add.layer();
+    layer.setDepth(1);
+
+    this.allParcels
+      .filter((parcel) => this.assignedParcelIds.has(parcel.id))
+      .forEach((parcel) => {
+        for (let x = parcel.x; x < parcel.x + parcel.width; x += 1) {
+          for (let y = parcel.y; y < parcel.y + parcel.height; y += 1) {
+            if (!this.isTileWithinBounds(x, y)) {
+              continue;
+            }
+
+            const screenPosition = isoToScreenPoint({ x, y, z: 0 }, this.iso, {
+              offset: this.mapOffset,
+            });
+            const overlay = this.add.image(screenPosition.x, screenPosition.y, GROUND_TEXTURE_KEY);
+            overlay.setOrigin(0.5, 0.5);
+            overlay.setTint(0x66bb6a);
+            overlay.setAlpha(0.28);
+            overlay.setDepth(screenPosition.y - HALF_TILE_HEIGHT + 1);
+            layer.add(overlay);
+          }
+        }
+      });
+
+    this.parcelLayer = layer;
+  }
+
+  private handleWorldInfo(payload: WorldInfoPayload): void {
+    this.applyWorldDimensions(payload.width, payload.height);
+    this.assignedParcelIds = new Set(payload.assignedParcelIds ?? []);
+    this.updateBuildableParcels(payload.parcels ?? []);
   }
 
   private preloadTilesets(): void {
@@ -489,18 +958,20 @@ export default class GameScene extends Phaser.Scene {
       return;
     }
 
+    this.userId = userId;
+
     try {
       this.client = new Client(endpoint);
       this.client
         .joinOrCreate('community', { userId })
-        .then((room) => {
+        .then((room: Room) => {
           this.room = room;
           this.registerRoomListeners(room);
         })
-        .catch((error) => {
+        .catch((error: unknown) => {
           console.error('Failed to join community room', error);
         });
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Failed to connect to Colyseus server', error);
     }
   }
@@ -520,6 +991,18 @@ export default class GameScene extends Phaser.Scene {
 
     room.onMessage('chunk:playerLeft', (payload: { playerId: string }) => {
       this.removeRemotePlayer(payload.playerId);
+    });
+
+    room.onMessage('chunk:buildingPlaced', (payload: { building: SerializedBuilding }) => {
+      this.handleBuildingPlaced(payload.building);
+    });
+
+    room.onMessage('world:info', (payload: WorldInfoPayload) => {
+      this.handleWorldInfo(payload);
+    });
+
+    room.onMessage('error', (payload: { message: string }) => {
+      this.handleServerError(payload.message);
     });
   }
 
@@ -543,6 +1026,8 @@ export default class GameScene extends Phaser.Scene {
         this.removeRemotePlayer(id);
       }
     });
+
+    this.reconcileBuildings(snapshot);
   }
 
   private syncLocalWithServer(player: SerializedPlayer): void {
@@ -635,6 +1120,26 @@ export default class GameScene extends Phaser.Scene {
     this.input.off('pointermove', this.handlePointerMove, this);
     this.input.off('pointerup', this.handlePointerUpGeneral, this);
     this.load.off(Phaser.Loader.Events.FILE_LOAD_ERROR, this.onTilesetLoadError, this);
+    gameEvents.off(GameEvent.BuildSelect, this.handleBuildSelection, this);
+
+    this.previewSprite?.destroy();
+    this.previewSprite = undefined;
+
+    this.parcelLayer?.destroy(true);
+    this.parcelLayer = undefined;
+
+    this.buildingVisuals.forEach((visual) => {
+      visual.image.destroy();
+    });
+    this.buildingVisuals.clear();
+    this.occupiedTiles.clear();
+    this.pathfindingGrid = [];
+    this.buildableParcels = [];
+    this.allParcels = [];
+    this.assignedParcelIds.clear();
+    this.pendingPlacement = null;
+    this.isAwaitingBuildConfirmation = false;
+
     this.remotePlayers.forEach((remote) => {
       remote.sprite.destroy();
       remote.label.destroy();
@@ -655,6 +1160,7 @@ export default class GameScene extends Phaser.Scene {
     }
 
     this.client = undefined;
+    this.userId = null;
   }
 
   private resolveServerEndpoint(): string | null {
@@ -734,6 +1240,29 @@ export default class GameScene extends Phaser.Scene {
     graphics.strokePath();
 
     graphics.generateTexture(GROUND_TEXTURE_KEY, TILE_WIDTH, TILE_HEIGHT);
+    graphics.destroy();
+  }
+
+  private generatePreviewTexture(): void {
+    if (this.textures.exists(BUILD_PREVIEW_TEXTURE_KEY)) {
+      return;
+    }
+
+    const graphics = this.add.graphics({ x: 0, y: 0 });
+    graphics.setVisible(false);
+
+    graphics.lineStyle(3, 0xffffff, 0.9);
+    graphics.fillStyle(0xffffff, 0.25);
+    graphics.beginPath();
+    graphics.moveTo(TILE_WIDTH / 2, 0);
+    graphics.lineTo(TILE_WIDTH, HALF_TILE_HEIGHT);
+    graphics.lineTo(TILE_WIDTH / 2, TILE_HEIGHT);
+    graphics.lineTo(0, HALF_TILE_HEIGHT);
+    graphics.closePath();
+    graphics.fillPath();
+    graphics.strokePath();
+
+    graphics.generateTexture(BUILD_PREVIEW_TEXTURE_KEY, TILE_WIDTH, TILE_HEIGHT);
     graphics.destroy();
   }
 }
